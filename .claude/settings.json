@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:office.zedcapital.com)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes --name teamwox)",
+      "Bash(mkdir -p d:/Codes/Teamwox/temp)",
+      "Bash(npx create-next-app@latest teamwox-app --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes)",
+      "Bash(cp -r d:/Codes/Teamwox/temp/teamwox-app/. d:/Codes/Teamwox/)",
+      "Bash(rm -rf d:/Codes/Teamwox/temp)"
+    ],
+    "additionalDirectories": [
+      "d:\\Codes\\Teamwox\\temp"
+    ]
+  }
+}
