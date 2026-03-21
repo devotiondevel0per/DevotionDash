@@ -1,0 +1,1317 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// AUTH / USERS
+// ─────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  login           String    @unique
+  email           String    @unique
+  password        String
+  name            String
+  surname         String    @default("")
+  fullname        String    @default("")
+  position        String    @default("")
+  department      String    @default("")
+  company         String    @default("")
+  description     String?   @db.Text
+  location        String    @default("")
+  photoUrl        String?   @db.MediumText
+  language        String    @default("en")
+  timezone        Int       @default(0)
+  isAdmin         Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  workState       Int       @default(1)
+  agentStatus     String    @default("offline")
+  lastActivity    DateTime?
+  dateBirthday    DateTime?
+  dateWorkSince   DateTime?
+  phoneWork       String    @default("")
+  phoneMobile     String    @default("")
+  phoneHome       String    @default("")
+  phoneFax        String    @default("")
+  phoneSip        String    @default("")
+  messengerSkype  String    @default("")
+  messengerIcq    String    @default("")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sessions              Session[]
+  accounts              Account[]
+  tasksCreated          Task[]               @relation("TaskCreator")
+  tasksAssigned         TaskAssignee[]
+  taskComments          TaskComment[]
+  taskFavorites         TaskFavorite[]
+  documents             Document[]
+  documentShares        DocumentShare[]
+  documentFoldersOwned  DocumentFolder[]    @relation("DocumentFolderOwner")
+  documentFolderShares  DocumentFolderShare[]
+  emailsFrom            Email[]              @relation("EmailFrom")
+  emailsTo              EmailRecipient[]
+  chatMessages          ChatMessage[]
+  chatDialogMembers     ChatDialogMember[]
+  calendarEvents        CalendarEvent[]
+  calendarMembers       CalendarMember[]
+  organizationsManaged  Organization[]       @relation("OrgManager")
+  boardTopics           BoardTopic[]         @relation("BoardTopicCreator")
+  boardResolvedTopics   BoardTopic[]         @relation("BoardTopicResolvedBy")
+  boardPosts            BoardPost[]
+  contacts              Contact[]
+  leadsOwned            Lead[]               @relation("LeadOwner")
+  leadActivities        LeadActivity[]       @relation("LeadActivityAuthor")
+  serviceDeskRequests   ServiceDeskRequest[] @relation("SDRequester")
+  serviceDeskAssigned   ServiceDeskRequest[] @relation("SDAssignee")
+  serviceDeskComments   ServiceDeskComment[]
+  projects              ProjectMember[]
+  projectTasks          ProjectTask[]
+  notifications         Notification[]
+  groupMembers          GroupMember[]
+  emailConfig           EmailConfig?
+  liveChatDeptMembers   LiveChatDepartmentMember[]
+  deviceTokens          DeviceToken[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// ─────────────────────────────────────────────
+// GROUPS & PERMISSIONS
+// ─────────────────────────────────────────────
+
+model Group {
+  id          String        @id @default(cuid())
+  name        String
+  description String?       @db.Text
+  color       String        @default("#3B4A61")
+  createdAt   DateTime      @default(now())
+  members     GroupMember[]
+  boardTopics BoardTopic[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id      String @id @default(cuid())
+  groupId String
+  userId  String
+  role    String @default("member")
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+// ─────────────────────────────────────────────
+// TASKS
+// ─────────────────────────────────────────────
+
+model Task {
+  id          String         @id @default(cuid())
+  title       String
+  description String?        @db.Text
+  type        String         @default("task") // task, event, note
+  status      String         @default("opened") // opened, completed, closed
+  priority    String         @default("normal") // low, normal, high
+  isPrivate   Boolean        @default(false)
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  creatorId   String
+  creator     User           @relation("TaskCreator", fields: [creatorId], references: [id])
+  assignees   TaskAssignee[]
+  comments    TaskComment[]
+  favorites   TaskFavorite[]
+  attachments Attachment[]
+
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  id     String @id @default(cuid())
+  taskId String
+  userId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@map("task_assignees")
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("task_comments")
+}
+
+model TaskFavorite {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@map("task_favorites")
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENTS
+// ─────────────────────────────────────────────
+
+model DocumentFolder {
+  id        String           @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    DocumentFolder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children  DocumentFolder[] @relation("FolderTree")
+  documents Document[]
+  ownerId   String?
+  owner     User?            @relation("DocumentFolderOwner", fields: [ownerId], references: [id])
+  accessLevel String         @default("module") // module, private
+  shares    DocumentFolderShare[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("document_folders")
+}
+
+model DocumentFolderShare {
+  id        String         @id @default(cuid())
+  folderId  String
+  userId    String
+  canRead   Boolean        @default(true)
+  canWrite  Boolean        @default(false)
+  canDelete Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  folder    DocumentFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([folderId, userId])
+  @@index([userId])
+  @@map("document_folder_shares")
+}
+
+model Document {
+  id          String          @id @default(cuid())
+  name        String
+  content     String?         @db.LongText
+  fileUrl     String?
+  fileSize    Int?
+  mimeType    String?
+  folderId    String?
+  folder      DocumentFolder? @relation(fields: [folderId], references: [id])
+  ownerId     String
+  owner       User            @relation(fields: [ownerId], references: [id])
+  accessLevel String          @default("module") // module, private
+  isSigned    Boolean         @default(false)
+  signedAt    DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  attachments Attachment[]
+  shares      DocumentShare[]
+
+  @@map("documents")
+}
+
+model DocumentShare {
+  id        String   @id @default(cuid())
+  documentId String
+  userId    String
+  canRead   Boolean  @default(true)
+  canWrite  Boolean  @default(false)
+  canDelete Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+  @@map("document_shares")
+}
+
+// ─────────────────────────────────────────────
+// EMAIL
+// ─────────────────────────────────────────────
+
+model Mailbox {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  imapHost  String
+  imapPort  Int       @default(993)
+  smtpHost  String
+  smtpPort  Int       @default(587)
+  username  String
+  password  String
+  useSSL    Boolean   @default(true)
+  isActive  Boolean   @default(true)
+  lastSync  DateTime?
+  createdAt DateTime  @default(now())
+  emails    Email[]
+
+  @@map("mailboxes")
+}
+
+model Email {
+  id             String           @id @default(cuid())
+  subject        String
+  body           String           @db.LongText
+  fromId         String?
+  from           User?            @relation("EmailFrom", fields: [fromId], references: [id])
+  senderEmail    String?          // raw sender address for external emails
+  senderName     String?          // raw sender name for external emails
+  messageId      String?          // RFC Message-ID for IMAP dedup
+  mailboxId      String?
+  mailbox        Mailbox?         @relation(fields: [mailboxId], references: [id])
+  status         String           @default("inbox") // inbox, sent, draft, spam, deleted
+  isRead         Boolean          @default(false)
+  isStarred      Boolean          @default(false)
+  parentId       String?
+  threadId       String?
+  organizationId String?
+  organization   Organization?    @relation(fields: [organizationId], references: [id])
+  sentAt         DateTime?
+  createdAt      DateTime         @default(now())
+  recipients     EmailRecipient[]
+  attachments    Attachment[]
+
+  @@index([mailboxId, messageId])
+  @@map("emails")
+}
+
+model EmailRecipient {
+  id      String @id @default(cuid())
+  emailId String
+  userId  String
+  type    String @default("to") // to, cc, bcc
+  email   Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id])
+
+  @@map("email_recipients")
+}
+
+// ─────────────────────────────────────────────
+// CHAT
+// ─────────────────────────────────────────────
+
+model ChatServiceGroup {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  isPublic    Boolean      @default(false)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  dialogs     ChatDialog[]
+
+  @@map("chat_service_groups")
+}
+
+model ChatDialog {
+  id             String             @id @default(cuid())
+  subject        String?
+  groupId        String?
+  group          ChatServiceGroup?  @relation(fields: [groupId], references: [id])
+  departmentId   String?
+  department     LiveChatDepartment? @relation("LiveChatDeptDialogs", fields: [departmentId], references: [id])
+  organizationId String?
+  organization   Organization?      @relation(fields: [organizationId], references: [id])
+  status         String             @default("open") // open, closed
+  isExternal     Boolean            @default(false)
+  visitorName    String?
+  visitorEmail   String?
+  visitorIp      String?
+  referrerUrl    String?
+  priority       String             @default("normal") // low, normal, high, urgent
+  waitingSince   DateTime?
+  firstResponseAt DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  messages       ChatMessage[]
+  members        ChatDialogMember[]
+
+  @@index([isExternal, status, updatedAt])
+  @@index([isExternal, groupId, updatedAt])
+  @@index([isExternal, departmentId, updatedAt])
+  @@index([isExternal, organizationId, updatedAt])
+  @@map("chat_dialogs")
+}
+
+model ChatDialogMember {
+  id       String     @id @default(cuid())
+  dialogId String
+  userId   String
+  dialog   ChatDialog @relation(fields: [dialogId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([dialogId, userId])
+  @@index([userId, dialogId])
+  @@map("chat_dialog_members")
+}
+
+model ChatMessage {
+  id        String     @id @default(cuid())
+  dialogId  String
+  userId    String
+  content   String     @db.MediumText
+  isSystem  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  dialog    ChatDialog @relation(fields: [dialogId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id])
+
+  @@index([dialogId, createdAt])
+  @@index([userId, createdAt])
+  @@map("chat_messages")
+}
+
+// ─────────────────────────────────────────────
+// CALENDAR
+// ─────────────────────────────────────────────
+
+model Calendar {
+  id        String           @id @default(cuid())
+  name      String
+  type      String           @default("personal") // personal, shared
+  color     String           @default("#437388")
+  ownerId   String?
+  createdAt DateTime         @default(now())
+  events    CalendarEvent[]
+  members   CalendarMember[]
+
+  @@map("calendars")
+}
+
+model CalendarMember {
+  id         String   @id @default(cuid())
+  calendarId String
+  userId     String
+  canEdit    Boolean  @default(false)
+  calendar   Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, userId])
+  @@map("calendar_members")
+}
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  calendarId  String
+  creatorId   String
+  title       String
+  description String?  @db.Text
+  startDate   DateTime
+  endDate     DateTime
+  allDay      Boolean  @default(false)
+  location    String?
+  color       String?
+  isRecurring Boolean  @default(false)
+  recurRule   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  calendar    Calendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  creator     User     @relation(fields: [creatorId], references: [id])
+
+  @@map("calendar_events")
+}
+
+// ─────────────────────────────────────────────
+// ORGANIZATIONS (CRM)
+// ─────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(cuid())
+  cid         String   @unique @default(cuid())
+  name        String
+  type        String   @default("potential") // potential, client, agent, partner
+  status      String   @default("open") // open, closed, rejected
+  rating      String   @default("weak") // hot, good, weak
+  industry    String?
+  leadSource  String?
+  slaId       String?
+  sla         SLA?     @relation(fields: [slaId], references: [id])
+  managerId   String?
+  manager     User?    @relation("OrgManager", fields: [managerId], references: [id])
+  email       String?
+  website     String?
+  phone       String?
+  fax         String?
+  country     String?
+  region      String?
+  city        String?
+  address     String?
+  postalIndex String?
+  timezone    String?
+  regAddress  String?
+  bankAccount String?
+  comment     String?  @db.Text
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contacts            Contact[]
+  emails              Email[]
+  chatDialogs         ChatDialog[]
+  serviceDeskRequests ServiceDeskRequest[]
+  historyEntries      OrgHistory[]
+  orgDocuments        OrgDocument[]
+  customFields        OrgCustomField[]
+  accountingBooks     AccountingBook[]
+  boardTopics         BoardTopic[]
+  leads               Lead[]
+
+  @@map("organizations")
+}
+
+model SLA {
+  id            String         @id @default(cuid())
+  name          String
+  hoursLimit    Int
+  organizations Organization[]
+
+  @@map("slas")
+}
+
+model OrgHistory {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String?
+  content        String       @db.Text
+  isSystem       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_history")
+}
+
+model OrgDocument {
+  id             String       @id @default(cuid())
+  organizationId String
+  documentId     String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_documents")
+}
+
+model OrgCustomField {
+  id             String       @id @default(cuid())
+  organizationId String
+  fieldName      String
+  fieldValue     String?      @db.Text
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_custom_fields")
+}
+
+// ─────────────────────────────────────────────
+// CONTACTS
+// ─────────────────────────────────────────────
+
+model Contact {
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User          @relation(fields: [createdById], references: [id])
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  mobile         String?
+  position       String?
+  department     String?
+  website        String?
+  country        String?
+  city           String?
+  address        String?
+  note           String?       @db.Text
+  photoUrl       String?       @db.MediumText
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  leads          Lead[]
+
+  @@map("contacts")
+}
+
+model Lead {
+  id              String        @id @default(cuid())
+  title           String
+  companyName     String
+  contactName     String?
+  email           String?
+  phone           String?
+  country         String?
+  language        String?
+  source          String?
+  priority        String        @default("normal") // low, normal, high
+  stage           String        @default("new") // new, qualified, proposal, negotiation, won, lost
+  status          String        @default("open") // open, won, lost, archived
+  expectedDeposit Decimal?      @db.Decimal(15, 2)
+  score           Int           @default(0)
+  notes           String?       @db.Text
+  followUpAt      DateTime?
+  closedAt        DateTime?
+  customData      String?   @db.Text  // JSON object of custom field values
+  ownerId         String?
+  owner           User?         @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  contactId       String?
+  contact         Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  activities      LeadActivity[]
+
+  @@index([stage, updatedAt])
+  @@index([ownerId, stage])
+  @@index([status, updatedAt])
+  @@index([source])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String?
+  type        String    @default("note") // note, stage_change, system, call, email, meeting, follow_up
+  content     String    @db.Text
+  scheduledAt DateTime?
+  metadata    String?   @db.Text
+  createdAt   DateTime  @default(now())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user      User?    @relation("LeadActivityAuthor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+// ─────────────────────────────────────────────
+// BOARD
+// ─────────────────────────────────────────────
+
+model BoardCategory {
+  id          String       @id @default(cuid())
+  name        String
+  color       String       @default("#FE0000")
+  description String?
+  createdAt   DateTime     @default(now())
+  topics      BoardTopic[]
+
+  @@map("board_categories")
+}
+
+model BoardTopic {
+  id             String        @id @default(cuid())
+  categoryId     String
+  creatorId      String
+  title          String
+  description    String?       @db.Text
+  visibility     String        @default("organization") // public, organization, team, private
+  teamId         String?
+  organizationId String?
+  isPinned       Boolean       @default(false)
+  isLocked       Boolean       @default(false)
+  isResolved     Boolean       @default(false)
+  resolvedAt     DateTime?
+  resolvedById   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lastActivityAt DateTime      @default(now())
+  category       BoardCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  creator        User          @relation("BoardTopicCreator", fields: [creatorId], references: [id])
+  resolvedBy     User?         @relation("BoardTopicResolvedBy", fields: [resolvedById], references: [id])
+  team           Group?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  posts          BoardPost[]
+
+  @@index([categoryId, updatedAt])
+  @@index([visibility, teamId, organizationId])
+  @@index([creatorId, updatedAt])
+
+  @@map("board_topics")
+}
+
+model BoardPost {
+  id        String     @id @default(cuid())
+  topicId   String
+  authorId  String
+  content   String     @db.Text
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  topic     BoardTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  author    User       @relation(fields: [authorId], references: [id])
+
+  @@map("board_posts")
+}
+
+// ─────────────────────────────────────────────
+// SERVICE DESK
+// ─────────────────────────────────────────────
+
+model ServiceDeskGroup {
+  id          String                @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean               @default(true)
+  createdAt   DateTime              @default(now())
+  requests    ServiceDeskRequest[]
+  categories  ServiceDeskCategory[]
+
+  @@map("servicedesk_groups")
+}
+
+model ServiceDeskCategory {
+  id       String               @id @default(cuid())
+  groupId  String
+  name     String
+  group    ServiceDeskGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requests ServiceDeskRequest[]
+
+  @@map("servicedesk_categories")
+}
+
+model ServiceDeskRequest {
+  id             String               @id @default(cuid())
+  groupId        String
+  categoryId     String?
+  requesterId    String
+  assigneeId     String?
+  organizationId String?
+  title          String
+  description    String               @db.Text
+  status         String               @default("open") // open, closed, pending
+  priority       String               @default("normal")
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  closedAt       DateTime?
+  source      String   @default("internal")
+  clientEmail String?
+  clientName  String?
+  clientToken String?  @unique
+  group          ServiceDeskGroup     @relation(fields: [groupId], references: [id])
+  category       ServiceDeskCategory? @relation(fields: [categoryId], references: [id])
+  requester      User                 @relation("SDRequester", fields: [requesterId], references: [id])
+  assignee       User?                @relation("SDAssignee", fields: [assigneeId], references: [id])
+  organization   Organization?        @relation(fields: [organizationId], references: [id])
+  comments       ServiceDeskComment[]
+  attachments    Attachment[]
+
+  @@map("servicedesk_requests")
+}
+
+model ServiceDeskComment {
+  id        String             @id @default(cuid())
+  requestId String
+  userId    String
+  content   String             @db.Text
+  isSystem  Boolean            @default(false)
+  isPublic  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  request   ServiceDeskRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id])
+
+  @@map("servicedesk_comments")
+}
+
+// ─────────────────────────────────────────────
+// PROJECTS
+// ─────────────────────────────────────────────
+
+model ProjectCategory {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  projects  Project[]
+
+  @@map("project_categories")
+}
+
+model Project {
+  id          String           @id @default(cuid())
+  categoryId  String?
+  name        String
+  description String?          @db.Text
+  status      String           @default("active") // active, archived, completed
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  category    ProjectCategory? @relation(fields: [categoryId], references: [id])
+  members     ProjectMember[]
+  tasks       ProjectTask[]
+  phases      ProjectPhase[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String  @id @default(cuid())
+  projectId String
+  userId    String
+  role      String  @default("member")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model ProjectPhase {
+  id        String        @id @default(cuid())
+  projectId String
+  name      String
+  order     Int           @default(0)
+  startDate DateTime?
+  endDate   DateTime?
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     ProjectTask[]
+
+  @@map("project_phases")
+}
+
+model ProjectTask {
+  id          String        @id @default(cuid())
+  projectId   String
+  phaseId     String?
+  assigneeId  String?
+  title       String
+  description String?       @db.Text
+  status      String        @default("todo") // todo, in_progress, done
+  priority    String        @default("normal")
+  dueDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phase       ProjectPhase? @relation(fields: [phaseId], references: [id])
+  assignee    User?         @relation(fields: [assigneeId], references: [id])
+
+  @@map("project_tasks")
+}
+
+// ─────────────────────────────────────────────
+// PRODUCTS
+// ─────────────────────────────────────────────
+
+model ProductCategory {
+  id       String    @id @default(cuid())
+  name     String
+  products Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id          String           @id @default(cuid())
+  categoryId  String?
+  name        String
+  description String?          @db.Text
+  price       Decimal          @default(0) @db.Decimal(15, 2)
+  currency    String           @default("USD")
+  sku         String?
+  stock       Int              @default(0)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  category    ProductCategory? @relation(fields: [categoryId], references: [id])
+
+  @@map("products")
+}
+
+// ─────────────────────────────────────────────
+// ACCOUNTING
+// ─────────────────────────────────────────────
+
+model AccountingBook {
+  id             String               @id @default(cuid())
+  organizationId String?
+  name           String
+  description    String?
+  status         String               @default("open") // open, closed
+  currency       String               @default("USD")
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  organization   Organization?        @relation(fields: [organizationId], references: [id])
+  contracts      AccountingContract[]
+
+  @@map("accounting_books")
+}
+
+model AccountingContract {
+  id           String                  @id @default(cuid())
+  bookId       String
+  number       String
+  description  String?                 @db.Text
+  amount       Decimal                 @default(0) @db.Decimal(15, 2)
+  currency     String                  @default("USD")
+  status       String                  @default("active")
+  signedAt     DateTime?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  book         AccountingBook          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  transactions AccountingTransaction[]
+
+  @@map("accounting_contracts")
+}
+
+model AccountingTransaction {
+  id          String             @id @default(cuid())
+  contractId  String
+  type        String             @default("credit") // credit, debit
+  amount      Decimal            @db.Decimal(15, 2)
+  description String?
+  date        DateTime           @default(now())
+  contract    AccountingContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@map("accounting_transactions")
+}
+
+// ─────────────────────────────────────────────
+// E-BANK
+// ─────────────────────────────────────────────
+
+model BankAccount {
+  id            String            @id @default(cuid())
+  name          String
+  accountNumber String
+  bankName      String
+  currency      String            @default("USD")
+  provider      String            @default("manual")
+  balance       Decimal           @default(0) @db.Decimal(15, 2)
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  transactions  BankTransaction[]
+  routingRules  BankRoutingRule[]
+
+  @@map("bank_accounts")
+}
+
+model BankTransaction {
+  id            String      @id @default(cuid())
+  accountId     String
+  type          String      @default("credit") // credit, debit
+  amount        Decimal     @db.Decimal(15, 2)
+  currency      String      @default("USD")
+  description   String?
+  reference     String?
+  status        String      @default("recognized") // recognized, unrecognized
+  transactionAt DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  account       BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("bank_transactions")
+}
+
+model BankRoutingRule {
+  id        String      @id @default(cuid())
+  accountId String
+  name      String
+  condition String      @db.Text
+  action    String      @db.Text
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  account   BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("bank_routing_rules")
+}
+
+// ─────────────────────────────────────────────
+// TELEPHONY
+// ─────────────────────────────────────────────
+
+model TelephonyProvider {
+  id           String   @id @default(cuid())
+  name         String
+  providerType String   @default("generic") // 3cx | asterisk | freepbx | twilio | vonage | ringcentral | generic
+  host         String
+  port         Int      @default(5060)
+  username     String
+  password     String
+  transport    String   @default("UDP")   // UDP | TCP | TLS
+  fromDomain   String?
+  callerIdName String?
+  callerIdNum  String?
+  isActive     Boolean  @default(true)
+  isDefault    Boolean  @default(false)
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@map("telephony_providers")
+}
+
+model Extension {
+  id        String   @id @default(cuid())
+  userId    String?  @unique
+  number    String   @unique
+  password  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("extensions")
+}
+
+model CallLog {
+  id        String    @id @default(cuid())
+  callerId  String?
+  callerNum String
+  calleeNum String
+  calleeId  String?
+  direction String    @default("inbound") // inbound, outbound, internal
+  status    String    @default("answered") // answered, missed, busy, failed
+  duration  Int       @default(0)
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  recordUrl String?
+
+  @@map("call_logs")
+}
+
+model TelephonyBlacklist {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@map("telephony_blacklist")
+}
+
+model TelephonyInboundRule {
+  id          String   @id @default(cuid())
+  name        String
+  didNumber   String?
+  action      String   @default("ring_extension") // ring_extension | ring_group | voicemail | playback | reject
+  target      String?  // extension number or group name
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("telephony_inbound_rules")
+}
+
+model TelephonyOutboundRule {
+  id          String   @id @default(cuid())
+  name        String
+  prefix      String?
+  stripDigits Int      @default(0)
+  providerId  String?
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("telephony_outbound_rules")
+}
+
+// ─────────────────────────────────────────────
+// TEAM / DEPARTMENTS
+// ─────────────────────────────────────────────
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  parentId  String?
+  managerId String?
+  createdAt DateTime @default(now())
+
+  @@map("departments")
+}
+
+model WorkSchedule {
+  id        String  @id @default(cuid())
+  userId    String  @unique
+  monday    Boolean @default(true)
+  tuesday   Boolean @default(true)
+  wednesday Boolean @default(true)
+  thursday  Boolean @default(true)
+  friday    Boolean @default(true)
+  saturday  Boolean @default(false)
+  sunday    Boolean @default(false)
+  startTime String  @default("09:00")
+  endTime   String  @default("18:00")
+
+  @@map("work_schedules")
+}
+
+// ─────────────────────────────────────────────
+// ATTACHMENTS (shared)
+// ─────────────────────────────────────────────
+
+model Attachment {
+  id                   String              @id @default(cuid())
+  fileName             String
+  fileUrl              String
+  fileSize             Int
+  mimeType             String
+  createdAt            DateTime            @default(now())
+  taskId               String?
+  task                 Task?               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  documentId           String?
+  document             Document?           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  emailId              String?
+  email                Email?              @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  serviceDeskRequestId String?
+  serviceDeskRequest   ServiceDeskRequest? @relation(fields: [serviceDeskRequestId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// SYSTEM / ADMINISTRATION
+// ─────────────────────────────────────────────
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  module    String
+  targetId  String?
+  details   String?  @db.Text
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([module, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// EMAIL CONFIGURATION (per-user)
+// ─────────────────────────────────────────────
+
+model EmailConfig {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  imapHost     String   @default("")
+  imapPort     Int      @default(993)
+  imapSsl      Boolean  @default(true)
+  imapLogin    String   @default("")
+  imapPassword String   @default("")
+  smtpHost     String   @default("")
+  smtpPort     Int      @default(587)
+  smtpSsl      Boolean  @default(true)
+  smtpLogin    String   @default("")
+  smtpPassword String   @default("")
+  fromName     String   @default("")
+  fromEmail    String   @default("")
+  isEnabled    Boolean  @default(false)
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_configs")
+}
+
+// ─────────────────────────────────────────────
+// LIVE CHAT DEPARTMENTS
+// ─────────────────────────────────────────────
+
+model LiveChatDepartment {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     LiveChatDepartmentMember[]
+  dialogs     ChatDialog[]               @relation("LiveChatDeptDialogs")
+
+  @@map("livechat_departments")
+}
+
+model LiveChatDepartmentMember {
+  id           String   @id @default(cuid())
+  departmentId String
+  userId       String
+  isLead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  department LiveChatDepartment @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, userId])
+  @@map("livechat_department_members")
+}
+
+// ─────────────────────────────────────────────
+// LIVE CHAT WIDGETS (per-website)
+// ─────────────────────────────────────────────
+
+model LiveChatWidget {
+  id           String   @id @default(cuid())
+  name         String
+  domain       String?
+  token        String   @unique
+  enabled      Boolean  @default(true)
+  brandLabel   String   @default("Chat with us")
+  logoUrl      String?
+  welcomeText  String   @default("Hi! How can we help you today?")
+  accentColor  String   @default("#FE0000")
+  position     String   @default("right")
+  allowDomains String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("livechat_widgets")
+}
+
+// ─────────────────────────────────────────────
+// TICKET WIDGET
+// ─────────────────────────────────────────────
+
+model TicketWidget {
+  id             String   @id @default(cuid())
+  name           String
+  token          String   @unique
+  enabled        Boolean  @default(true)
+  brandLabel     String   @default("Support")
+  logoUrl        String?
+  welcomeText    String   @default("Hi! How can we help you today?")
+  accentColor    String   @default("#B02B2C")
+  position       String   @default("right")
+  defaultGroupId String?
+  allowDomains   String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("ticket_widgets")
+}
+
+// ─────────────────────────────────────────────
+// MULTI-TENANT PLATFORM REGISTRY
+// (stored in platform DB only)
+// ─────────────────────────────────────────────
+
+model Tenant {
+  id             String              @id @default(cuid())
+  slug           String              @unique
+  name           String
+  defaultDomain  String              @unique
+  customDomain   String?             @unique
+  status         String              @default("trial")
+  plan           String              @default("basic")
+  maxUsers       Int                 @default(10)
+  databaseUrl    String              @db.Text
+  adminEmail     String
+  trialEndsAt    DateTime?
+  notes          String?             @db.Text
+  brandName      String?
+  brandLogoUrl   String?
+  brandColors    String?             @db.Text
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  subscription   TenantSubscription?
+
+  @@map("tenants")
+}
+
+model TenantSubscription {
+  id             String    @id @default(cuid())
+  tenantId       String    @unique
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  billingType    String    @default("per_user_monthly")
+  pricePerUser   Decimal?  @db.Decimal(10,2)
+  flatPrice      Decimal?  @db.Decimal(10,2)
+  currency       String    @default("USD")
+  userLimit      Int       @default(10)
+  nextBillingAt  DateTime?
+  lastBilledAt   DateTime?
+  status         String    @default("active")
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("tenant_subscriptions")
+}
+
+// ─────────────────────────────────────────────
+// DEVICE TOKENS (FCM push notifications)
+// ─────────────────────────────────────────────
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String   @default("android") // android | ios
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("device_tokens")
+}

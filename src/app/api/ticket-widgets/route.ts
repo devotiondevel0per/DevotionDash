@@ -1,0 +1,46 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireModuleAccess } from "@/lib/api-access";
+import { randomBytes } from "crypto";
+
+export async function GET() {
+  const r = await requireModuleAccess("servicedesk", "manage");
+  if (!r.ok) return r.response;
+  const widgets = await r.ctx.db.ticketWidget.findMany({ orderBy: { createdAt: "desc" } });
+  return NextResponse.json(widgets);
+}
+
+export async function POST(req: NextRequest) {
+  const r = await requireModuleAccess("servicedesk", "manage");
+  if (!r.ok) return r.response;
+
+  const body = (await req.json()) as {
+    name?: string;
+    brandLabel?: string;
+    welcomeText?: string;
+    accentColor?: string;
+    position?: string;
+    defaultGroupId?: string;
+    allowDomains?: string;
+    logoUrl?: string;
+  };
+
+  if (!body.name?.trim()) {
+    return NextResponse.json({ error: "name is required" }, { status: 400 });
+  }
+
+  const widget = await r.ctx.db.ticketWidget.create({
+    data: {
+      name: body.name.trim(),
+      token: randomBytes(20).toString("hex"),
+      brandLabel: body.brandLabel?.trim() || "Support",
+      welcomeText: body.welcomeText?.trim() || "Hi! How can we help you today?",
+      accentColor: body.accentColor?.trim() || "#B02B2C",
+      position: body.position || "right",
+      defaultGroupId: body.defaultGroupId || null,
+      allowDomains: body.allowDomains || null,
+      logoUrl: body.logoUrl || null,
+    },
+  });
+
+  return NextResponse.json(widget, { status: 201 });
+}
