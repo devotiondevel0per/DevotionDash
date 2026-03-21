@@ -10,12 +10,17 @@ import '../../widgets/empty_state.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
-final projectsProvider =
-    FutureProvider.family<List<dynamic>, Map<String, String>>((ref, query) {
-  return ref.watch(apiClientProvider).getProjects(
-        search: query['search'],
-        status: query['status'],
-      );
+final projectsProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, queryKey) async {
+  final query = queryKey.isEmpty ? <String, String>{} : Uri.splitQueryString(queryKey);
+  final raw = await ref.watch(apiClientProvider).getProjects(
+    search: query['search'],
+    status: query['status'],
+  );
+  return raw
+      .whereType<Map>()
+      .map((row) => Map<String, dynamic>.from(row))
+      .toList();
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,7 +98,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
         if (_status != 'all') 'status': _status,
       };
 
-  void _refresh() => ref.invalidate(projectsProvider(_query));
+  String get _queryKey => Uri(queryParameters: _query).query;
+
+  void _refresh() => ref.invalidate(projectsProvider(_queryKey));
 
   Future<void> _createProject() async {
     final name = TextEditingController();
@@ -217,7 +224,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final projects = ref.watch(projectsProvider(_query));
+    final projects = ref.watch(projectsProvider(_queryKey));
 
     return Scaffold(
       appBar: AppBar(
@@ -302,10 +309,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                     padding: const EdgeInsets.all(16),
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) {
-                      final p = list[i] as Map<String, dynamic>;
-                      return _ProjectCard(project: p);
-                    },
+                    itemBuilder: (_, i) => _ProjectCard(project: list[i]),
                   ),
                 ),
               ),
@@ -342,7 +346,9 @@ class _ProjectCard extends StatelessWidget {
         ? (manager['fullname'] ?? manager['name'] ?? '').toString()
         : '';
 
-    final count = project['_count'] as Map<String, dynamic>?;
+    final count = project['_count'] is Map
+        ? Map<String, dynamic>.from(project['_count'] as Map)
+        : null;
     final taskCount = count?['tasks'] ?? project['taskCount'];
     final phaseCount = count?['phases'] ?? project['phaseCount'];
 

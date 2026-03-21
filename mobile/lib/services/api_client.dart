@@ -508,7 +508,12 @@ class ApiClient {
         'categoryId': categoryId,
       'limit': limit,
     });
-    return res.data as List<dynamic>;
+    final data = res.data;
+    if (data is List<dynamic>) return data;
+    if (data is Map && data['items'] is List) {
+      return List<dynamic>.from(data['items'] as List);
+    }
+    return const [];
   }
 
   Future<Map<String, dynamic>> getProject(String id) async {
