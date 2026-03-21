@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -23,6 +24,7 @@ import {
   Shield,
   List,
   ArrowRightLeft,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +43,13 @@ type Extension = {
   number: string;
   userId: string | null;
   isActive: boolean;
+  user?: {
+    id: string;
+    name: string;
+    fullname: string;
+    login: string;
+    email: string;
+  } | null;
 };
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -68,21 +77,24 @@ export default function TelephonyPage() {
   const [calls, setCalls] = useState<CallLog[]>([]);
   const [extensions, setExtensions] = useState<Extension[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function loadTelephony() {
+    const [callsRes, extensionsRes] = await Promise.all([fetch("/api/telephony/calls?limit=600"), fetch("/api/telephony/extensions")]);
+    if (!callsRes.ok) throw new Error("Failed to load call logs");
+    if (!extensionsRes.ok) throw new Error("Failed to load extensions");
+    const callsData = (await callsRes.json()) as CallLog[];
+    const extData = (await extensionsRes.json()) as Extension[];
+    setCalls(Array.isArray(callsData) ? callsData : []);
+    setExtensions(Array.isArray(extData) ? extData : []);
+  }
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
 
-    Promise.all([fetch("/api/telephony/calls?limit=600"), fetch("/api/telephony/extensions")])
-      .then(async ([callsRes, extensionsRes]) => {
-        if (!callsRes.ok) throw new Error("Failed to load call logs");
-        if (!extensionsRes.ok) throw new Error("Failed to load extensions");
-        const callsData = (await callsRes.json()) as CallLog[];
-        const extData = (await extensionsRes.json()) as Extension[];
-        if (!mounted) return;
-        setCalls(Array.isArray(callsData) ? callsData : []);
-        setExtensions(Array.isArray(extData) ? extData : []);
-      })
+    loadTelephony()
       .catch((err: unknown) => {
         if (!mounted) return;
         setError(err instanceof Error ? err.message : "Failed to load telephony data");
@@ -112,11 +124,39 @@ export default function TelephonyPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="border-b bg-white px-6 py-4">
-        <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-          <Phone className="h-5 w-5 text-primary" />
-          Telephony
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage extensions, call routing, and view call history</p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <Phone className="h-5 w-5 text-primary" />
+              Telephony
+            </h1>
+            <p className="text-sm text-gray-500 mt-0.5">Manage extensions, call routing, and view call history</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={syncing}
+            onClick={async () => {
+              setSyncing(true);
+              setError(null);
+              try {
+                const response = await fetch("/api/telephony/sync/3cx", { method: "POST" });
+                if (!response.ok) {
+                  const payload = (await response.json().catch(() => ({}))) as { error?: string };
+                  throw new Error(payload.error ?? "3CX sync failed");
+                }
+                await loadTelephony();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "3CX sync failed");
+              } finally {
+                setSyncing(false);
+              }
+            }}
+          >
+            <RefreshCw className={cn("mr-2 h-4 w-4", syncing && "animate-spin")} />
+            {syncing ? "Syncing 3CX..." : "Sync 3CX"}
+          </Button>
+        </div>
         {error && (
           <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
@@ -251,7 +291,9 @@ export default function TelephonyPage() {
                     {extensions.map((ext) => (
                       <TableRow key={ext.id}>
                         <TableCell className="pl-6 font-mono text-sm">{ext.number}</TableCell>
-                        <TableCell className="text-sm text-gray-600">{ext.userId ? ext.userId.slice(0, 8) : "Unassigned"}</TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {ext.user?.fullname || ext.user?.name || ext.user?.login || (ext.userId ? ext.userId.slice(0, 8) : "Unassigned")}
+                        </TableCell>
                         <TableCell>
                           <Badge
                             variant="secondary"
@@ -287,5 +329,3 @@ export default function TelephonyPage() {
     </div>
   );
 }
-
-
