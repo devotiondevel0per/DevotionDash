@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
   List,
   ArrowRightLeft,
   RefreshCw,
+  FileUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +79,10 @@ export default function TelephonyPage() {
   const [extensions, setExtensions] = useState<Extension[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const cdrFileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function loadTelephony() {
     const [callsRes, extensionsRes] = await Promise.all([fetch("/api/telephony/calls?limit=600"), fetch("/api/telephony/extensions")]);
@@ -88,6 +92,39 @@ export default function TelephonyPage() {
     const extData = (await extensionsRes.json()) as Extension[];
     setCalls(Array.isArray(callsData) ? callsData : []);
     setExtensions(Array.isArray(extData) ? extData : []);
+  }
+
+  async function importCdrCsv(file: File) {
+    setImporting(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("source", "manual_csv");
+      const response = await fetch("/api/telephony/import/cdr", {
+        method: "POST",
+        body: form,
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        inserted?: number;
+        skipped?: number;
+        warnings?: string[];
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "CDR import failed");
+      }
+      await loadTelephony();
+      const inserted = payload.inserted ?? 0;
+      const skipped = payload.skipped ?? 0;
+      const warning = payload.warnings?.length ? ` Warning: ${payload.warnings.join(" | ")}` : "";
+      setInfo(`CDR imported. Inserted ${inserted}, skipped ${skipped}.${warning}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "CDR import failed");
+    } finally {
+      setImporting(false);
+    }
   }
 
   useEffect(() => {
@@ -132,31 +169,64 @@ export default function TelephonyPage() {
             </h1>
             <p className="text-sm text-gray-500 mt-0.5">Manage extensions, call routing, and view call history</p>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={syncing}
-            onClick={async () => {
-              setSyncing(true);
-              setError(null);
-              try {
-                const response = await fetch("/api/telephony/sync/3cx", { method: "POST" });
-                if (!response.ok) {
-                  const payload = (await response.json().catch(() => ({}))) as { error?: string };
-                  throw new Error(payload.error ?? "3CX sync failed");
+          <div className="flex items-center gap-2">
+            <input
+              ref={cdrFileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                await importCdrCsv(file);
+                event.currentTarget.value = "";
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={importing}
+              onClick={() => cdrFileInputRef.current?.click()}
+            >
+              <FileUp className={cn("mr-2 h-4 w-4", importing && "animate-pulse")} />
+              {importing ? "Importing CDR..." : "Import CDR CSV"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={syncing}
+              onClick={async () => {
+                setSyncing(true);
+                setError(null);
+                setInfo(null);
+                try {
+                  const response = await fetch("/api/telephony/sync/3cx", { method: "POST" });
+                  const payload = (await response.json().catch(() => ({}))) as { error?: string; warnings?: string[] };
+                  if (!response.ok) {
+                    throw new Error(payload.error ?? "3CX sync failed");
+                  }
+                  await loadTelephony();
+                  if (payload.warnings?.length) {
+                    setInfo(`3CX sync completed with warnings: ${payload.warnings.join(" | ")}`);
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "3CX sync failed");
+                } finally {
+                  setSyncing(false);
                 }
-                await loadTelephony();
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "3CX sync failed");
-              } finally {
-                setSyncing(false);
-              }
-            }}
-          >
-            <RefreshCw className={cn("mr-2 h-4 w-4", syncing && "animate-spin")} />
-            {syncing ? "Syncing 3CX..." : "Sync 3CX"}
-          </Button>
+              }}
+            >
+              <RefreshCw className={cn("mr-2 h-4 w-4", syncing && "animate-spin")} />
+              {syncing ? "Syncing 3CX..." : "Sync 3CX"}
+            </Button>
+          </div>
         </div>
+        <p className="mt-1 text-xs text-gray-500">If API is license-limited, use CDR CSV import from 3CX/Dinstar call reports.</p>
+        {info && (
+          <div className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            {info}
+          </div>
+        )}
         {error && (
           <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
