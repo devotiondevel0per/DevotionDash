@@ -74,7 +74,11 @@ export async function POST(req: NextRequest) {
 
     if (syncUsers) {
       const [threeCxUsers, localUsers, localExtensions] = await Promise.all([
-        list3cxUsers(provider),
+        list3cxUsers(provider).catch((error) => {
+          const message = error instanceof Error ? error.message : "Configuration API unavailable";
+          syncSummary.warnings.push(`Extension/user sync skipped: ${message}`);
+          return [];
+        }),
         accessResult.ctx.db.user.findMany({
           select: { id: true, email: true },
         }),
