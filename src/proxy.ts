@@ -83,6 +83,10 @@ export default auth(async (req) => {
     if (isApiRoute) {
       return NextResponse.json({ error: "Blocked by security policy" }, { status: 403 });
     }
+    // Don't redirect to /login if already on a public auth page — that causes an infinite redirect loop
+    if (isPublicAuthPage) {
+      return new NextResponse("Access denied by security policy.", { status: 403 });
+    }
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 

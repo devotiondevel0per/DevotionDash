@@ -652,7 +652,11 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                   }
                   final doc = documents[i - folders.length]
                       as Map<String, dynamic>;
-                  return _FileTile(doc: doc, onDeleted: _invalidate);
+                  return _FileTile(
+                    doc: doc,
+                    onDeleted: _invalidate,
+                    onChanged: _invalidate,
+                  );
                 },
               ),
             );
@@ -910,7 +914,8 @@ class _FolderTile extends StatelessWidget {
 class _FileTile extends ConsumerWidget {
   final Map<String, dynamic> doc;
   final VoidCallback? onDeleted;
-  const _FileTile({required this.doc, this.onDeleted});
+  final VoidCallback? onChanged;
+  const _FileTile({required this.doc, this.onDeleted, this.onChanged});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1211,6 +1216,25 @@ class _FileTile extends ConsumerWidget {
     }
   }
 
+  Future<void> _showShareSheet(BuildContext context, WidgetRef ref) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: _DocumentShareSheet(
+          documentId: doc['id']?.toString() ?? '',
+          documentName: _docName(doc),
+          onSaved: onChanged,
+        ),
+      ),
+    );
+  }
+
   void _showFileOptions(BuildContext context, WidgetRef ref) {
     final fileUrl = resolveServerUrl(doc['fileUrl']?.toString()) ?? '';
     final name = _docName(doc);
@@ -1222,6 +1246,11 @@ class _FileTile extends ConsumerWidget {
     final accessLevel = (doc['accessLevel'] ?? 'private').toString();
     final signedAt = _formatDate(doc['signedAt']?.toString());
     final hasContent = (doc['content']?.toString() ?? '').isNotEmpty;
+    final canManageShare =
+        doc['permission']?['isOwner'] == true ||
+        doc['permission']?['canWrite'] == true ||
+        doc['myAccess']?['canWrite'] == true ||
+        doc['myAccess']?['canDelete'] == true;
 
     showModalBottomSheet(
       context: context,
@@ -1366,6 +1395,15 @@ class _FileTile extends ConsumerWidget {
                 title: const Text('Details'),
                 onTap: () => Navigator.pop(sheetCtx),
               ),
+              if (canManageShare)
+                ListTile(
+                  leading: const Icon(Icons.share_outlined),
+                  title: const Text('Share'),
+                  onTap: () async {
+                    Navigator.pop(sheetCtx);
+                    await _showShareSheet(context, ref);
+                  },
+                ),
               // Delete (only shown if user has permission)
               if (doc['myAccess']?['canDelete'] == true ||
                   doc['permission']?['canDelete'] == true)
@@ -1429,6 +1467,421 @@ class _FileTile extends ConsumerWidget {
 }
 
 // ─── Create folder sheet ──────────────────────────────────────────────────────
+
+class _DocumentShareSheet extends ConsumerStatefulWidget {
+  final String documentId;
+  final String documentName;
+  final VoidCallback? onSaved;
+
+  const _DocumentShareSheet({
+    required this.documentId,
+    required this.documentName,
+    this.onSaved,
+  });
+
+  @override
+  ConsumerState<_DocumentShareSheet> createState() =>
+      _DocumentShareSheetState();
+}
+
+class _DocumentShareSheetState extends ConsumerState<_DocumentShareSheet> {
+  bool _loading = true;
+  bool _saving = false;
+  String _accessLevel = 'private';
+  List<Map<String, dynamic>> _shares = const [];
+  List<Map<String, dynamic>> _users = const [];
+  String _selectedUserId = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (widget.documentId.isEmpty) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final result = await Future.wait([
+        api.getDocumentShareSettings(widget.documentId),
+        api.getDocumentShareUsers(limit: 200),
+      ]);
+
+      final shareData = result[0] as Map<String, dynamic>;
+      final usersRaw = result[1] as List<dynamic>;
+      final sharesRaw = (shareData['shares'] as List<dynamic>? ?? const []);
+
+      if (!mounted) return;
+      setState(() {
+        _accessLevel = (shareData['accessLevel'] ?? 'private').toString();
+        _shares = sharesRaw
+            .whereType<Map>()
+            .map((entry) => {
+                  'userId': entry['userId']?.toString() ?? '',
+                  'userName': entry['userName']?.toString() ?? '',
+                  'userEmail': entry['userEmail']?.toString() ?? '',
+                  'canRead': entry['canRead'] == true,
+                  'canWrite': entry['canWrite'] == true,
+                  'canDelete': entry['canDelete'] == true,
+                })
+            .where((entry) => (entry['userId'] as String).isNotEmpty)
+            .toList();
+        _users = usersRaw
+            .whereType<Map>()
+            .map((entry) => {
+                  'id': entry['id']?.toString() ?? '',
+                  'name': entry['name']?.toString() ?? '',
+                  'email': entry['email']?.toString() ?? '',
+                })
+            .where((entry) => (entry['id'] as String).isNotEmpty)
+            .toList();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load sharing settings: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _toggleShare(String userId, String key, bool value) {
+    setState(() {
+      _shares = _shares.map((entry) {
+        if (entry['userId']?.toString() != userId) return entry;
+        final updated = Map<String, dynamic>.from(entry);
+        if (key == 'canWrite' && value) {
+          updated['canWrite'] = true;
+          updated['canRead'] = true;
+          return updated;
+        }
+        if (key == 'canDelete' && value) {
+          updated['canDelete'] = true;
+          updated['canRead'] = true;
+          return updated;
+        }
+        if (key == 'canRead' && !value) {
+          updated['canRead'] = false;
+          updated['canWrite'] = false;
+          updated['canDelete'] = false;
+          return updated;
+        }
+        updated[key] = value;
+        return updated;
+      }).toList();
+    });
+  }
+
+  void _addSelectedUser() {
+    if (_selectedUserId.isEmpty) return;
+    final user = _users.firstWhere(
+      (entry) => entry['id']?.toString() == _selectedUserId,
+      orElse: () => const {},
+    );
+    if (user.isEmpty) return;
+    if (_shares.any((entry) => entry['userId']?.toString() == _selectedUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User already added')),
+      );
+      return;
+    }
+    setState(() {
+      _shares = [
+        ..._shares,
+        {
+          'userId': user['id']?.toString() ?? '',
+          'userName': user['name']?.toString() ?? '',
+          'userEmail': user['email']?.toString() ?? '',
+          'canRead': true,
+          'canWrite': false,
+          'canDelete': false,
+        },
+      ];
+      _selectedUserId = '';
+    });
+  }
+
+  void _removeUser(String userId) {
+    setState(() {
+      _shares = _shares
+          .where((entry) => entry['userId']?.toString() != userId)
+          .toList();
+    });
+  }
+
+  Future<void> _save() async {
+    if (widget.documentId.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final payload = _shares
+          .map((entry) => {
+                'userId': entry['userId']?.toString() ?? '',
+                'canRead': entry['canRead'] == true,
+                'canWrite': entry['canWrite'] == true,
+                'canDelete': entry['canDelete'] == true,
+              })
+          .where((entry) =>
+              (entry['userId'] as String).isNotEmpty &&
+              (entry['canRead'] == true ||
+                  entry['canWrite'] == true ||
+                  entry['canDelete'] == true))
+          .toList();
+
+      await ref.read(apiClientProvider).updateDocumentShareSettings(
+            documentId: widget.documentId,
+            accessLevel: _accessLevel == 'module' ? 'module' : 'private',
+            shares: payload,
+          );
+      if (!mounted) return;
+      widget.onSaved?.call();
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sharing updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save sharing: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Share Document',
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.documentName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_loading)
+            const Expanded(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            DropdownButtonFormField<String>(
+              value: _accessLevel == 'module' ? 'module' : 'private',
+              decoration: const InputDecoration(
+                labelText: 'Access level',
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: 'module',
+                  child: Text('Module users can view'),
+                ),
+                DropdownMenuItem(
+                  value: 'private',
+                  child: Text('Private (shared users only)'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _accessLevel = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedUserId.isEmpty ? null : _selectedUserId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Add user',
+                    ),
+                    items: _users
+                        .where((user) => !_shares.any((entry) =>
+                            entry['userId']?.toString() ==
+                            user['id']?.toString()))
+                        .map((user) => DropdownMenuItem<String>(
+                              value: user['id']?.toString() ?? '',
+                              child: Text(
+                                '${user['name']} (${user['email']})',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedUserId = value ?? ''),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonal(
+                  onPressed: _selectedUserId.isEmpty ? null : _addSelectedUser,
+                  child: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _shares.isEmpty
+                  ? const Center(
+                      child: Text('No user-specific shares configured.'),
+                    )
+                  : ListView.separated(
+                      itemCount: _shares.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, index) {
+                        final entry = _shares[index];
+                        final userId = entry['userId']?.toString() ?? '';
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          entry['userName']?.toString() ??
+                                              'User',
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        Text(
+                                          entry['userEmail']?.toString() ?? '',
+                                          style: theme.textTheme.bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () => _removeUser(userId),
+                                    icon: const Icon(Icons.delete_outline),
+                                    tooltip: 'Remove',
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: CheckboxListTile(
+                                      value: entry['canRead'] == true,
+                                      onChanged: (value) => _toggleShare(
+                                        userId,
+                                        'canRead',
+                                        value == true,
+                                      ),
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('View'),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: CheckboxListTile(
+                                      value: entry['canWrite'] == true,
+                                      onChanged: (value) => _toggleShare(
+                                        userId,
+                                        'canWrite',
+                                        value == true,
+                                      ),
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Edit'),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: CheckboxListTile(
+                                      value: entry['canDelete'] == true,
+                                      onChanged: (value) => _toggleShare(
+                                        userId,
+                                        'canDelete',
+                                        value == true,
+                                      ),
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Delete'),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(backgroundColor: _kPrimary),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _CreateFolderSheet extends ConsumerStatefulWidget {
   final String? parentId;

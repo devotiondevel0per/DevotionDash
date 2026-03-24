@@ -734,6 +734,51 @@ class ApiClient {
     await _dio.delete('/documents/folders/$id');
   }
 
+  Future<List<dynamic>> getDocumentShareUsers({
+    String? search,
+    int limit = 200,
+  }) async {
+    final res = await _dio.get('/documents/share-users', queryParameters: {
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      'limit': limit,
+    });
+    return res.data as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getDocumentShareSettings(
+    String documentId,
+  ) async {
+    final res = await _dio.get('/documents/$documentId/share');
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<void> updateDocumentShareSettings({
+    required String documentId,
+    required String accessLevel,
+    required List<Map<String, dynamic>> shares,
+  }) async {
+    await _dio.put('/documents/$documentId/share', data: {
+      'accessLevel': accessLevel,
+      'shares': shares,
+    });
+  }
+
+  Future<Map<String, dynamic>> getFolderShareSettings(String folderId) async {
+    final res = await _dio.get('/documents/folders/$folderId/share');
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<void> updateFolderShareSettings({
+    required String folderId,
+    required String accessLevel,
+    required List<Map<String, dynamic>> shares,
+  }) async {
+    await _dio.put('/documents/folders/$folderId/share', data: {
+      'accessLevel': accessLevel,
+      'shares': shares,
+    });
+  }
+
   // ─── Notifications ──────────────────────────────────────
   Future<Map<String, dynamic>> getNotifications({
     int page = 1,
