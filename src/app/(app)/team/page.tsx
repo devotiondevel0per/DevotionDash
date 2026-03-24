@@ -221,30 +221,32 @@ function MemberProfileModal({
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0">
+        {/* Header */}
+        <DialogHeader className="shrink-0 border-b px-5 py-4">
           <DialogTitle className="flex items-center gap-3">
-            <div className="relative">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className={cn("font-semibold", colorClass)}>{initialsOf(user)}</AvatarFallback>
+            <div className="relative shrink-0">
+              <Avatar className="h-11 w-11">
+                <AvatarFallback className={cn("text-sm font-semibold", colorClass)}>{initialsOf(user)}</AvatarFallback>
               </Avatar>
               <span className="absolute bottom-0 right-0">
                 <StatusDot status={status} size="sm" />
               </span>
             </div>
-            <div>
-              <p className="text-base font-semibold">{fullName}</p>
-              <p className="text-xs font-normal text-gray-500">{user.position || "No position"}</p>
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold">{fullName}</p>
+              <p className="truncate text-xs font-normal text-gray-500">{user.position || "No position"}</p>
             </div>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {/* Info grid */}
-          <div className="grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-3 text-sm">
-            <div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-gray-50 p-3 text-sm">
+            <div className="min-w-0">
               <p className="text-xs text-gray-400">Department</p>
-              <p className="font-medium text-gray-800">{user.department || "—"}</p>
+              <p className="truncate font-medium text-gray-800">{user.department || "—"}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400">Status</p>
@@ -255,10 +257,10 @@ function MemberProfileModal({
                 )}>{status}</span>
               </div>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-gray-400">Email</p>
-              <div className="flex items-center gap-1">
-                <p className="truncate font-medium text-gray-800">{user.email || "—"}</p>
+              <div className="flex items-center gap-1 min-w-0">
+                <p className="truncate font-medium text-gray-800 text-xs">{user.email || "—"}</p>
                 {user.email ? <CopyButton value={user.email} label="email" /> : null}
               </div>
             </div>
@@ -271,7 +273,7 @@ function MemberProfileModal({
             </div>
             <div>
               <p className="text-xs text-gray-400">Last Activity</p>
-              <p className="font-medium text-gray-800">
+              <p className="font-medium text-gray-800 text-xs">
                 {user.lastActivity
                   ? new Date(user.lastActivity).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
                   : "Never"}
@@ -308,11 +310,11 @@ function MemberProfileModal({
             ) : logs.length === 0 ? (
               <p className="rounded-lg border border-dashed py-4 text-center text-xs text-gray-400">No activity logs available</p>
             ) : (
-              <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border bg-gray-50 p-2">
+              <div className="space-y-1 rounded-lg border bg-gray-50 p-2">
                 {logs.map((log) => (
-                  <div key={log.id} className="flex items-start gap-2 rounded px-2 py-1 hover:bg-white text-xs">
-                    <span className="mt-0.5 shrink-0 rounded bg-slate-200 px-1.5 py-0.5 font-medium text-slate-600 uppercase text-[10px]">{log.module}</span>
-                    <span className="flex-1 text-gray-700">{log.action}{log.detail ? ` — ${log.detail}` : ""}</span>
+                  <div key={log.id} className="flex flex-wrap items-start gap-x-2 gap-y-0.5 rounded px-2 py-1.5 hover:bg-white text-xs">
+                    <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 font-medium text-slate-600 uppercase text-[10px]">{log.module}</span>
+                    <span className="flex-1 min-w-0 break-words text-gray-700">{log.action}{log.detail ? ` — ${log.detail}` : ""}</span>
                     <span className="shrink-0 text-gray-400">
                       {new Date(log.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </span>
