@@ -38,12 +38,13 @@ final _projectProvider = FutureProvider.autoDispose.family<_ProjectDetailData, S
     final taskRes = await api.getProjectTasks(id);
     final tasks = _asRows(taskRes['items']);
     final stages = _asRows(taskRes['stages']);
-    return _ProjectDetailData(project: project, tasks: tasks, stages: stages);
+    final resolvedStages = stages.isNotEmpty ? stages : _asRows(project['taskStages']);
+    return _ProjectDetailData(project: project, tasks: tasks, stages: resolvedStages);
   } catch (_) {
     return _ProjectDetailData(
       project: project,
       tasks: _asRows(project['tasks']),
-      stages: const [],
+      stages: _asRows(project['taskStages']),
     );
   }
 });
@@ -159,17 +160,9 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen>
     return _s(member['name']);
   }
 
-  int _progress(List<Map<String, dynamic>> tasks, Map<String, String> stageLabels) {
+  int _progress(List<Map<String, dynamic>> tasks, Set<String> closedStageKeys) {
     if (tasks.isEmpty) return 0;
-    final doneStatuses = <String>{'done', 'completed', 'closed'};
-    stageLabels.forEach((key, value) {
-      final normalized = value.toLowerCase();
-      if (normalized.contains('done') ||
-          normalized.contains('complete') ||
-          normalized.contains('close')) {
-        doneStatuses.add(key);
-      }
-    });
+    final doneStatuses = <String>{...closedStageKeys, 'done', 'completed', 'closed', 'cancelled'};
     final done = tasks
         .where((t) => doneStatuses.contains(_s(t['status']).trim().toLowerCase()))
         .length;
@@ -217,6 +210,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen>
           final tasks = detail.tasks;
           final stageLabels = <String, String>{};
           final stageColors = <String, Color>{};
+          final closedStageKeys = <String>{};
           for (final stage in detail.stages) {
             final key = _s(stage['key']).trim().toLowerCase();
             if (key.isEmpty) continue;
@@ -224,6 +218,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen>
             if (label.isNotEmpty) stageLabels[key] = label;
             final color = _hexColor(_s(stage['color']));
             if (color != null) stageColors[key] = color;
+            if (stage['isClosed'] == true) closedStageKeys.add(key);
           }
           final stageKeys = detail.stages
               .map((stage) => _s(stage['key']).trim().toLowerCase())
@@ -253,7 +248,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen>
             fmt: _fmt,
             memberName: _memberName,
             memberUserId: _memberUserId,
-            progress: _progress(tasks, stageLabels),
+            progress: _progress(tasks, closedStageKeys),
             refresh: _refresh,
             snack: _snack,
             err: _err,
@@ -943,10 +938,7 @@ class _TaskSection extends ConsumerWidget {
     return statusColor(status);
   }
 
-  Future<void> _advanceStatus(WidgetRef ref, Map<String, dynamic> task) async {
-    final current = _s(task['status']).trim().toLowerCase();
-    final idx = statuses.indexOf(current);
-    final next = idx == -1 ? statuses.first : statuses[(idx + 1) % statuses.length];
+  Future<void> _updateStatus(WidgetRef ref, Map<String, dynamic> task, String next) async {
     try {
       await ref.read(apiClientProvider).updateProjectTask(
         projectId,
@@ -958,6 +950,14 @@ class _TaskSection extends ConsumerWidget {
     } catch (e) {
       snack(err(e), error: true);
     }
+  }
+
+  Future<void> _advanceStatus(WidgetRef ref, Map<String, dynamic> task) async {
+    if (statuses.isEmpty) return;
+    final current = _s(task['status']).trim().toLowerCase();
+    final idx = statuses.indexOf(current);
+    final next = idx == -1 ? statuses.first : statuses[(idx + 1) % statuses.length];
+    await _updateStatus(ref, task, next);
   }
 
   @override
@@ -1039,14 +1039,33 @@ class _TaskSection extends ConsumerWidget {
                                       confirm: confirm,
                                       existing: task,
                                     );
-                                  } else {
+                                  } else if (v == 'advance') {
                                     _advanceStatus(ref, task);
+                                  } else if (v.startsWith('status:')) {
+                                    final next = v.substring('status:'.length);
+                                    if (next.isNotEmpty) {
+                                      _updateStatus(ref, task, next);
+                                    }
                                   }
                                 },
-                                itemBuilder: (_) => const [
-                                  PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                  PopupMenuItem(value: 'advance', child: Text('Advance status')),
-                                ],
+                                itemBuilder: (_) {
+                                  final current = _s(task['status']).trim().toLowerCase();
+                                  final stageItems = statuses
+                                      .where((stage) => stage.trim().toLowerCase() != current)
+                                      .map(
+                                        (stage) => PopupMenuItem<String>(
+                                          value: 'status:$stage',
+                                          child: Text('Move to ${_statusLabel(stage)}'),
+                                        ),
+                                      )
+                                      .toList();
+                                  return [
+                                    const PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
+                                    const PopupMenuItem<String>(value: 'advance', child: Text('Advance status')),
+                                    if (stageItems.isNotEmpty) const PopupMenuDivider(),
+                                    ...stageItems,
+                                  ];
+                                },
                               )
                             : null,
                       ),

@@ -37,16 +37,34 @@ export async function GET() {
         fullname: true,
         email: true,
         department: true,
+        groupMembers: {
+          select: {
+            group: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
+          },
+        },
       },
       orderBy: [{ fullname: "asc" }, { name: "asc" }],
       take: 500,
     });
 
-    const groups = accessResult.ctx.access.roles.map((role) => ({
-      id: role.groupId,
-      name: role.name,
-      color: role.color,
-    }));
+    const groupMap = new Map<string, { id: string; name: string; color: string }>();
+    for (const user of users) {
+      for (const membership of user.groupMembers) {
+        if (!membership.group?.id) continue;
+        groupMap.set(membership.group.id, {
+          id: membership.group.id,
+          name: membership.group.name,
+          color: membership.group.color,
+        });
+      }
+    }
+    const groups = Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
     return NextResponse.json({
       users: users.map((user) => ({
@@ -54,6 +72,7 @@ export async function GET() {
         fullname: user.fullname || `${user.name} ${user.surname}`.trim(),
         email: user.email,
         department: user.department,
+        groupIds: user.groupMembers.map((membership) => membership.group.id),
       })),
       groups,
       currentUserId: userId,
@@ -63,4 +82,3 @@ export async function GET() {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

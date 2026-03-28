@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { requireProjectReadAccess, requireProjectWriteAccess } from "@/lib/project-access";
+import { loadProjectTaskStages } from "@/lib/workflow-config";
 
 export async function GET(
   req: NextRequest,
@@ -39,7 +40,9 @@ export async function GET(
 
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    return NextResponse.json(project);
+    const taskStages = await loadProjectTaskStages();
+
+    return NextResponse.json({ ...project, taskStages });
   } catch (error) {
     console.error("[GET /api/projects/[id]]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

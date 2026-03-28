@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 200);
 
     const scopeFilters: Record<string, unknown>[] = [];
+    const isSubordinateCategory = category === "subordinate";
     const groupIds = accessResult.ctx.access.roles.map((role) => role.groupId);
     let groupedUserIds: string[] = [];
 
@@ -35,15 +36,15 @@ export async function GET(req: NextRequest) {
       groupedUserIds = Array.from(new Set(members.map((member) => member.userId)));
     }
 
-    if (view === "overview") {
+    if (view === "overview" && !isSubordinateCategory) {
       scopeFilters.push({
         OR: [{ creatorId: userId }, { assignees: { some: { userId } } }],
       });
-    } else if (view === "personal") {
+    } else if (view === "personal" && !isSubordinateCategory) {
       scopeFilters.push({ creatorId: userId });
-    } else if (view === "assigned") {
+    } else if (view === "assigned" && !isSubordinateCategory) {
       scopeFilters.push({ assignees: { some: { userId } } });
-    } else if (view === "groups") {
+    } else if (view === "groups" && !isSubordinateCategory) {
       if (groupedUserIds.length === 0) {
         scopeFilters.push({ id: "__none__" });
       } else {
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (scopeFilters.length === 0 && !accessResult.ctx.access.isAdmin) {
+    if (scopeFilters.length === 0 && !accessResult.ctx.access.isAdmin && !isSubordinateCategory) {
       scopeFilters.push({
         OR: [{ creatorId: userId }, { assignees: { some: { userId } } }],
       });
@@ -132,10 +133,11 @@ export async function GET(req: NextRequest) {
         and.push({ favorites: { some: { userId } } });
       } else if (category === "subordinate") {
         const subordinateIds = groupedUserIds.filter((id) => id !== userId);
-        if (subordinateIds.length === 0) {
-          and.push({ id: "__none__" });
-        } else {
+        if (subordinateIds.length > 0) {
           and.push({ creatorId: { in: subordinateIds } });
+        } else {
+          // Fallback for setups without group hierarchy: show tasks created by other users.
+          and.push({ creatorId: { not: userId } });
         }
       }
 

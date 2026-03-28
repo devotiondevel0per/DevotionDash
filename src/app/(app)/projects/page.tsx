@@ -87,6 +87,15 @@ type Project = {
   _count: { phases: number; tasks: number };
 };
 
+type WorkflowStage = {
+  key: string;
+  label: string;
+  color: string;
+  isClosed: boolean;
+  isDefault: boolean;
+  order: number;
+};
+
 type ProjectTask = {
   id: string;
   title: string;
@@ -109,6 +118,7 @@ type ProjectPhaseItem = {
 type ProjectDetail = Project & {
   phases: ProjectPhaseItem[];
   tasks: ProjectTask[];
+  taskStages?: WorkflowStage[];
 };
 
 type TeamUser = {
@@ -126,12 +136,12 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   archived: { label: "Archived", className: "bg-gray-100 text-gray-500" },
 };
 
-const TASK_STATUS_CONFIG: Record<string, { label: string; className: string; next: string }> = {
-  todo: { label: "To Do", className: "bg-gray-100 text-gray-600", next: "in_progress" },
-  in_progress: { label: "In Progress", className: "bg-blue-100 text-blue-700", next: "done" },
-  done: { label: "Done", className: "bg-green-100 text-green-700", next: "todo" },
-  cancelled: { label: "Cancelled", className: "bg-red-100 text-red-500", next: "todo" },
-};
+const DEFAULT_PROJECT_TASK_STAGES: WorkflowStage[] = [
+  { key: "todo", label: "To Do", color: "#64748b", isClosed: false, isDefault: true, order: 0 },
+  { key: "in_progress", label: "In Progress", color: "#3b82f6", isClosed: false, isDefault: false, order: 1 },
+  { key: "done", label: "Done", color: "#22c55e", isClosed: true, isDefault: false, order: 2 },
+  { key: "cancelled", label: "Cancelled", color: "#ef4444", isClosed: true, isDefault: false, order: 3 },
+];
 
 const TASK_PRIORITY_CONFIG: Record<string, { label: string; className: string }> = {
   high: { label: "High", className: "bg-red-100 text-[#FE0000]" },
@@ -178,13 +188,73 @@ function normalizeTaskStatus(status?: string | null): string {
   return status.toLowerCase().replace("-", "_");
 }
 
+function normalizeWorkflowStages(input?: WorkflowStage[] | null): WorkflowStage[] {
+  if (!Array.isArray(input) || input.length === 0) return DEFAULT_PROJECT_TASK_STAGES;
+  const stages = input
+    .map((stage, index) => ({
+      key: normalizeTaskStatus(stage.key),
+      label: String(stage.label || stage.key || "").trim() || normalizeTaskStatus(stage.key),
+      color: /^#[0-9a-f]{6}$/i.test(stage.color) ? stage.color : "#64748b",
+      isClosed: Boolean(stage.isClosed),
+      isDefault: Boolean(stage.isDefault),
+      order: typeof stage.order === "number" ? stage.order : index,
+    }))
+    .filter((stage) => Boolean(stage.key));
+  if (stages.length === 0) return DEFAULT_PROJECT_TASK_STAGES;
+  if (!stages.some((stage) => stage.isDefault)) {
+    stages[0] = { ...stages[0], isDefault: true };
+  }
+  return stages.sort((a, b) => a.order - b.order);
+}
+
+function stageStyle(color: string) {
+  return {
+    backgroundColor: `${color}1A`,
+    borderColor: `${color}3D`,
+    color,
+  };
+}
+
+function getTaskStage(stages: WorkflowStage[], status?: string | null): WorkflowStage {
+  if (stages.length === 0) return DEFAULT_PROJECT_TASK_STAGES[0];
+  const normalized = normalizeTaskStatus(status);
+  return stages.find((stage) => stage.key === normalized) ?? stages.find((stage) => stage.isDefault) ?? stages[0];
+}
+
+function getTaskStageLabel(stages: WorkflowStage[], status?: string | null): string {
+  const normalized = normalizeTaskStatus(status);
+  const match = stages.find((stage) => stage.key === normalized);
+  if (match) return match.label;
+  return normalized
+    .split("_")
+    .filter(Boolean)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(" ");
+}
+
+function isTaskClosed(stages: WorkflowStage[], status?: string | null): boolean {
+  const normalized = normalizeTaskStatus(status);
+  const match = stages.find((stage) => stage.key === normalized);
+  if (match) return match.isClosed;
+  return normalized.includes("done") || normalized.includes("complete") || normalized.includes("closed") || normalized.includes("cancel");
+}
+
+function getNextTaskStageKey(stages: WorkflowStage[], status?: string | null): string {
+  if (stages.length === 0) return "todo";
+  const normalized = normalizeTaskStatus(status);
+  const currentIndex = stages.findIndex((stage) => stage.key === normalized);
+  if (currentIndex < 0) return stages[0].key;
+  const nextIndex = (currentIndex + 1) % stages.length;
+  return stages[nextIndex].key;
+}
+
 function normalizeProjectTask(task: ProjectTask): ProjectTask {
   return { ...task, status: normalizeTaskStatus(task.status) };
 }
 
-function calcProgress(tasks: ProjectTask[]): number {
+function calcProgress(tasks: ProjectTask[], stages: WorkflowStage[]): number {
   if (!tasks.length) return 0;
-  const done = tasks.filter((t) => normalizeTaskStatus(t.status) === "done").length;
+  const done = tasks.filter((task) => isTaskClosed(stages, task.status)).length;
   return Math.round((done / tasks.length) * 100);
 }
 // ─── Create / Edit Project Dialog ─────────────────────────────────────────────
@@ -380,16 +450,23 @@ type TaskDialogProps = {
   onSaved: (task: ProjectTask) => void;
   onDeleted?: (taskId: string) => void;
   projectId: string;
+  stages: WorkflowStage[];
   phases: ProjectPhaseItem[];
   members: ProjectMember[];
   existing?: ProjectTask;
 };
 
-function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, phases, members, existing }: TaskDialogProps) {
+function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phases, members, existing }: TaskDialogProps) {
   const isEdit = Boolean(existing);
+  const stageOptions = useMemo(() => normalizeWorkflowStages(stages), [stages]);
+  const defaultStage = stageOptions.find((stage) => stage.isDefault) ?? stageOptions[0];
+  const resolveStatus = useCallback((value?: string | null) => {
+    const normalized = normalizeTaskStatus(value);
+    return stageOptions.some((stage) => stage.key === normalized) ? normalized : defaultStage.key;
+  }, [defaultStage.key, stageOptions]);
   const [title, setTitle] = useState(existing?.title ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
-  const [status, setStatus] = useState(normalizeTaskStatus(existing?.status));
+  const [status, setStatus] = useState(resolveStatus(existing?.status));
   const [priority, setPriority] = useState(existing?.priority ?? "normal");
   const [assigneeId, setAssigneeId] = useState(existing?.assignee?.id ?? "");
   const [phaseId, setPhaseId] = useState(existing?.phase?.id ?? "");
@@ -402,14 +479,14 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, phases, memb
     if (open) {
       setTitle(existing?.title ?? "");
       setDescription(existing?.description ?? "");
-      setStatus(normalizeTaskStatus(existing?.status));
+      setStatus(resolveStatus(existing?.status));
       setPriority(existing?.priority ?? "normal");
       setAssigneeId(existing?.assignee?.id ?? "");
       setPhaseId(existing?.phase?.id ?? "");
       setDueDate(existing?.dueDate ? existing.dueDate.slice(0, 10) : "");
       setConfirmDelete(false);
     }
-  }, [open, existing]);
+  }, [open, existing, resolveStatus]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -494,11 +571,11 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, phases, memb
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v ?? "todo")}>
+              <Select value={status} onValueChange={(v) => setStatus(v ?? defaultStage.key)}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(TASK_STATUS_CONFIG).map(([key, cfg]) => (
-                    <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+                  {stageOptions.map((stage) => (
+                    <SelectItem key={stage.key} value={stage.key}>{stage.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -794,6 +871,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
 
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
+  const [taskStages, setTaskStages] = useState<WorkflowStage[]>(DEFAULT_PROJECT_TASK_STAGES);
   const [phases, setPhases] = useState<ProjectPhaseItem[]>([]);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -814,8 +892,25 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
         const res = await fetch(`/api/projects/${projectId}`);
         if (!res.ok) throw new Error("Failed to load project");
         const data = (await res.json()) as ProjectDetail;
+
+        let nextStages = normalizeWorkflowStages(data.taskStages);
+        let nextTasks = (data.tasks ?? []).map(normalizeProjectTask);
+        try {
+          const tasksRes = await fetch(`/api/projects/${projectId}/tasks`);
+          if (tasksRes.ok) {
+            const tasksData = (await tasksRes.json()) as { items?: ProjectTask[]; stages?: WorkflowStage[] };
+            if (Array.isArray(tasksData.items)) {
+              nextTasks = tasksData.items.map(normalizeProjectTask);
+            }
+            nextStages = normalizeWorkflowStages(tasksData.stages ?? nextStages);
+          }
+        } catch {
+          // Keep project payload fallback when task endpoint is unavailable.
+        }
+
         setDetail(data);
-        setTasks((data.tasks ?? []).map(normalizeProjectTask));
+        setTasks(nextTasks);
+        setTaskStages(nextStages);
         setPhases(data.phases ?? []);
         setMembers(data.members ?? []);
       } catch (err) {
@@ -853,7 +948,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
     };
   }, [loadProject]);
 
-  const progress = useMemo(() => calcProgress(tasks), [tasks]);
+  const progress = useMemo(() => calcProgress(tasks, taskStages), [taskStages, tasks]);
   const currentUserId = access?.userId ?? "";
   const myMembership = useMemo(
     () => members.find((member) => member.user.id === currentUserId),
@@ -865,8 +960,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   const canProjectManage = canWrite && (canManage || isProjectManager);
 
   async function toggleTaskStatus(task: ProjectTask) {
-    const normalizedStatus = normalizeTaskStatus(task.status);
-    const next = TASK_STATUS_CONFIG[normalizedStatus]?.next ?? "todo";
+    const next = getNextTaskStageKey(taskStages, task.status);
     setTogglingTaskId(task.id);
     try {
       const res = await fetch(`/api/projects/${projectId}/tasks/${task.id}`, {
@@ -1012,7 +1106,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
             </ProgressTrack>
           </Progress>
           <span className="text-xs text-gray-500 shrink-0">
-            {tasks.filter((t) => normalizeTaskStatus(t.status) === "done").length}/{tasks.length} done - {progress}%
+            {tasks.filter((task) => isTaskClosed(taskStages, task.status)).length}/{tasks.length} completed - {progress}%
           </span>
         </div>
       </div>
@@ -1105,16 +1199,16 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                             </TableCell>
                             <TableCell onClick={(e) => { if (!canProjectWrite) return; e.stopPropagation(); void toggleTaskStatus(task); }}>
                               <Badge
-                                variant="secondary"
+                                variant="outline"
                                 className={cn(
                                   "text-xs transition-opacity select-none",
                                   canProjectWrite && "cursor-pointer hover:opacity-80",
-                                  togglingTaskId === task.id ? "opacity-50" : "",
-                                  TASK_STATUS_CONFIG[normalizeTaskStatus(task.status)]?.className ?? "bg-gray-100 text-gray-600"
+                                  togglingTaskId === task.id ? "opacity-50" : ""
                                 )}
-                                title={canProjectWrite ? "Click to advance status" : undefined}
+                                style={stageStyle(getTaskStage(taskStages, task.status).color)}
+                                title={canProjectWrite ? "Click to move to next stage" : undefined}
                               >
-                                {TASK_STATUS_CONFIG[normalizeTaskStatus(task.status)]?.label ?? task.status}
+                                {getTaskStageLabel(taskStages, task.status)}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -1182,7 +1276,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
               ) : (
                 phases.map((phase, idx) => {
                   const phaseTasks = tasks.filter((t) => t.phase?.id === phase.id);
-                  const phaseProgress = calcProgress(phaseTasks);
+                  const phaseProgress = calcProgress(phaseTasks, taskStages);
                   return (
                     <div key={phase.id} className="flex items-center gap-4 p-4 bg-white rounded-xl border group">
                       <div
@@ -1299,6 +1393,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
         }}
         onDeleted={(id) => setTasks((prev) => prev.filter((t) => t.id !== id))}
         projectId={projectId}
+        stages={taskStages}
         phases={phases}
         members={members}
         existing={editingTask}
@@ -1332,7 +1427,7 @@ type ProjectCardProps = {
 function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardProps) {
   const [hovered, setHovered] = useState(false);
   const tasksCount = project.tasks?.length ?? project._count.tasks;
-  const doneTasks = (project.tasks ?? []).filter((task) => normalizeTaskStatus(task.status) === "done").length;
+  const doneTasks = (project.tasks ?? []).filter((task) => isTaskClosed(DEFAULT_PROJECT_TASK_STAGES, task.status)).length;
   const progress = tasksCount > 0 ? Math.round((doneTasks / tasksCount) * 100) : 0;
   const membersCount = project.members.length;
 
@@ -1735,5 +1830,3 @@ export default function ProjectsPage() {
     </div>
   );
 }
-
-

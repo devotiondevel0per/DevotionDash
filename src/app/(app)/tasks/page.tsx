@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -65,10 +65,11 @@ type WorkflowStage = {
 type TaskType = "task" | "event" | "note";
 type TaskPriority = "low" | "normal" | "high";
 type TaskView = "overview" | "personal" | "assigned" | "groups" | "all" | "filter";
-type TaskCategory = "open" | "closed" | "events" | "notes" | "favorites" | "subordinate" | "all";
+type TaskCategory = "open" | "closed" | "events" | "notes" | "favorites" | "all";
 type TaskLayout = "list" | "grid" | "kanban";
 
-type TaskUser = { id: string; fullname: string; email?: string };
+type TaskUser = { id: string; fullname: string; email?: string; groupIds?: string[] };
+type TaskGroup = { id: string; name: string; color?: string };
 
 type TaskItem = {
   id: string;
@@ -95,6 +96,7 @@ type TaskComment = {
 
 type TaskMetaResponse = {
   users: TaskUser[];
+  groups: TaskGroup[];
   currentUserId: string;
 };
 
@@ -129,11 +131,10 @@ const VIEW_TABS: Array<{ id: TaskView; label: string }> = [
 
 const CATEGORY_ITEMS: Array<{ id: TaskCategory; label: string }> = [
   { id: "open", label: "Open" },
-  { id: "closed", label: "Closed" },
+  { id: "closed", label: "Completed" },
   { id: "events", label: "Events" },
   { id: "notes", label: "Notes" },
   { id: "favorites", label: "Favorites" },
-  { id: "subordinate", label: "Subordinate" },
   { id: "all", label: "All" },
 ];
 
@@ -327,6 +328,7 @@ function TaskModal({
   onClose,
   onSaved,
   users,
+  groups,
   initial,
   stages,
 }: {
@@ -334,6 +336,7 @@ function TaskModal({
   onClose: () => void;
   onSaved: () => void;
   users: TaskUser[];
+  groups: TaskGroup[];
   initial: TaskFormState;
   stages: WorkflowStage[];
 }) {
@@ -441,7 +444,48 @@ function TaskModal({
   }
 
   const selected = useMemo(() => new Set(form.assigneeIds), [form.assigneeIds]);
+  const groupedUsers = useMemo(() => {
+    const sections = new Map<string, { group: TaskGroup; users: TaskUser[] }>();
+    for (const group of groups) {
+      sections.set(group.id, { group, users: [] });
+    }
+    const ungrouped: TaskUser[] = [];
+
+    for (const user of users) {
+      const groupId = (user.groupIds ?? []).find((id) => sections.has(id));
+      if (groupId && sections.has(groupId)) {
+        sections.get(groupId)?.users.push(user);
+      } else {
+        ungrouped.push(user);
+      }
+    }
+
+    const result = Array.from(sections.values()).filter((section) => section.users.length > 0);
+    if (ungrouped.length > 0) {
+      result.push({
+        group: { id: "ungrouped", name: "Ungrouped", color: "#94a3b8" },
+        users: ungrouped,
+      });
+    }
+    return result;
+  }, [groups, users]);
   const titleIcon = form.id ? <Pencil className="h-5 w-5 text-[#FE0000]" /> : <FilePlus2 className="h-5 w-5 text-[#FE0000]" />;
+
+  function toggleAssignee(userId: string, checked: boolean) {
+    const next = checked
+      ? Array.from(new Set([...form.assigneeIds, userId]))
+      : form.assigneeIds.filter((id) => id !== userId);
+    setForm((prev) => ({ ...prev, assigneeIds: next }));
+  }
+
+  function toggleAssigneeGroup(userIds: string[], checked: boolean) {
+    const nextSet = new Set(form.assigneeIds);
+    for (const userId of userIds) {
+      if (checked) nextSet.add(userId);
+      else nextSet.delete(userId);
+    }
+    setForm((prev) => ({ ...prev, assigneeIds: Array.from(nextSet) }));
+  }
 
   function setDuePreset(daysFromToday: number) {
     const now = new Date();
@@ -558,24 +602,49 @@ function TaskModal({
             <div className="space-y-3 overflow-auto rounded border bg-slate-50 p-3">
             <Label>Assigned to</Label>
             <div className="max-h-72 space-y-1 overflow-y-auto rounded border bg-white p-2">
-              {users.length === 0 ? <p className="text-xs text-slate-500">No users available</p> : users.map((u) => (
-                <label key={u.id} className="flex cursor-pointer gap-2 rounded px-2 py-1.5 hover:bg-slate-50">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(u.id)}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                        ? Array.from(new Set([...form.assigneeIds, u.id]))
-                        : form.assigneeIds.filter((id) => id !== u.id);
-                      setForm((p) => ({ ...p, assigneeIds: next }));
-                    }}
-                  />
-                  <span className="min-w-0 text-sm">
-                    <span className="block truncate font-medium text-slate-800">{u.fullname}</span>
-                    {u.email ? <span className="block truncate text-xs text-slate-500">{u.email}</span> : null}
-                  </span>
-                </label>
-              ))}
+              {groupedUsers.length === 0 ? <p className="text-xs text-slate-500">No users available</p> : groupedUsers.map((section) => {
+                const userIds = section.users.map((user) => user.id);
+                const selectedCount = userIds.filter((id) => selected.has(id)).length;
+                const allSelected = userIds.length > 0 && selectedCount === userIds.length;
+                return (
+                  <div key={section.group.id} className="rounded-md border bg-slate-50/50 p-2">
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: section.group.color ?? "#94a3b8" }} />
+                        <span className="truncate text-xs font-semibold uppercase tracking-wide text-slate-600">
+                          {section.group.name}
+                        </span>
+                        <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-slate-500">
+                          {section.users.length}
+                        </span>
+                      </div>
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={(event) => toggleAssigneeGroup(userIds, event.target.checked)}
+                        />
+                        All
+                      </label>
+                    </div>
+                    <div className="space-y-1">
+                      {section.users.map((u) => (
+                        <label key={u.id} className="flex cursor-pointer gap-2 rounded px-2 py-1.5 hover:bg-white">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(u.id)}
+                            onChange={(event) => toggleAssignee(u.id, event.target.checked)}
+                          />
+                          <span className="min-w-0 text-sm">
+                            <span className="block truncate font-medium text-slate-800">{u.fullname}</span>
+                            {u.email ? <span className="block truncate text-xs text-slate-500">{u.email}</span> : null}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <label className="flex items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
               <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm((p) => ({ ...p, isPrivate: e.target.checked }))} />
@@ -771,12 +840,14 @@ export default function TasksPage() {
   const router = useRouter();
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [countTasks, setCountTasks] = useState<TaskItem[]>([]);
   const [stages, setStages] = useState<WorkflowStage[]>([
     { key: "opened", label: "Open", color: "#22c55e", isClosed: false, isDefault: true, order: 0 },
     { key: "completed", label: "Completed", color: "#3b82f6", isClosed: true, isDefault: false, order: 1 },
     { key: "closed", label: "Closed", color: "#64748b", isClosed: true, isDefault: false, order: 2 },
   ]);
   const [users, setUsers] = useState<TaskUser[]>([]);
+  const [groups, setGroups] = useState<TaskGroup[]>([]);
   const [meId, setMeId] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -797,6 +868,7 @@ export default function TasksPage() {
 
   const [refreshToken, setRefreshToken] = useState(0);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setSearch(searchInput.trim()), 220);
@@ -809,6 +881,7 @@ export default function TasksPage() {
       if (!response.ok) throw new Error();
       const data = (await response.json()) as TaskMetaResponse;
       setUsers(data.users ?? []);
+      setGroups(data.groups ?? []);
       setMeId(data.currentUserId ?? "");
     } catch {
       toast.error("Failed to load task metadata");
@@ -818,18 +891,38 @@ export default function TasksPage() {
   const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
-      const params = buildParams(view, category, statusScope, search, filterApplied);
-      const response = await fetch(`/api/tasks?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const listParams = buildParams(view, category, statusScope, search, filterApplied);
+      const countParams = buildParams(view, "all", "all", "", filterApplied);
+
+      const [listResponse, countResponse] = await Promise.all([
+        fetch(`/api/tasks?${listParams.toString()}`, { cache: "no-store" }),
+        fetch(`/api/tasks?${countParams.toString()}`, { cache: "no-store" }),
+      ]);
+
+      if (!listResponse.ok) {
+        const payload = (await listResponse.json().catch(() => null)) as { error?: string } | null;
         throw new Error(payload?.error ?? "Failed to load tasks");
       }
-      const data = (await response.json()) as { items: TaskItem[]; stages: WorkflowStage[] } | TaskItem[];
-      if (Array.isArray(data)) {
-        setTasks(data);
+      if (!countResponse.ok) {
+        const payload = (await countResponse.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Failed to load task counters");
+      }
+
+      const listData = (await listResponse.json()) as { items: TaskItem[]; stages: WorkflowStage[] } | TaskItem[];
+      const countData = (await countResponse.json()) as { items: TaskItem[]; stages: WorkflowStage[] } | TaskItem[];
+
+      if (Array.isArray(listData)) {
+        setTasks(listData);
       } else {
-        setTasks(Array.isArray(data.items) ? data.items : []);
-        if (Array.isArray(data.stages) && data.stages.length > 0) setStages(data.stages);
+        setTasks(Array.isArray(listData.items) ? listData.items : []);
+        if (Array.isArray(listData.stages) && listData.stages.length > 0) setStages(listData.stages);
+      }
+
+      if (Array.isArray(countData)) {
+        setCountTasks(countData);
+      } else {
+        setCountTasks(Array.isArray(countData.items) ? countData.items : []);
+        if (Array.isArray(countData.stages) && countData.stages.length > 0) setStages(countData.stages);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load tasks");
@@ -840,23 +933,27 @@ export default function TasksPage() {
 
   useEffect(() => { void loadMeta(); }, [loadMeta]);
   useEffect(() => { void loadTasks(); }, [loadTasks, refreshToken]);
+  useEffect(() => () => {
+    const preview = dragPreviewRef.current;
+    if (preview?.parentNode) preview.parentNode.removeChild(preview);
+    dragPreviewRef.current = null;
+  }, []);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of CATEGORY_ITEMS) map.set(item.id, 0);
     const openKeys = new Set(stages.filter((s) => !s.isClosed).map((s) => s.key));
     const closedKeys = new Set(stages.filter((s) => s.isClosed).map((s) => s.key));
-    for (const task of tasks) {
+    for (const task of countTasks) {
       map.set("all", (map.get("all") ?? 0) + 1);
       if (openKeys.has(task.status)) map.set("open", (map.get("open") ?? 0) + 1);
       if (closedKeys.has(task.status)) map.set("closed", (map.get("closed") ?? 0) + 1);
       if (task.type === "event") map.set("events", (map.get("events") ?? 0) + 1);
       if (task.type === "note") map.set("notes", (map.get("notes") ?? 0) + 1);
       if (task.isFavorite) map.set("favorites", (map.get("favorites") ?? 0) + 1);
-      if (meId && task.creatorId !== meId) map.set("subordinate", (map.get("subordinate") ?? 0) + 1);
     }
     return map;
-  }, [meId, tasks, stages]);
+  }, [countTasks, stages]);
 
   const tasksByStatus = useMemo(() => {
     const buckets: Record<string, TaskItem[]> = {};
@@ -909,6 +1006,7 @@ export default function TasksPage() {
     }
     const updatedTask = data as TaskItem;
     setTasks((prev) => prev.map((task) => (task.id === id ? updatedTask : task)));
+    setCountTasks((prev) => prev.map((task) => (task.id === id ? updatedTask : task)));
   }
 
   async function toggleComplete(task: TaskItem) {
@@ -935,12 +1033,50 @@ export default function TasksPage() {
     }
   }
 
+  function cleanupDragPreview() {
+    const preview = dragPreviewRef.current;
+    if (preview?.parentNode) {
+      preview.parentNode.removeChild(preview);
+    }
+    dragPreviewRef.current = null;
+  }
+
+  function handleKanbanDragStart(event: DragEvent<HTMLElement>, taskId: string) {
+    setDragTaskId(taskId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", taskId);
+
+    cleanupDragPreview();
+    const source = event.currentTarget;
+    const clone = source.cloneNode(true) as HTMLDivElement;
+    clone.style.position = "fixed";
+    clone.style.top = "-1000px";
+    clone.style.left = "-1000px";
+    clone.style.margin = "0";
+    clone.style.width = `${source.clientWidth}px`;
+    clone.style.maxWidth = `${source.clientWidth}px`;
+    clone.style.pointerEvents = "none";
+    clone.style.opacity = "0.92";
+    clone.style.transform = "scale(0.98)";
+    clone.style.boxShadow = "0 12px 32px rgba(15, 23, 42, 0.22)";
+    clone.style.zIndex = "9999";
+    document.body.appendChild(clone);
+    dragPreviewRef.current = clone;
+    event.dataTransfer.setDragImage(clone, 18, 18);
+  }
+
+  function handleKanbanDragEnd() {
+    setDragTaskId(null);
+    cleanupDragPreview();
+  }
+
   async function toggleFavorite(task: TaskItem) {
     try {
       const response = await fetch(`/api/tasks/${task.id}/favorite`, { method: task.isFavorite ? "DELETE" : "POST" });
       const data = (await response.json().catch(() => null)) as { isFavorite: boolean; favoriteCount: number; error?: string } | null;
       if (!response.ok || !data) throw new Error(data?.error ?? "Favorite update failed");
       setTasks((prev) => prev.map((entry) => entry.id === task.id ? { ...entry, isFavorite: data.isFavorite } : entry));
+      setCountTasks((prev) => prev.map((entry) => entry.id === task.id ? { ...entry, isFavorite: data.isFavorite } : entry));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Favorite update failed");
     }
@@ -955,6 +1091,7 @@ export default function TasksPage() {
         throw new Error(payload?.error ?? "Delete failed");
       }
       setTasks((prev) => prev.filter((entry) => entry.id !== task.id));
+      setCountTasks((prev) => prev.filter((entry) => entry.id !== task.id));
       setDeleteTarget(null);
       toast.success("Task deleted");
     } catch (error) {
@@ -1318,8 +1455,8 @@ export default function TasksPage() {
                             <article
                               key={task.id}
                               draggable={canWrite}
-                              onDragStart={() => setDragTaskId(task.id)}
-                              onDragEnd={() => setDragTaskId(null)}
+                              onDragStart={(event) => handleKanbanDragStart(event, task.id)}
+                              onDragEnd={handleKanbanDragEnd}
                               className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
                             >
                               <button
@@ -1395,7 +1532,7 @@ export default function TasksPage() {
         </section>
       </div>
 
-      <TaskModal open={formOpen} onClose={() => setFormOpen(false)} onSaved={() => setRefreshToken((p) => p + 1)} users={users} initial={formInitial} stages={stages} />
+      <TaskModal open={formOpen} onClose={() => setFormOpen(false)} onSaved={() => setRefreshToken((p) => p + 1)} users={users} groups={groups} initial={formInitial} stages={stages} />
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(next) => {
