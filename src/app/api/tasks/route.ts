@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { notifyTaskChange } from "@/lib/task-notifications";
-import { loadTaskStages, getDefaultStage } from "@/lib/workflow-config";
+import { loadTaskStages, getDefaultStage, isClosedStage } from "@/lib/workflow-config";
 
 export async function GET(req: NextRequest) {
   const accessResult = await requireModuleAccess("tasks", "read");
@@ -206,17 +206,20 @@ export async function POST(req: NextRequest) {
     const stages = await loadTaskStages();
     const defaultStage = getDefaultStage(stages);
 
+    const statusToUse = typeof status === "string" && stages.some((stage) => stage.key === status)
+      ? status
+      : defaultStage.key;
+
     const task = await prisma.task.create({
       data: {
         title: title.trim(),
         description,
         type: type ?? "task",
-        status: status ?? defaultStage.key,
+        status: statusToUse,
         priority: priority ?? "normal",
         isPrivate: isPrivate ?? false,
         dueDate: dueDate ? new Date(dueDate) : undefined,
-        completedAt:
-          status === "completed" || status === "closed" ? new Date() : null,
+        completedAt: isClosedStage(stages, statusToUse) ? new Date() : null,
         creatorId: accessResult.ctx.userId,
         assignees: assigneeIds?.length
           ? {

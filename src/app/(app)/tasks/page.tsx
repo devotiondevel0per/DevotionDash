@@ -152,7 +152,11 @@ function hexToRgb(hex: string) {
 
 function getStageMeta(stages: WorkflowStage[], key: string) {
   const stage = stages.find((s) => s.key === key);
-  const label = stage?.label ?? key;
+  const label = stage?.label ?? key
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
   const color = stage?.color ?? "#64748b";
   const { r, g, b } = hexToRgb(color.startsWith("#") && color.length === 7 ? color : "#64748b");
   return {

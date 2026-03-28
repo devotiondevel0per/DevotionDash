@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { notifyTaskChange } from "@/lib/task-notifications";
+import { isClosedStage, loadTaskStages } from "@/lib/workflow-config";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -49,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function PUT(req: NextRequest, { params }: RouteContext) {
+async function updateTask(req: NextRequest, { params }: RouteContext) {
   const accessResult = await requireModuleAccess("tasks", "write");
   if (!accessResult.ok) return accessResult.response;
 
@@ -62,6 +63,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    const stages = await loadTaskStages();
     const body = await req.json();
     const {
       title,
@@ -83,11 +85,17 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       assigneeIds?: string[];
     };
 
+    const statusToUse = status !== undefined
+      ? (stages.some((stage) => stage.key === status) ? status : existing.status)
+      : undefined;
+
     let completedAt: Date | null | undefined;
-    if (status !== undefined) {
-      if (status === "completed" || status === "closed") {
+    if (statusToUse !== undefined) {
+      const wasClosed = isClosedStage(stages, existing.status);
+      const nowClosed = isClosedStage(stages, statusToUse);
+      if (nowClosed) {
         completedAt = existing.completedAt ?? new Date();
-      } else if (status === "opened") {
+      } else if (wasClosed) {
         completedAt = null;
       }
     }
@@ -103,7 +111,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
           ...(title !== undefined && { title: title.trim() }),
           ...(description !== undefined && { description }),
           ...(type !== undefined && { type }),
-          ...(status !== undefined && { status }),
+          ...(statusToUse !== undefined && { status: statusToUse }),
           ...(completedAt !== undefined && { completedAt }),
           ...(priority !== undefined && { priority }),
           ...(isPrivate !== undefined && { isPrivate }),
@@ -136,7 +144,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     });
     const assigneeUserIds = task.assignees.map((entry) => entry.user.id);
     const summaryParts: string[] = [];
-    if (status !== undefined && status !== existing.status) summaryParts.push(`status ${existing.status} -> ${task.status}`);
+    if (statusToUse !== undefined && statusToUse !== existing.status) summaryParts.push(`status ${existing.status} -> ${task.status}`);
     if (priority !== undefined && priority !== existing.priority) summaryParts.push(`priority ${existing.priority} -> ${task.priority}`);
     if (dueDate !== undefined) {
       const nextDue = task.dueDate ? task.dueDate.toISOString().slice(0, 10) : "none";
@@ -169,6 +177,14 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     console.error("[PUT /api/tasks/[id]]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+}
+
+export async function PUT(req: NextRequest, ctx: RouteContext) {
+  return updateTask(req, ctx);
+}
+
+export async function PATCH(req: NextRequest, ctx: RouteContext) {
+  return updateTask(req, ctx);
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {

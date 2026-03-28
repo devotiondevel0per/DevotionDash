@@ -21,16 +21,15 @@ final tasksProvider =
   //  'assigned'  → view=assigned (tasks assigned to me)
   //  'completed' → view=overview + status=completed
   String? view;
-  String? status;
   if (key == 'personal') {
     view = 'personal';
   } else if (key == 'assigned') {
     view = 'assigned';
   } else if (key == 'completed') {
-    status = 'completed';
+    view = 'overview';
   }
 
-  final res = await api.getTasks(view: view, status: status, limit: 50);
+  final res = await api.getTasks(view: view, limit: 50);
   if (res is List) return res;
   if (res is Map) {
     final raw = res['items'] ?? res['data'] ?? res['tasks'] ?? [];
@@ -39,20 +38,68 @@ final tasksProvider =
   return [];
 });
 
+final taskStagesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  final res = await api.getTasks(limit: 1);
+  if (res is Map && res['stages'] is List) {
+    return (res['stages'] as List<dynamic>)
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+  return const [];
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-Color _statusColor(String? status) {
+Color _parseHexColor(String? hex, {Color fallback = const Color(0xFF6B7280)}) {
+  if (hex == null) return fallback;
+  final normalized = hex.replaceAll('#', '').trim();
+  if (normalized.length != 6) return fallback;
+  final value = int.tryParse(normalized, radix: 16);
+  if (value == null) return fallback;
+  return Color(0xFF000000 | value);
+}
+
+Map<String, dynamic>? _findStage(String? status, List<Map<String, dynamic>> stages) {
+  if (status == null || status.isEmpty) return null;
+  for (final stage in stages) {
+    if ((stage['key'] ?? '').toString().toLowerCase() == status.toLowerCase()) {
+      return stage;
+    }
+  }
+  return null;
+}
+
+String _humanizeStatus(String status) {
+  final words = status.replaceAll('_', ' ').trim().split(RegExp(r'\s+'));
+  return words
+      .where((word) => word.isNotEmpty)
+      .map((word) => word[0].toUpperCase() + word.substring(1))
+      .join(' ');
+}
+
+String _statusLabel(String? status, List<Map<String, dynamic>> stages) {
+  final value = (status ?? '').trim();
+  if (value.isEmpty) return '';
+  final stage = _findStage(value, stages);
+  final label = (stage?['label'] ?? '').toString().trim();
+  if (label.isNotEmpty) return label;
+  return _humanizeStatus(value);
+}
+
+Color _statusColor(String? status, List<Map<String, dynamic>> stages) {
+  final stage = _findStage(status, stages);
+  if (stage != null) {
+    return _parseHexColor(stage['color']?.toString(), fallback: const Color(0xFF6B7280));
+  }
   switch ((status ?? '').toLowerCase()) {
     case 'opened':
-      return const Color(0xFF3B82F6); // blue
+      return const Color(0xFF3B82F6);
     case 'completed':
-      return const Color(0xFF10B981); // green
+      return const Color(0xFF10B981);
     case 'closed':
-      return const Color(0xFF6B7280); // grey
-    case 'events':
-      return const Color(0xFFF97316); // orange
-    case 'notes':
-      return const Color(0xFF8B5CF6); // purple
+      return const Color(0xFF6B7280);
     default:
       return const Color(0xFF6B7280);
   }
@@ -129,6 +176,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
     _tabs = TabController(length: _tabDefs.length, vsync: this);
     startAutoRefresh(const Duration(seconds: 60), () {
       for (final t in _tabDefs) { ref.invalidate(tasksProvider(t.$2)); }
+      ref.invalidate(taskStagesProvider);
     });
   }
 
@@ -216,6 +264,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
           for (final t in _tabDefs) {
             ref.invalidate(tasksProvider(t.$2));
           }
+          ref.invalidate(taskStagesProvider);
         },
       ),
     );
@@ -233,6 +282,7 @@ class _TaskList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(tasksProvider(status));
+    final stages = ref.watch(taskStagesProvider).valueOrNull ?? const <Map<String, dynamic>>[];
 
     return async.when(
       loading: () => const ShimmerList(count: 8),
@@ -241,7 +291,7 @@ class _TaskList extends ConsumerWidget {
         onRetry: () => ref.invalidate(tasksProvider(status)),
       ),
       data: (list) {
-        final filtered = _filter(list, searchQuery);
+        final filtered = _filter(list, searchQuery, stages);
         if (filtered.isEmpty) {
           return EmptyState(
             icon: Icons.task_alt_rounded,
@@ -252,7 +302,10 @@ class _TaskList extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(tasksProvider(status)),
+          onRefresh: () async {
+            ref.invalidate(tasksProvider(status));
+            ref.invalidate(taskStagesProvider);
+          },
           child: ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
             itemCount: filtered.length,
@@ -261,6 +314,7 @@ class _TaskList extends ConsumerWidget {
               final task = filtered[i] as Map<String, dynamic>;
               return _TaskCard(
                 task: task,
+                stages: stages,
                 onTap: () {
                   final id = task['id']?.toString() ?? '';
                   if (id.isNotEmpty) ctx.push('/tasks/$id');
@@ -273,10 +327,27 @@ class _TaskList extends ConsumerWidget {
     );
   }
 
-  List<dynamic> _filter(List<dynamic> list, String q) {
-    if (q.isEmpty) return list;
+  List<dynamic> _filter(List<dynamic> list, String q, List<Map<String, dynamic>> stages) {
+    var filtered = list;
+    if (status == 'completed') {
+      final closedKeys = stages
+          .where((stage) => stage['isClosed'] == true)
+          .map((stage) => (stage['key'] ?? '').toString())
+          .where((key) => key.isNotEmpty)
+          .toSet();
+      if (closedKeys.isEmpty) {
+        closedKeys.addAll(const {'completed', 'closed'});
+      }
+      filtered = list.where((item) {
+        if (item is! Map<String, dynamic>) return false;
+        final stageKey = (item['status'] ?? '').toString();
+        return closedKeys.contains(stageKey);
+      }).toList();
+    }
+
+    if (q.isEmpty) return filtered;
     final lower = q.toLowerCase();
-    return list.where((t) {
+    return filtered.where((t) {
       final task = t as Map<String, dynamic>;
       final title = _taskTitle(task).toLowerCase();
       return title.contains(lower);
@@ -288,18 +359,24 @@ class _TaskList extends ConsumerWidget {
 
 class _TaskCard extends StatelessWidget {
   final Map<String, dynamic> task;
+  final List<Map<String, dynamic>> stages;
   final VoidCallback onTap;
 
-  const _TaskCard({required this.task, required this.onTap});
+  const _TaskCard({
+    required this.task,
+    required this.stages,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = (task['status'] ?? '').toString();
+    final statusLabel = _statusLabel(status, stages);
     final priority = (task['priority'] ?? '').toString();
     final dueDate = _formatDate(task['dueDate']?.toString());
     final assignee = _assigneeName(task);
-    final statusColor = _statusColor(status);
+    final statusColor = _statusColor(status, stages);
     final priorityColor = _priorityColor(priority);
 
     // Determine if overdue
@@ -337,7 +414,7 @@ class _TaskCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   // Status chip
-                  _StatusChip(label: status, color: statusColor),
+                  _StatusChip(label: statusLabel, color: statusColor),
                 ],
               ),
               const SizedBox(height: 10),

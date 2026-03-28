@@ -6,7 +6,15 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePermissions } from "@/hooks/use-permissions";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -96,7 +104,11 @@ function getStageMeta(stages: WorkflowStage[], key: string) {
   const color = stage?.color ?? "#64748b";
   const { r, g, b } = hexToRgb(color.startsWith("#") && color.length === 7 ? color : "#64748b");
   return {
-    label: stage?.label ?? key,
+    label: stage?.label ?? key
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase() + part.slice(1))
+      .join(" "),
     badgeStyle: {
       borderColor: `rgba(${r},${g},${b},0.3)`,
       backgroundColor: `rgba(${r},${g},${b},0.1)`,
@@ -168,6 +180,8 @@ export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: session } = useSession();
+  const { can } = usePermissions();
+  const canWrite = can("tasks", "write");
   const meId = session?.user?.id ?? "";
 
   const [task, setTask] = useState<TaskDetail | null>(null);
@@ -180,6 +194,7 @@ export default function TaskDetailPage() {
   const [posting, setPosting] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -297,6 +312,28 @@ export default function TaskDetailPage() {
     }
   }
 
+  async function updateTaskStatus(nextStatus: string) {
+    if (!task || !nextStatus || nextStatus === task.status || changingStatus) return;
+    setChangingStatus(true);
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = (await res.json().catch(() => null)) as TaskDetail | { error?: string } | null;
+      if (!res.ok || !data || "error" in data) {
+        throw new Error((data as { error?: string } | null)?.error ?? "Failed to update stage");
+      }
+      setTask(data as TaskDetail);
+      toast.success(`Task moved to ${getStageMeta(stages, nextStatus).label.toLowerCase()}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update stage");
+    } finally {
+      setChangingStatus(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-6 space-y-4">
@@ -356,6 +393,26 @@ export default function TaskDetailPage() {
             <Badge variant="outline" style={stageMeta.badgeStyle} className="h-6 px-2 text-xs">
               {stageMeta.label}
             </Badge>
+            {canWrite ? (
+              <Select
+                value={task.status}
+                onValueChange={(value) => {
+                  if (value) void updateTaskStatus(value);
+                }}
+                disabled={changingStatus}
+              >
+                <SelectTrigger className="h-6 w-[140px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage.key} value={stage.key}>
+                      {stage.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
             <Badge variant="outline" className={cn("h-6 px-2 text-xs", priorityMeta.cls)}>
               {priorityMeta.label}
             </Badge>
@@ -603,9 +660,31 @@ export default function TaskDetailPage() {
                 <div>
                   <dt className="text-xs text-slate-400">Status</dt>
                   <dd className="mt-0.5 font-medium">
-                    <Badge variant="outline" style={stageMeta.badgeStyle} className="h-5 px-1.5 text-[11px]">
-                      {stageMeta.label}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" style={stageMeta.badgeStyle} className="h-5 px-1.5 text-[11px]">
+                        {stageMeta.label}
+                      </Badge>
+                      {canWrite ? (
+                        <Select
+                          value={task.status}
+                          onValueChange={(value) => {
+                            if (value) void updateTaskStatus(value);
+                          }}
+                          disabled={changingStatus}
+                        >
+                          <SelectTrigger className="h-7 w-[140px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {stages.map((stage) => (
+                              <SelectItem key={stage.key} value={stage.key}>
+                                {stage.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                    </div>
                   </dd>
                 </div>
                 <div>

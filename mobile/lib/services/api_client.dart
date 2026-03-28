@@ -194,7 +194,7 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> updateTask(String id, Map<String, dynamic> body) async {
-    final res = await _dio.patch('/tasks/$id', data: body);
+    final res = await _dio.put('/tasks/$id', data: body);
     return res.data as Map<String, dynamic>;
   }
 

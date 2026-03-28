@@ -35,7 +35,47 @@ final _taskStagesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asy
 
 const _kPrimary = Color(0xFFE81313);
 
-Color _statusColor(String? status) {
+Color _parseHexColor(String? hex, {Color fallback = Colors.blueGrey}) {
+  if (hex == null) return fallback;
+  final normalized = hex.replaceAll('#', '').trim();
+  if (normalized.length != 6) return fallback;
+  final value = int.tryParse(normalized, radix: 16);
+  if (value == null) return fallback;
+  return Color(0xFF000000 | value);
+}
+
+Map<String, dynamic>? _findStage(String? status, List<Map<String, dynamic>> stages) {
+  if (status == null || status.isEmpty) return null;
+  for (final stage in stages) {
+    if ((stage['key'] ?? '').toString().toLowerCase() == status.toLowerCase()) {
+      return stage;
+    }
+  }
+  return null;
+}
+
+String _humanizeStatus(String status) {
+  final words = status.replaceAll('_', ' ').trim().split(RegExp(r'\s+'));
+  return words
+      .where((word) => word.isNotEmpty)
+      .map((word) => word[0].toUpperCase() + word.substring(1))
+      .join(' ');
+}
+
+String _statusLabel(String? status, List<Map<String, dynamic>> stages) {
+  final value = (status ?? '').trim();
+  if (value.isEmpty) return '';
+  final stage = _findStage(value, stages);
+  final label = (stage?['label'] ?? '').toString().trim();
+  if (label.isNotEmpty) return label;
+  return _humanizeStatus(value);
+}
+
+Color _statusColor(String? status, List<Map<String, dynamic>> stages) {
+  final stage = _findStage(status, stages);
+  if (stage != null) {
+    return _parseHexColor(stage['color']?.toString(), fallback: Colors.blueGrey);
+  }
   switch ((status ?? '').toLowerCase()) {
     case 'opened':
       return Colors.blue;
@@ -43,10 +83,6 @@ Color _statusColor(String? status) {
       return Colors.green;
     case 'closed':
       return Colors.grey;
-    case 'events':
-      return Colors.orange;
-    case 'notes':
-      return Colors.purple;
     default:
       return Colors.blueGrey;
   }
@@ -340,7 +376,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           message: e.toString(),
           onRetry: () => ref.invalidate(_taskDetailProvider(widget.taskId)),
         ),
-        data: (task) => _buildContent(context, task),
+        data: (task) => _buildContent(
+          context,
+          task,
+          stagesAsync.valueOrNull ?? const <Map<String, dynamic>>[],
+        ),
       ),
       bottomNavigationBar: _buildCommentBar(),
     );
@@ -380,12 +420,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
   // ─── Main content ─────────────────────────────────────────────────────────
 
-  Widget _buildContent(BuildContext context, Map<String, dynamic> task) {
+  Widget _buildContent(
+    BuildContext context,
+    Map<String, dynamic> task,
+    List<Map<String, dynamic>> stages,
+  ) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     final title = (task['title'] ?? task['subject'] ?? 'Untitled') as String;
     final status = task['status'] as String?;
+    final statusLabel = _statusLabel(status, stages);
+    final statusColor = _statusColor(status, stages);
     final priority = task['priority'] as String?;
     final dueDate = task['dueDate'] as String?;
     final createdAt = task['createdAt'] as String?;
@@ -417,11 +463,39 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             runSpacing: 6,
             children: [
               if (status != null)
-                _StatusChip(status: status),
+                _StatusChip(label: statusLabel, color: statusColor),
               if (priority != null)
                 _PriorityBadge(priority: priority),
             ],
           ),
+          if (stages.isNotEmpty && status != null) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: stages.any((stage) => (stage['key'] ?? '').toString() == status)
+                  ? status
+                  : null,
+              decoration: const InputDecoration(
+                labelText: 'Stage',
+                isDense: true,
+                prefixIcon: Icon(Icons.swap_horiz_rounded),
+              ),
+              items: stages
+                  .where((stage) => (stage['key'] ?? '').toString().isNotEmpty)
+                  .map((stage) {
+                final key = (stage['key'] ?? '').toString();
+                final label = (stage['label'] ?? key).toString();
+                return DropdownMenuItem<String>(
+                  value: key,
+                  child: Text(label),
+                );
+              }).toList(),
+              onChanged: (next) {
+                if (next != null && next != status) {
+                  _changeStatus(next);
+                }
+              },
+            ),
+          ],
           const SizedBox(height: 20),
 
           // ── Dates ─────────────────────────────────────────────────────
@@ -702,12 +776,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 // ─── Reusable sub-widgets ──────────────────────────────────────────────────
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final String status;
+  const _StatusChip({required this.label, required this.color});
+  final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final color = _statusColor(status);
+    if (label.trim().isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
@@ -725,7 +800,7 @@ class _StatusChip extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            status[0].toUpperCase() + status.substring(1),
+            label,
             style: TextStyle(
               color: color,
               fontSize: 13,
