@@ -53,6 +53,7 @@ import {
   ArrowLeft,
   Pencil,
   List,
+  Columns3,
   Layers,
   Trash2,
   UserPlus,
@@ -878,6 +879,8 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
 
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | undefined>(undefined);
+  const [taskLayout, setTaskLayout] = useState<"list" | "kanban">("list");
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [addPhaseOpen, setAddPhaseOpen] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [deletingPhaseId, setDeletingPhaseId] = useState<string | null>(null);
@@ -949,6 +952,18 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   }, [loadProject]);
 
   const progress = useMemo(() => calcProgress(tasks, taskStages), [taskStages, tasks]);
+  const tasksByStage = useMemo(() => {
+    const buckets: Record<string, ProjectTask[]> = {};
+    for (const stage of taskStages) buckets[stage.key] = [];
+    for (const task of tasks) {
+      const key = taskStages.some((stage) => stage.key === task.status)
+        ? task.status
+        : (taskStages[0]?.key ?? "todo");
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(task);
+    }
+    return buckets;
+  }, [taskStages, tasks]);
   const currentUserId = access?.userId ?? "";
   const myMembership = useMemo(
     () => members.find((member) => member.user.id === currentUserId),
@@ -959,14 +974,14 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   const canProjectWrite = canWrite && (canManage || isProjectMember);
   const canProjectManage = canWrite && (canManage || isProjectManager);
 
-  async function toggleTaskStatus(task: ProjectTask) {
-    const next = getNextTaskStageKey(taskStages, task.status);
+  async function moveTaskToStage(task: ProjectTask, nextStatus: string) {
+    if (normalizeTaskStatus(task.status) === normalizeTaskStatus(nextStatus)) return;
     setTogglingTaskId(task.id);
     try {
       const res = await fetch(`/api/projects/${projectId}/tasks/${task.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: next }),
+        body: JSON.stringify({ status: nextStatus }),
       });
       if (!res.ok) throw new Error("Failed to update task");
       const updated = normalizeProjectTask((await res.json()) as ProjectTask);
@@ -976,6 +991,11 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
     } finally {
       setTogglingTaskId(null);
     }
+  }
+
+  async function toggleTaskStatus(task: ProjectTask) {
+    const next = getNextTaskStageKey(taskStages, task.status);
+    await moveTaskToStage(task, next);
   }
 
   async function deletePhase(phaseId: string) {
@@ -1137,10 +1157,36 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
           <TabsContent value="tasks" className="flex-1 overflow-y-auto mt-0 bg-gray-50">
             <div className="p-4">
               <div className="bg-white rounded-xl border overflow-hidden">
-                <div className="px-4 py-3 border-b flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">
-                    {tasks.length} task{tasks.length !== 1 ? "s" : ""}
-                  </span>
+                <div className="px-4 py-3 border-b flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+                    </span>
+                    <div className="inline-flex items-center rounded-md border bg-white p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setTaskLayout("list")}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
+                          taskLayout === "list" ? "bg-[#FE0000] text-white" : "text-gray-500 hover:bg-gray-100"
+                        )}
+                      >
+                        <List className="h-3.5 w-3.5" />
+                        List
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTaskLayout("kanban")}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
+                          taskLayout === "kanban" ? "bg-[#FE0000] text-white" : "text-gray-500 hover:bg-gray-100"
+                        )}
+                      >
+                        <Columns3 className="h-3.5 w-3.5" />
+                        Kanban
+                      </button>
+                    </div>
+                  </div>
                   {canProjectWrite && (
                     <Button
                       size="sm"
@@ -1169,7 +1215,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                       </Button>
                     ) : null}
                   </div>
-                ) : (
+                ) : taskLayout === "list" ? (
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-gray-50 hover:bg-gray-50">
@@ -1248,6 +1294,101 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                       })}
                     </TableBody>
                   </Table>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <div className="flex min-w-max gap-3 p-3">
+                      {taskStages.map((stage) => {
+                        const stageTasks = tasksByStage[stage.key] ?? [];
+                        const stageMetaStyle = stageStyle(stage.color);
+                        return (
+                          <div
+                            key={stage.key}
+                            onDragOver={(event) => {
+                              if (!canProjectWrite) return;
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = "move";
+                            }}
+                            onDrop={(event) => {
+                              if (!canProjectWrite) return;
+                              event.preventDefault();
+                              if (!dragTaskId) return;
+                              const draggedTask = tasks.find((item) => item.id === dragTaskId);
+                              setDragTaskId(null);
+                              if (!draggedTask) return;
+                              void moveTaskToStage(draggedTask, stage.key);
+                            }}
+                            className={cn(
+                              "w-72 shrink-0 rounded-lg border bg-slate-50/60",
+                              dragTaskId && "transition-colors",
+                              dragTaskId && canProjectWrite && "border-dashed border-slate-300"
+                            )}
+                          >
+                            <div className="flex items-center justify-between border-b bg-white px-3 py-2.5">
+                              <Badge variant="outline" style={stageMetaStyle} className="text-xs">
+                                {stage.label}
+                              </Badge>
+                              <span className="text-xs text-slate-500">{stageTasks.length}</span>
+                            </div>
+                            <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2">
+                              {stageTasks.length === 0 ? (
+                                <p className="rounded-md border border-dashed border-slate-200 bg-white p-3 text-xs text-slate-400">
+                                  Drop task here
+                                </p>
+                              ) : stageTasks.map((task) => {
+                                const assigneeName = task.assignee ? displayName(task.assignee) : "Unassigned";
+                                return (
+                                  <article
+                                    key={task.id}
+                                    draggable={canProjectWrite}
+                                    onDragStart={() => setDragTaskId(task.id)}
+                                    onDragEnd={() => setDragTaskId(null)}
+                                    className="rounded-md border bg-white p-3 shadow-sm"
+                                  >
+                                    <button
+                                      type="button"
+                                      className="line-clamp-2 text-left text-sm font-semibold text-slate-800 hover:text-[#FE0000] hover:underline"
+                                      onClick={() => { if (!canProjectWrite) return; setEditingTask(task); setTaskDialogOpen(true); }}
+                                    >
+                                      {task.title}
+                                    </button>
+                                    {task.description ? (
+                                      <p className="mt-1 line-clamp-2 text-xs text-slate-500">{task.description}</p>
+                                    ) : null}
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                      <Badge variant="outline" style={stageMetaStyle} className="h-5 px-1.5 text-[10px]">
+                                        {getTaskStageLabel(taskStages, task.status)}
+                                      </Badge>
+                                      <Badge
+                                        variant="secondary"
+                                        className={cn("h-5 px-1.5 text-[10px]", TASK_PRIORITY_CONFIG[task.priority]?.className ?? "bg-gray-100 text-gray-600")}
+                                      >
+                                        {TASK_PRIORITY_CONFIG[task.priority]?.label ?? task.priority}
+                                      </Badge>
+                                      {task.dueDate ? (
+                                        <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-orange-700 border-orange-200 bg-orange-50">
+                                          {formatDate(task.dueDate)}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                                      <span className="truncate">{assigneeName}</span>
+                                      <button
+                                        type="button"
+                                        className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                        onClick={() => { if (!canProjectWrite) return; void toggleTaskStatus(task); }}
+                                      >
+                                        Next
+                                      </button>
+                                    </div>
+                                  </article>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

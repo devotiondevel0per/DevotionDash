@@ -867,7 +867,7 @@ class _ProjectActions extends ConsumerWidget {
   }
 }
 
-class _TaskSection extends ConsumerWidget {
+class _TaskSection extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>> tasks;
   final bool canWrite;
   final String projectId;
@@ -908,6 +908,13 @@ class _TaskSection extends ConsumerWidget {
     required this.confirm,
   });
 
+  @override
+  ConsumerState<_TaskSection> createState() => _TaskSectionState();
+}
+
+class _TaskSectionState extends ConsumerState<_TaskSection> {
+  String _layout = 'list';
+
   String _s(dynamic v) => v?.toString() ?? '';
   Map<String, dynamic> _m(dynamic v) =>
       v is Map ? Map<String, dynamic>.from(v) : const {};
@@ -926,152 +933,329 @@ class _TaskSection extends ConsumerWidget {
 
   String _statusLabel(String status) {
     final key = status.trim().toLowerCase();
-    final stageLabel = stageLabels[key];
+    final stageLabel = widget.stageLabels[key];
     if (stageLabel != null && stageLabel.isNotEmpty) return stageLabel;
-    return label(status.isNotEmpty ? status : 'todo');
+    return widget.label(status.isNotEmpty ? status : 'todo');
   }
 
   Color _taskStatusColor(String status) {
     final key = status.trim().toLowerCase();
-    final stageColor = stageColors[key];
+    final stageColor = widget.stageColors[key];
     if (stageColor != null) return stageColor;
-    return statusColor(status);
+    return widget.statusColor(status);
   }
 
   Future<void> _updateStatus(WidgetRef ref, Map<String, dynamic> task, String next) async {
     try {
       await ref.read(apiClientProvider).updateProjectTask(
-        projectId,
+        widget.projectId,
         _s(task['id']),
         {'status': next},
       );
-      snack('Task status updated');
-      refresh();
+      widget.snack('Task status updated');
+      widget.refresh();
     } catch (e) {
-      snack(err(e), error: true);
+      widget.snack(widget.err(e), error: true);
     }
   }
 
   Future<void> _advanceStatus(WidgetRef ref, Map<String, dynamic> task) async {
-    if (statuses.isEmpty) return;
+    if (widget.statuses.isEmpty) return;
     final current = _s(task['status']).trim().toLowerCase();
-    final idx = statuses.indexOf(current);
-    final next = idx == -1 ? statuses.first : statuses[(idx + 1) % statuses.length];
+    final idx = widget.statuses.indexOf(current);
+    final next = idx == -1
+        ? widget.statuses.first
+        : widget.statuses[(idx + 1) % widget.statuses.length];
     await _updateStatus(ref, task, next);
+  }
+
+  Future<void> _editTask(BuildContext context, WidgetRef ref, Map<String, dynamic> task) {
+    return _TaskDialog.open(
+      context: context,
+      ref: ref,
+      projectId: widget.projectId,
+      members: widget.members,
+      phases: widget.phases,
+      statuses: widget.statuses,
+      priorities: widget.priorities,
+      memberUserId: widget.memberUserId,
+      memberName: widget.memberName,
+      label: _statusLabel,
+      pickDate: widget.pickDate,
+      snack: widget.snack,
+      err: widget.err,
+      refresh: widget.refresh,
+      confirm: widget.confirm,
+      existing: task,
+    );
+  }
+
+  List<PopupMenuEntry<String>> _menuItemsForTask(Map<String, dynamic> task) {
+    final current = _s(task['status']).trim().toLowerCase();
+    final stageItems = widget.statuses
+        .where((stage) => stage.trim().toLowerCase() != current)
+        .map(
+          (stage) => PopupMenuItem<String>(
+            value: 'status:$stage',
+            child: Text('Move to ${_statusLabel(stage)}'),
+          ),
+        )
+        .toList();
+    return [
+      const PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
+      const PopupMenuItem<String>(value: 'advance', child: Text('Advance status')),
+      if (stageItems.isNotEmpty) const PopupMenuDivider(),
+      ...stageItems,
+    ];
+  }
+
+  void _onMenuSelected(BuildContext context, WidgetRef ref, Map<String, dynamic> task, String v) {
+    if (v == 'edit') {
+      _editTask(context, ref, task);
+      return;
+    }
+    if (v == 'advance') {
+      _advanceStatus(ref, task);
+      return;
+    }
+    if (v.startsWith('status:')) {
+      final next = v.substring('status:'.length);
+      if (next.isNotEmpty) _updateStatus(ref, task, next);
+    }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final showKanban = widget.statuses.isNotEmpty;
+    final taskMap = <String, List<Map<String, dynamic>>>{};
+    for (final status in widget.statuses) {
+      taskMap[status] = <Map<String, dynamic>>[];
+    }
+    for (final task in widget.tasks) {
+      final rawStatus = _s(task['status']).trim().toLowerCase();
+      final status = taskMap.containsKey(rawStatus)
+          ? rawStatus
+          : (widget.statuses.isNotEmpty ? widget.statuses.first : rawStatus);
+      taskMap.putIfAbsent(status, () => <Map<String, dynamic>>[]).add(task);
+    }
+
     return _BlockCard(
       title: 'Tasks',
-      subtitle: '${tasks.length}',
-      child: tasks.isEmpty
+      subtitle: '${widget.tasks.length}',
+      child: widget.tasks.isEmpty
           ? const EmptyState(
               icon: Icons.task_outlined,
               title: 'No tasks yet',
               subtitle: 'Create tasks for this project',
             )
           : Column(
-              children: tasks
-                  .map(
-                    (task) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        tileColor: Theme.of(context).colorScheme.surfaceContainerLow,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        title: Text(_s(task['title'])),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (_s(task['description']).isNotEmpty) Text(_s(task['description'])),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 4,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('List'),
+                      selected: _layout == 'list',
+                      onSelected: (_) => setState(() => _layout = 'list'),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Kanban'),
+                      selected: _layout == 'kanban',
+                      onSelected: (_) => setState(() => _layout = 'kanban'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (_layout == 'kanban' && showKanban)
+                  SizedBox(
+                    height: 430,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: widget.statuses.map((status) {
+                          final columnTasks = taskMap[status] ?? const <Map<String, dynamic>>[];
+                          return Container(
+                            width: 290,
+                            margin: const EdgeInsets.only(right: 10),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
                               children: [
-                                _Pill(
-                                  text: _statusLabel(_s(task['status'])),
-                                  color: _taskStatusColor(_s(task['status'])),
-                                ),
-                                _Pill(
-                                  text: label(_s(task['priority']).isNotEmpty ? _s(task['priority']) : 'normal'),
-                                  color: _priorityColor(_s(task['priority'])),
-                                ),
-                                if (_s(_m(task['assignee'])['id']).isNotEmpty)
-                                  _Pill(
-                                    text: memberName(_m(task['assignee'])),
-                                    color: const Color(0xFF0EA5E9),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _statusLabel(status),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(fontWeight: FontWeight.w700),
+                                        ),
+                                      ),
+                                      Text('${columnTasks.length}'),
+                                    ],
                                   ),
-                                if (_s(task['dueDate']).isNotEmpty)
-                                  Builder(
-                                    builder: (_) {
-                                      final due = DateTime.tryParse(_s(task['dueDate']))?.toLocal();
-                                      if (due == null) return const SizedBox.shrink();
-                                      return _Pill(
-                                        text: DateFormat('MMM d, y').format(due),
-                                        color: const Color(0xFFEA580C),
-                                      );
-                                    },
-                                  ),
+                                ),
+                                Expanded(
+                                  child: columnTasks.isEmpty
+                                      ? const Center(
+                                          child: Text(
+                                            'No tasks',
+                                            style: TextStyle(color: Colors.grey),
+                                          ),
+                                        )
+                                      : ListView.builder(
+                                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                                          itemCount: columnTasks.length,
+                                          itemBuilder: (_, i) {
+                                            final task = columnTasks[i];
+                                            final due = DateTime.tryParse(_s(task['dueDate']))?.toLocal();
+                                            return Card(
+                                              margin: const EdgeInsets.only(bottom: 8),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(10),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      _s(task['title']),
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.copyWith(fontWeight: FontWeight.w700),
+                                                    ),
+                                                    if (_s(task['description']).isNotEmpty) ...[
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        _s(task['description']),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ],
+                                                    const SizedBox(height: 8),
+                                                    Wrap(
+                                                      spacing: 6,
+                                                      runSpacing: 4,
+                                                      children: [
+                                                        _Pill(
+                                                          text: _statusLabel(_s(task['status'])),
+                                                          color: _taskStatusColor(_s(task['status'])),
+                                                        ),
+                                                        _Pill(
+                                                          text: widget.label(
+                                                            _s(task['priority']).isNotEmpty
+                                                                ? _s(task['priority'])
+                                                                : 'normal',
+                                                          ),
+                                                          color: _priorityColor(_s(task['priority'])),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: Text(
+                                                            _s(_m(task['assignee'])['id']).isNotEmpty
+                                                                ? widget.memberName(_m(task['assignee']))
+                                                                : 'Unassigned',
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                                          ),
+                                                        ),
+                                                        if (due != null)
+                                                          Text(
+                                                            DateFormat('MMM d').format(due),
+                                                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                                          ),
+                                                        if (widget.canWrite)
+                                                          PopupMenuButton<String>(
+                                                            onSelected: (v) => _onMenuSelected(context, ref, task, v),
+                                                            itemBuilder: (_) => _menuItemsForTask(task),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                ),
                               ],
                             ),
-                          ],
-                        ),
-                        trailing: canWrite
-                            ? PopupMenuButton<String>(
-                                onSelected: (v) {
-                                  if (v == 'edit') {
-                                    _TaskDialog.open(
-                                      context: context,
-                                      ref: ref,
-                                      projectId: projectId,
-                                      members: members,
-                                      phases: phases,
-                                      statuses: statuses,
-                                      priorities: priorities,
-                                      memberUserId: memberUserId,
-                                      memberName: memberName,
-                                      label: _statusLabel,
-                                      pickDate: pickDate,
-                                      snack: snack,
-                                      err: err,
-                                      refresh: refresh,
-                                      confirm: confirm,
-                                      existing: task,
-                                    );
-                                  } else if (v == 'advance') {
-                                    _advanceStatus(ref, task);
-                                  } else if (v.startsWith('status:')) {
-                                    final next = v.substring('status:'.length);
-                                    if (next.isNotEmpty) {
-                                      _updateStatus(ref, task, next);
-                                    }
-                                  }
-                                },
-                                itemBuilder: (_) {
-                                  final current = _s(task['status']).trim().toLowerCase();
-                                  final stageItems = statuses
-                                      .where((stage) => stage.trim().toLowerCase() != current)
-                                      .map(
-                                        (stage) => PopupMenuItem<String>(
-                                          value: 'status:$stage',
-                                          child: Text('Move to ${_statusLabel(stage)}'),
-                                        ),
-                                      )
-                                      .toList();
-                                  return [
-                                    const PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
-                                    const PopupMenuItem<String>(value: 'advance', child: Text('Advance status')),
-                                    if (stageItems.isNotEmpty) const PopupMenuDivider(),
-                                    ...stageItems,
-                                  ];
-                                },
-                              )
-                            : null,
+                          );
+                        }).toList(),
                       ),
                     ),
                   )
-                  .toList(),
+                else
+                  Column(
+                    children: widget.tasks
+                        .map(
+                          (task) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              tileColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              title: Text(_s(task['title'])),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (_s(task['description']).isNotEmpty) Text(_s(task['description'])),
+                                  const SizedBox(height: 4),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    children: [
+                                      _Pill(
+                                        text: _statusLabel(_s(task['status'])),
+                                        color: _taskStatusColor(_s(task['status'])),
+                                      ),
+                                      _Pill(
+                                        text: widget.label(
+                                          _s(task['priority']).isNotEmpty ? _s(task['priority']) : 'normal',
+                                        ),
+                                        color: _priorityColor(_s(task['priority'])),
+                                      ),
+                                      if (_s(_m(task['assignee'])['id']).isNotEmpty)
+                                        _Pill(
+                                          text: widget.memberName(_m(task['assignee'])),
+                                          color: const Color(0xFF0EA5E9),
+                                        ),
+                                      if (_s(task['dueDate']).isNotEmpty)
+                                        Builder(
+                                          builder: (_) {
+                                            final due = DateTime.tryParse(_s(task['dueDate']))?.toLocal();
+                                            if (due == null) return const SizedBox.shrink();
+                                            return _Pill(
+                                              text: DateFormat('MMM d, y').format(due),
+                                              color: const Color(0xFFEA580C),
+                                            );
+                                          },
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              trailing: widget.canWrite
+                                  ? PopupMenuButton<String>(
+                                      onSelected: (v) => _onMenuSelected(context, ref, task, v),
+                                      itemBuilder: (_) => _menuItemsForTask(task),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+              ],
             ),
     );
   }
