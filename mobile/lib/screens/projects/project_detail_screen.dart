@@ -1025,7 +1025,7 @@ class _TaskSectionState extends ConsumerState<_TaskSection> {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final showKanban = widget.statuses.isNotEmpty;
     final taskMap = <String, List<Map<String, dynamic>>>{};
     for (final status in widget.statuses) {
