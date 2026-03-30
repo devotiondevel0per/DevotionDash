@@ -14,6 +14,12 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
+    "test:roles": "tsx scripts/role-smoke-test.ts",
+    "test:tasks-module": "tsx scripts/tasks-module-deep-test.ts",
+    "test:projects-module": "tsx scripts/projects-module-deep-test.ts",
+    "test:documents-module": "tsx scripts/documents-module-deep-test.ts",
+    "test:chat-module": "tsx scripts/chat-module-deep-test.ts",
+    "test:livechat-module": "tsx scripts/livechat-module-deep-test.ts",
     "setup:tenant": "tsx scripts/setup-tenant.ts",
     "tenant:push": "prisma db push --schema=prisma/schema.prisma"
   },
