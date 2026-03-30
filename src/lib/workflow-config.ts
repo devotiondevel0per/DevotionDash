@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { PrismaClient } from "@prisma/client";
 
 // ─────────────────────────────────────────────
 // SETTING KEYS
@@ -79,9 +80,14 @@ export function sanitizeStages(input: unknown, defaults: WorkflowStage[]): Workf
 // LOADERS
 // ─────────────────────────────────────────────
 
-async function loadStages(key: string, defaults: WorkflowStage[]): Promise<WorkflowStage[]> {
+async function loadStages(
+  key: string,
+  defaults: WorkflowStage[],
+  db?: PrismaClient
+): Promise<WorkflowStage[]> {
+  const actualDb = db ?? prisma;
   try {
-    const row = await prisma.systemSetting.findUnique({ where: { key } });
+    const row = await actualDb.systemSetting.findUnique({ where: { key } });
     if (!row?.value) return defaults;
     const parsed = JSON.parse(row.value);
     return sanitizeStages(parsed, defaults);
@@ -90,24 +96,29 @@ async function loadStages(key: string, defaults: WorkflowStage[]): Promise<Workf
   }
 }
 
-export function loadTaskStages(): Promise<WorkflowStage[]> {
-  return loadStages(TASK_STAGES_KEY, DEFAULT_TASK_STAGES);
+export function loadTaskStages(db?: PrismaClient): Promise<WorkflowStage[]> {
+  return loadStages(TASK_STAGES_KEY, DEFAULT_TASK_STAGES, db);
 }
 
-export function loadServiceDeskStages(): Promise<WorkflowStage[]> {
-  return loadStages(SERVICEDESK_STAGES_KEY, DEFAULT_SERVICEDESK_STAGES);
+export function loadServiceDeskStages(db?: PrismaClient): Promise<WorkflowStage[]> {
+  return loadStages(SERVICEDESK_STAGES_KEY, DEFAULT_SERVICEDESK_STAGES, db);
 }
 
-export function loadProjectTaskStages(): Promise<WorkflowStage[]> {
-  return loadStages(PROJECT_TASK_STAGES_KEY, DEFAULT_PROJECT_TASK_STAGES);
+export function loadProjectTaskStages(db?: PrismaClient): Promise<WorkflowStage[]> {
+  return loadStages(PROJECT_TASK_STAGES_KEY, DEFAULT_PROJECT_TASK_STAGES, db);
 }
 
 // ─────────────────────────────────────────────
 // SAVE
 // ─────────────────────────────────────────────
 
-export async function saveStages(key: string, stages: WorkflowStage[]): Promise<void> {
-  await prisma.systemSetting.upsert({
+export async function saveStages(
+  key: string,
+  stages: WorkflowStage[],
+  db?: PrismaClient
+): Promise<void> {
+  const actualDb = db ?? prisma;
+  await actualDb.systemSetting.upsert({
     where: { key },
     create: { key, value: JSON.stringify(stages) },
     update: { value: JSON.stringify(stages) },

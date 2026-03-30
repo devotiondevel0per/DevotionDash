@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getDb } from "@/lib/get-db";
+import type { PrismaClient } from "@prisma/client";
 
 type AuditLogInput = {
   userId?: string | null;
@@ -7,11 +9,13 @@ type AuditLogInput = {
   targetId?: string | null;
   details?: string | null;
   ipAddress?: string | null;
+  db?: PrismaClient;
 };
 
 export async function writeAuditLog(input: AuditLogInput) {
   try {
-    await prisma.auditLog.create({
+    const db = input.db ?? (await getDb().catch(() => prisma));
+    await db.auditLog.create({
       data: {
         userId: input.userId ?? null,
         action: input.action,
@@ -32,4 +36,3 @@ export function getClientIpAddress(request: Request) {
   if (forwarded) return forwarded.split(",")[0]?.trim() ?? null;
   return request.headers.get("x-real-ip") ?? null;
 }
-

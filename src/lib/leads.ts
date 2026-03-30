@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { PrismaClient } from "@prisma/client";
 
 export const LEAD_STAGE_SETTING_KEY = "leads.pipeline.stages";
 export const LEAD_SOURCE_OPTIONS_KEY = "leads.source.options";
@@ -75,8 +76,9 @@ export function parseLeadCustomFieldsSetting(raw: string | null | undefined): Le
   }
 }
 
-export async function loadLeadCustomFields(): Promise<LeadCustomField[]> {
-  const setting = await prisma.systemSetting.findUnique({
+export async function loadLeadCustomFields(db?: PrismaClient): Promise<LeadCustomField[]> {
+  const actualDb = db ?? prisma;
+  const setting = await actualDb.systemSetting.findUnique({
     where: { key: LEAD_CUSTOM_FIELDS_KEY },
     select: { value: true },
   });
@@ -306,8 +308,9 @@ export function parseLeadSourceOptionsSetting(raw: string | null | undefined): s
   }
 }
 
-export async function loadLeadStageFlow() {
-  const setting = await prisma.systemSetting.findUnique({
+export async function loadLeadStageFlow(db?: PrismaClient) {
+  const actualDb = db ?? prisma;
+  const setting = await actualDb.systemSetting.findUnique({
     where: { key: LEAD_STAGE_SETTING_KEY },
     select: { value: true },
   });
@@ -315,8 +318,9 @@ export async function loadLeadStageFlow() {
   return parseLeadStageFlowSetting(setting?.value);
 }
 
-export async function loadLeadSourceOptions() {
-  const setting = await prisma.systemSetting.findUnique({
+export async function loadLeadSourceOptions(db?: PrismaClient) {
+  const actualDb = db ?? prisma;
+  const setting = await actualDb.systemSetting.findUnique({
     where: { key: LEAD_SOURCE_OPTIONS_KEY },
     select: { value: true },
   });
@@ -324,8 +328,9 @@ export async function loadLeadSourceOptions() {
   return parseLeadSourceOptionsSetting(setting?.value);
 }
 
-export async function loadLeadFormFields() {
-  const setting = await prisma.systemSetting.findUnique({
+export async function loadLeadFormFields(db?: PrismaClient) {
+  const actualDb = db ?? prisma;
+  const setting = await actualDb.systemSetting.findUnique({
     where: { key: LEAD_FORM_FIELDS_KEY },
     select: { value: true },
   });

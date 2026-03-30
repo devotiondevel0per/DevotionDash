@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { PrismaClient } from "@prisma/client";
 
 export interface EmailConfigData {
   imapHost: string;
@@ -17,8 +18,9 @@ export interface EmailConfigData {
   lastSyncAt: Date | null;
 }
 
-export async function loadEmailConfig(userId: string): Promise<EmailConfigData | null> {
-  const config = await prisma.emailConfig.findUnique({ where: { userId } });
+export async function loadEmailConfig(userId: string, db?: PrismaClient): Promise<EmailConfigData | null> {
+  const actualDb = db ?? prisma;
+  const config = await actualDb.emailConfig.findUnique({ where: { userId } });
   if (!config) return null;
   return {
     imapHost: config.imapHost,
@@ -40,8 +42,10 @@ export async function loadEmailConfig(userId: string): Promise<EmailConfigData |
 
 export async function saveEmailConfig(
   userId: string,
-  data: Partial<EmailConfigData>
+  data: Partial<EmailConfigData>,
+  db?: PrismaClient
 ): Promise<EmailConfigData> {
+  const actualDb = db ?? prisma;
   const sanitized: Record<string, unknown> = {};
   if (data.imapHost !== undefined) sanitized.imapHost = String(data.imapHost).trim();
   if (data.imapPort !== undefined) sanitized.imapPort = Math.max(1, Math.min(65535, Number(data.imapPort) || 993));
@@ -61,7 +65,7 @@ export async function saveEmailConfig(
   if (data.fromEmail !== undefined) sanitized.fromEmail = String(data.fromEmail).trim();
   if (data.isEnabled !== undefined) sanitized.isEnabled = Boolean(data.isEnabled);
 
-  const config = await prisma.emailConfig.upsert({
+  const config = await actualDb.emailConfig.upsert({
     where: { userId },
     create: { userId, ...sanitized },
     update: sanitized,

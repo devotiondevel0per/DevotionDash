@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { buildOtpAuthUri, generateBackupCodes, generateTotpSecret, hashBackupCode, verifyTotpCode } from "@/lib/two-factor";
+import type { PrismaClient } from "@prisma/client";
 
 const USER_2FA_PREFIX = "security.2fa.user.";
 
@@ -39,24 +40,27 @@ function keyForUser(userId: string) {
   return `${USER_2FA_PREFIX}${userId}`;
 }
 
-export async function getUserTwoFactorState(userId: string): Promise<UserTwoFactorState | null> {
-  const row = await prisma.systemSetting.findUnique({
+export async function getUserTwoFactorState(userId: string, db?: PrismaClient): Promise<UserTwoFactorState | null> {
+  const actualDb = db ?? prisma;
+  const row = await actualDb.systemSetting.findUnique({
     where: { key: keyForUser(userId) },
     select: { value: true },
   });
   return parseState(row?.value);
 }
 
-async function saveUserTwoFactorState(userId: string, state: UserTwoFactorState) {
-  await prisma.systemSetting.upsert({
+async function saveUserTwoFactorState(userId: string, state: UserTwoFactorState, db?: PrismaClient) {
+  const actualDb = db ?? prisma;
+  await actualDb.systemSetting.upsert({
     where: { key: keyForUser(userId) },
     create: { key: keyForUser(userId), value: JSON.stringify(state) },
     update: { value: JSON.stringify(state) },
   });
 }
 
-export async function disableUserTwoFactor(userId: string) {
-  await prisma.systemSetting.deleteMany({ where: { key: keyForUser(userId) } });
+export async function disableUserTwoFactor(userId: string, db?: PrismaClient) {
+  const actualDb = db ?? prisma;
+  await actualDb.systemSetting.deleteMany({ where: { key: keyForUser(userId) } });
 }
 
 export async function enableOrRotateUserTwoFactor(input: {
@@ -64,8 +68,9 @@ export async function enableOrRotateUserTwoFactor(input: {
   issuer: string;
   accountName: string;
   forceRotate?: boolean;
+  db?: PrismaClient;
 }): Promise<EnableResult> {
-  const existing = await getUserTwoFactorState(input.userId);
+  const existing = await getUserTwoFactorState(input.userId, input.db);
   const secret = !input.forceRotate && existing?.secret ? existing.secret : generateTotpSecret();
   const backupCodes = generateBackupCodes(8);
   const nowIso = new Date().toISOString();
@@ -78,7 +83,7 @@ export async function enableOrRotateUserTwoFactor(input: {
     updatedAt: nowIso,
   };
 
-  await saveUserTwoFactorState(input.userId, state);
+  await saveUserTwoFactorState(input.userId, state, input.db);
 
   return {
     state,
@@ -92,8 +97,11 @@ export async function enableOrRotateUserTwoFactor(input: {
   };
 }
 
-export async function regenerateBackupCodes(userId: string): Promise<{ backupCodes: string[]; state: UserTwoFactorState | null }> {
-  const existing = await getUserTwoFactorState(userId);
+export async function regenerateBackupCodes(
+  userId: string,
+  db?: PrismaClient
+): Promise<{ backupCodes: string[]; state: UserTwoFactorState | null }> {
+  const existing = await getUserTwoFactorState(userId, db);
   if (!existing || !existing.secret) return { backupCodes: [], state: null };
 
   const backupCodes = generateBackupCodes(8);
@@ -102,13 +110,17 @@ export async function regenerateBackupCodes(userId: string): Promise<{ backupCod
     backupCodeHashes: backupCodes.map(hashBackupCode),
     updatedAt: new Date().toISOString(),
   };
-  await saveUserTwoFactorState(userId, nextState);
+  await saveUserTwoFactorState(userId, nextState, db);
 
   return { backupCodes, state: nextState };
 }
 
-export async function verifyAndConsumeTwoFactorCode(userId: string, code: string): Promise<boolean> {
-  const state = await getUserTwoFactorState(userId);
+export async function verifyAndConsumeTwoFactorCode(
+  userId: string,
+  code: string,
+  db?: PrismaClient
+): Promise<boolean> {
+  const state = await getUserTwoFactorState(userId, db);
   if (!state?.enabled || !state.secret) return false;
 
   if (verifyTotpCode(state.secret, code)) return true;
@@ -121,6 +133,6 @@ export async function verifyAndConsumeTwoFactorCode(userId: string, code: string
     backupCodeHashes: state.backupCodeHashes.filter((item) => item !== hashed),
     updatedAt: new Date().toISOString(),
   };
-  await saveUserTwoFactorState(userId, nextState);
+  await saveUserTwoFactorState(userId, nextState, db);
   return true;
 }
