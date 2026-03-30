@@ -19,6 +19,10 @@ async function isMobileTokenValid(req: Request): Promise<boolean> {
 
 function redirectToLoginAndClearAuth(req: Request) {
   const response = NextResponse.redirect(new URL("/login", req.url));
+  return clearAuthCookies(response);
+}
+
+function clearAuthCookies<T extends NextResponse>(response: T): T {
   for (const name of [
     "authjs.session-token",
     "__Secure-authjs.session-token",
@@ -37,7 +41,6 @@ function redirectToLoginAndClearAuth(req: Request) {
 export default auth(async (req) => {
   const sessionLoggedIn = !!req.auth;
   const mobileLoggedIn = await isMobileTokenValid(req);
-  const isLoggedIn = sessionLoggedIn || mobileLoggedIn;
   const pathname = req.nextUrl.pathname;
   const isLoginPage = pathname === "/login";
   const isForgotPasswordPage = pathname === "/forgot-password";
@@ -107,25 +110,39 @@ export default auth(async (req) => {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 
+  let sessionExpired = false;
+  if (sessionLoggedIn) {
+    const authAt = Number((req.auth?.user as { authAt?: number } | undefined)?.authAt ?? 0);
+    if (Number.isFinite(authAt) && authAt > 0) {
+      const sessionAgeMs = Date.now() - authAt;
+      if (sessionAgeMs > policy.sessionMaxMinutes * 60 * 1000) {
+        sessionExpired = true;
+      }
+    }
+  }
+
+  const isLoggedIn = !sessionExpired && (sessionLoggedIn || mobileLoggedIn);
+
+  if (sessionExpired) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Session expired" }, { status: 401 });
+    }
+    // Avoid /login -> /login loops when stale cookies can't be deleted immediately.
+    // Let auth pages render and clear cookies in the same response.
+    if (isPublicAuthPage) {
+      const response = clearAuthCookies(NextResponse.next());
+      if (tenantId) response.headers.set("x-tenant-id", tenantId);
+      return response;
+    }
+    return redirectToLoginAndClearAuth(req);
+  }
+
   if (!isLoggedIn && isApiRoute) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (!isLoggedIn && !isPublicAuthPage) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
-  }
-
-  if (isLoggedIn) {
-    const authAt = Number((req.auth?.user as { authAt?: number } | undefined)?.authAt ?? 0);
-    if (Number.isFinite(authAt) && authAt > 0) {
-      const sessionAgeMs = Date.now() - authAt;
-      if (sessionAgeMs > policy.sessionMaxMinutes * 60 * 1000) {
-        if (isApiRoute) {
-          return NextResponse.json({ error: "Session expired" }, { status: 401 });
-        }
-        return redirectToLoginAndClearAuth(req);
-      }
-    }
   }
 
   if (isLoggedIn && isPublicAuthPage) {
