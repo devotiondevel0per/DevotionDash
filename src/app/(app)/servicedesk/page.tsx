@@ -562,7 +562,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
   useEffect(() => {
     if (!open) return;
     try {
-      const raw = window.localStorage.getItem("teamwox_recent_emojis_v1");
+      const raw = window.localStorage.getItem("zeddash_recent_emojis_v1");
       if (!raw) {
         setRecentEmojis([]);
         return;
@@ -619,7 +619,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
     const next = [emoji, ...recentEmojis.filter((entry) => entry !== emoji)].slice(0, 24);
     setRecentEmojis(next);
     try {
-      window.localStorage.setItem("teamwox_recent_emojis_v1", JSON.stringify(next));
+      window.localStorage.setItem("zeddash_recent_emojis_v1", JSON.stringify(next));
     } catch {
       // no-op
     }

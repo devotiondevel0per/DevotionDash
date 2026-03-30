@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.teamwox" "\0"
-            VALUE "FileDescription", "teamwox_mobile" "\0"
+            VALUE "CompanyName", "com.zeddash" "\0"
+            VALUE "FileDescription", "zeddash_mobile" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "teamwox_mobile" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.teamwox. All rights reserved." "\0"
-            VALUE "OriginalFilename", "teamwox_mobile.exe" "\0"
-            VALUE "ProductName", "teamwox_mobile" "\0"
+            VALUE "InternalName", "zeddash_mobile" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.zeddash. All rights reserved." "\0"
+            VALUE "OriginalFilename", "zeddash_mobile.exe" "\0"
+            VALUE "ProductName", "zeddash_mobile" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -1,4 +1,4 @@
-# TeamWox — Windows Server Production Deployment Guide
+# ZedDash — Windows Server Production Deployment Guide
 
 ## Prerequisites
 
@@ -35,9 +35,9 @@ npm --version
 4. After install, open **MySQL Command Line Client** and run:
 
 ```sql
-CREATE DATABASE teamwox CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'teamwox'@'localhost' IDENTIFIED BY 'YourStrongPassword123!';
-GRANT ALL PRIVILEGES ON teamwox.* TO 'teamwox'@'localhost';
+CREATE DATABASE zeddash CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'zeddash'@'localhost' IDENTIFIED BY 'YourStrongPassword123!';
+GRANT ALL PRIVILEGES ON zeddash.* TO 'zeddash'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
@@ -55,24 +55,24 @@ EXIT;
 
 Copy your project folder to the server, e.g.:
 ```
-C:\Apps\teamwox\
+C:\Apps\zeddash\
 ```
 
 Or clone from Git:
 ```powershell
-git clone <your-repo-url> C:\Apps\teamwox
-cd C:\Apps\teamwox
+git clone <your-repo-url> C:\Apps\zeddash
+cd C:\Apps\zeddash
 ```
 
 ---
 
 ## Step 4 — Configure Environment Variables
 
-Create the `.env` file at `C:\Apps\teamwox\.env`:
+Create the `.env` file at `C:\Apps\zeddash\.env`:
 
 ```env
 # ── Database ────────────────────────────────────────────────
-DATABASE_URL="mysql://teamwox:YourStrongPassword123!@localhost:3306/teamwox"
+DATABASE_URL="mysql://zeddash:YourStrongPassword123!@localhost:3306/zeddash"
 
 # ── Auth (generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 AUTH_SECRET="paste-a-64-hex-char-random-string-here"
@@ -102,7 +102,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ## Step 5 — Install Dependencies & Setup DB
 
 ```powershell
-cd C:\Apps\teamwox
+cd C:\Apps\zeddash
 
 # Install dependencies
 npm install
@@ -128,13 +128,13 @@ Run **PowerShell as Administrator**:
 
 ```powershell
 # Allow HTTP (port 80)
-netsh advfirewall firewall add rule name="TeamWox HTTP" protocol=TCP dir=in localport=80 action=allow
+netsh advfirewall firewall add rule name="ZedDash HTTP" protocol=TCP dir=in localport=80 action=allow
 
 # Allow HTTPS (port 443)
-netsh advfirewall firewall add rule name="TeamWox HTTPS" protocol=TCP dir=in localport=443 action=allow
+netsh advfirewall firewall add rule name="ZedDash HTTPS" protocol=TCP dir=in localport=443 action=allow
 
 # Allow app port (for reverse proxy setup)
-netsh advfirewall firewall add rule name="TeamWox App" protocol=TCP dir=in localport=3000 action=allow
+netsh advfirewall firewall add rule name="ZedDash App" protocol=TCP dir=in localport=3000 action=allow
 ```
 
 **Important:** Do NOT open MySQL port 3306 to the internet unless your DB is on a separate machine.
@@ -161,7 +161,7 @@ Install-WindowsFeature -Name Web-Server, Web-Asp-Net45 -IncludeManagementTools
 4. Add HTTPS binding with your certificate
 5. Add URL Rewrite rule to proxy to localhost:3000:
 
-Create `C:\Apps\teamwox\web.config` (if using IIS):
+Create `C:\Apps\zeddash\web.config` (if using IIS):
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
@@ -275,10 +275,10 @@ openssl pkcs12 -in C:\ssl\cert.pfx -out C:\ssl\private.key -nocerts -nodes -pass
 npm install -g pm2 pm2-windows-startup
 
 # Start the app (standard Next.js HTTP server, use when reverse proxy handles SSL)
-pm2 start npm --name teamwox -- run start -- --port 3000
+pm2 start npm --name zeddash -- run start -- --port 3000
 
 # OR start with custom server (for direct HTTPS, Option C)
-pm2 start npm --name teamwox -- run start:prod
+pm2 start npm --name zeddash -- run start:prod
 
 # Save PM2 process list
 pm2 save
@@ -291,11 +291,11 @@ pm2-startup install
 **Useful PM2 commands:**
 ```powershell
 pm2 status              # show all processes
-pm2 logs teamwox        # live log tail
-pm2 logs teamwox --lines 100  # last 100 lines
-pm2 restart teamwox     # restart after .env change
-pm2 stop teamwox        # stop
-pm2 delete teamwox      # remove from PM2
+pm2 logs zeddash        # live log tail
+pm2 logs zeddash --lines 100  # last 100 lines
+pm2 restart zeddash     # restart after .env change
+pm2 stop zeddash        # stop
+pm2 delete zeddash      # remove from PM2
 ```
 
 ---
@@ -330,7 +330,7 @@ C:\nssm\nssm.exe start nginx
 ## Updating the App
 
 ```powershell
-cd C:\Apps\teamwox
+cd C:\Apps\zeddash
 
 # Pull latest code (if using Git)
 git pull
@@ -348,7 +348,7 @@ npx prisma db push
 npm run build
 
 # Restart the app
-pm2 restart teamwox
+pm2 restart zeddash
 ```
 
 ---
@@ -357,22 +357,22 @@ pm2 restart teamwox
 
 **Database backup (daily scheduled task):**
 ```powershell
-# Create backup script: C:\Scripts\backup-teamwox.ps1
+# Create backup script: C:\Scripts\backup-zeddash.ps1
 $date = Get-Date -Format "yyyy-MM-dd"
-$backupDir = "C:\Backups\teamwox"
+$backupDir = "C:\Backups\zeddash"
 New-Item -ItemType Directory -Force -Path $backupDir
 & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe" `
-    --user=teamwox --password=YourStrongPassword123! `
-    --single-transaction teamwox > "$backupDir\teamwox-$date.sql"
+    --user=zeddash --password=YourStrongPassword123! `
+    --single-transaction zeddash > "$backupDir\zeddash-$date.sql"
 
 # Schedule it: Task Scheduler → Create Basic Task → Daily → PowerShell
-powershell -ExecutionPolicy Bypass -File C:\Scripts\backup-teamwox.ps1
+powershell -ExecutionPolicy Bypass -File C:\Scripts\backup-zeddash.ps1
 ```
 
 **Uploads backup:**
 ```powershell
 # Copy uploads folder to backup location
-Copy-Item -Path "C:\Apps\teamwox\public\uploads" -Destination "C:\Backups\teamwox\uploads-$date" -Recurse
+Copy-Item -Path "C:\Apps\zeddash\public\uploads" -Destination "C:\Backups\zeddash\uploads-$date" -Recurse
 ```
 
 ---
@@ -403,7 +403,7 @@ Internet
               │ HTTP (localhost)
               ▼ port 3000
 ┌─────────────────────────────┐
-│   Next.js App (PM2)         │  ← TeamWox application
+│   Next.js App (PM2)         │  ← ZedDash application
 └─────────────┬───────────────┘
               │
               ▼ port 3306

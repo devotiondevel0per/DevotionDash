@@ -3,16 +3,16 @@
     "allow": [
       "WebFetch(domain:office.zedcapital.com)",
       "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes)",
-      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes --name teamwox)",
-      "Bash(mkdir -p d:/Codes/Teamwox/temp)",
-      "Bash(npx create-next-app@latest teamwox-app --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes)",
-      "Bash(cp -r d:/Codes/Teamwox/temp/teamwox-app/. d:/Codes/Teamwox/)",
-      "Bash(rm -rf d:/Codes/Teamwox/temp)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes --name zeddash)",
+      "Bash(mkdir -p d:/Codes/ZedDash/temp)",
+      "Bash(npx create-next-app@latest zeddash-app --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes)",
+      "Bash(cp -r d:/Codes/ZedDash/temp/zeddash-app/. d:/Codes/ZedDash/)",
+      "Bash(rm -rf d:/Codes/ZedDash/temp)",
       "Bash(npx shadcn@latest add card input label badge avatar dropdown-menu dialog table tabs select textarea toast separator scroll-area progress alert sheet sidebar)",
       "Bash(npx shadcn@latest add card input label badge avatar dropdown-menu dialog table tabs select textarea sonner separator scroll-area progress alert sheet sidebar)"
     ],
     "additionalDirectories": [
-      "d:\\Codes\\Teamwox\\temp"
+      "d:\\Codes\\ZedDash\\temp"
     ]
   }
 }

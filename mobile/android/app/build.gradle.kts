@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.teamwox.mobile"
+    namespace = "com.zeddash.mobile"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.teamwox.mobile"
+        applicationId = "com.zeddash.mobile"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

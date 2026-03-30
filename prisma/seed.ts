@@ -9,12 +9,12 @@ async function main() {
 
   await prisma.user.upsert({
     where: { login: "admin" },
-    update: { email: "admin@teamwox.local", password, name: "Admin", surname: "User", fullname: "Admin User", isAdmin: true, isActive: true },
-    create: { login: "admin", email: "admin@teamwox.local", password, name: "Admin", surname: "User", fullname: "Admin User", isAdmin: true, isActive: true },
+    update: { email: "admin@zeddash.local", password, name: "Admin", surname: "User", fullname: "Admin User", isAdmin: true, isActive: true },
+    create: { login: "admin", email: "admin@zeddash.local", password, name: "Admin", surname: "User", fullname: "Admin User", isAdmin: true, isActive: true },
   });
 
   for (const [key, value] of [
-    ["app.name", "TeamWox"],
+    ["app.name", "ZedDash"],
     ["app.tagline", "Workspace"],
   ] as const) {
     await prisma.systemSetting.upsert({

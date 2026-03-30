@@ -2,7 +2,7 @@
 # Run this on the production server (209.192.167.118) as Administrator
 # It patches 2 files that enable mobile Bearer-token auth, then rebuilds.
 
-$AppRoot = "C:\Teamwox\Teamwox"
+$AppRoot = "C:\ZedDash\ZedDash"
 
 # ── 1. src\lib\api-access.ts ──────────────────────────────────────────────────
 $apiAccess = @'
@@ -226,6 +226,6 @@ Set-Location $AppRoot
 npm run build
 
 Write-Host "Restarting PM2..." -ForegroundColor Cyan
-pm2 restart teamwox
+pm2 restart zeddash
 
 Write-Host "Done! Mobile Bearer auth is now active." -ForegroundColor Green

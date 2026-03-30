@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/teamwox_mobile.iml" filepath="$PROJECT_DIR$/teamwox_mobile.iml" />
-      <module fileurl="file://$PROJECT_DIR$/android/teamwox_mobile_android.iml" filepath="$PROJECT_DIR$/android/teamwox_mobile_android.iml" />
+      <module fileurl="file://$PROJECT_DIR$/zeddash_mobile.iml" filepath="$PROJECT_DIR$/zeddash_mobile.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/zeddash_mobile_android.iml" filepath="$PROJECT_DIR$/android/zeddash_mobile_android.iml" />
     </modules>
   </component>
 </project>

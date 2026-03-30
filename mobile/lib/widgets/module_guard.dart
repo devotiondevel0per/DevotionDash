@@ -95,7 +95,7 @@ class _AccessDeniedView extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Your mobile access now follows the same module permissions exposed by the Teamwox server.',
+                'Your mobile access now follows the same module permissions exposed by the ZedDash server.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

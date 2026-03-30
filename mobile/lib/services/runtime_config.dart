@@ -16,9 +16,9 @@ class RuntimeConfig {
   static late final RuntimeConfig instance;
 
   static Future<void> init() async {
-    final envServerUrl = const String.fromEnvironment('TEAMWOX_SERVER_URL').trim();
-    final envAppName = const String.fromEnvironment('TEAMWOX_APP_NAME').trim();
-    final envTagline = const String.fromEnvironment('TEAMWOX_APP_TAGLINE').trim();
+    final envServerUrl = const String.fromEnvironment('ZEDDASH_SERVER_URL').trim();
+    final envAppName = const String.fromEnvironment('ZEDDASH_APP_NAME').trim();
+    final envTagline = const String.fromEnvironment('ZEDDASH_APP_TAGLINE').trim();
 
     Map<String, dynamic> fileConfig = const {};
     try {
@@ -39,7 +39,7 @@ class RuntimeConfig {
 
     if (configuredServerUrl.isEmpty) {
       throw StateError(
-        'Missing Teamwox server URL. Configure assets/config/runtime.json or pass --dart-define=TEAMWOX_SERVER_URL=...',
+        'Missing ZedDash server URL. Configure assets/config/runtime.json or pass --dart-define=ZEDDASH_SERVER_URL=...',
       );
     }
 
@@ -49,7 +49,7 @@ class RuntimeConfig {
           ? envAppName
           : (fileConfig['fallbackAppName']?.toString().trim().isNotEmpty == true
               ? fileConfig['fallbackAppName'].toString().trim()
-              : 'Teamwox'),
+              : 'ZedDash'),
       fallbackTagline: envTagline.isNotEmpty
           ? envTagline
           : (fileConfig['fallbackTagline']?.toString().trim().isNotEmpty == true

@@ -1743,7 +1743,7 @@ export default function AdministrationPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Application Name <span className="text-red-500">*</span></label>
-                      <Input value={settingsForm.appName} onChange={(e) => setSettingsForm((prev) => ({ ...prev, appName: e.target.value }))} placeholder="e.g. TeamWox" className={!settingsForm.appName.trim() ? "border-red-300 focus-visible:ring-red-300" : ""} />
+                      <Input value={settingsForm.appName} onChange={(e) => setSettingsForm((prev) => ({ ...prev, appName: e.target.value }))} placeholder="e.g. ZedDash" className={!settingsForm.appName.trim() ? "border-red-300 focus-visible:ring-red-300" : ""} />
                       {!settingsForm.appName.trim() && <p className="text-[11px] text-red-500">Application name is required</p>}
                     </div>
                     <div className="space-y-1">
@@ -3340,11 +3340,11 @@ export default function AdministrationPage() {
                   <p className="mb-3 text-xs text-slate-500">Run these commands as Administrator in PowerShell to open the required ports.</p>
                   <div className="rounded-md bg-slate-900 p-3 font-mono text-xs text-green-400 space-y-1">
                     <p className="text-slate-400"># Open HTTP (port 80)</p>
-                    <p>{"netsh advfirewall firewall add rule name=\"TeamWox HTTP\" protocol=TCP dir=in localport=80 action=allow"}</p>
+                    <p>{"netsh advfirewall firewall add rule name=\"ZedDash HTTP\" protocol=TCP dir=in localport=80 action=allow"}</p>
                     <p className="mt-2 text-slate-400"># Open HTTPS (port 443)</p>
-                    <p>{"netsh advfirewall firewall add rule name=\"TeamWox HTTPS\" protocol=TCP dir=in localport=443 action=allow"}</p>
+                    <p>{"netsh advfirewall firewall add rule name=\"ZedDash HTTPS\" protocol=TCP dir=in localport=443 action=allow"}</p>
                     <p className="mt-2 text-slate-400"># Open app port (if using reverse proxy)</p>
-                    <p>{"netsh advfirewall firewall add rule name=\"TeamWox App\" protocol=TCP dir=in localport=3000 action=allow"}</p>
+                    <p>{"netsh advfirewall firewall add rule name=\"ZedDash App\" protocol=TCP dir=in localport=3000 action=allow"}</p>
                     <p className="mt-2 text-slate-400"># Open MySQL (only if external access needed — otherwise keep closed)</p>
                     <p>{"netsh advfirewall firewall add rule name=\"MySQL\" protocol=TCP dir=in localport=3306 action=allow"}</p>
                   </div>
@@ -3370,16 +3370,16 @@ export default function AdministrationPage() {
                     <p className="mt-2 text-slate-400"># Build the app</p>
                     <p>npm run build</p>
                     <p className="mt-2 text-slate-400"># Start with PM2 (using built-in Next.js HTTP server)</p>
-                    <p>pm2 start npm --name teamwox -- run start</p>
+                    <p>pm2 start npm --name zeddash -- run start</p>
                     <p className="mt-2 text-slate-400"># OR start with custom HTTPS server</p>
-                    <p>pm2 start npm --name teamwox -- run start:prod</p>
+                    <p>pm2 start npm --name zeddash -- run start:prod</p>
                     <p className="mt-2 text-slate-400"># Save and enable auto-start on Windows boot</p>
                     <p>pm2 save</p>
                     <p>pm2-startup install  <span className="text-slate-500"># then follow the instructions it prints</span></p>
                     <p className="mt-2 text-slate-400"># Useful PM2 commands</p>
                     <p>pm2 status          <span className="text-slate-500"># view all processes</span></p>
-                    <p>pm2 logs teamwox    <span className="text-slate-500"># live log tail</span></p>
-                    <p>pm2 restart teamwox <span className="text-slate-500"># restart after config change</span></p>
+                    <p>pm2 logs zeddash    <span className="text-slate-500"># live log tail</span></p>
+                    <p>pm2 restart zeddash <span className="text-slate-500"># restart after config change</span></p>
                   </div>
                 </CardContent>
               </Card>
@@ -3392,7 +3392,7 @@ export default function AdministrationPage() {
                 <CardContent>
                   <div className="rounded-md bg-slate-900 p-4 font-mono text-xs space-y-1">
                     <p className="text-slate-400"># ── Database ───────────────────────────────────────</p>
-                    <p className="text-blue-300">DATABASE_URL<span className="text-white">="mysql://user:password@localhost:3306/teamwox"</span></p>
+                    <p className="text-blue-300">DATABASE_URL<span className="text-white">="mysql://user:password@localhost:3306/zeddash"</span></p>
                     <p className="mt-2 text-slate-400"># ── Auth ───────────────────────────────────────────</p>
                     <p className="text-blue-300">AUTH_SECRET<span className="text-white">="your-32-char-random-secret"</span></p>
                     <p className="text-blue-300">NEXTAUTH_URL<span className="text-white">="https://yourserver.com"</span></p>
@@ -3805,11 +3805,11 @@ export default function AdministrationPage() {
                         <CardHeader className="pb-3">
                           <CardTitle className="flex items-center gap-2 text-sm">
                             <Phone className="h-4 w-4 text-blue-600" />
-                            How to Connect 3CX to TeamWox
+                            How to Connect 3CX to ZedDash
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="text-sm text-slate-700 space-y-3">
-                          <p className="text-xs text-slate-500">Follow these steps to integrate your 3CX phone system with TeamWox telephony.</p>
+                          <p className="text-xs text-slate-500">Follow these steps to integrate your 3CX phone system with ZedDash telephony.</p>
                           <ol className="space-y-2 list-none">
                             {[
                               "In 3CX Management Console, go to SIP Trunks → Add new trunk.",
@@ -4049,7 +4049,7 @@ export default function AdministrationPage() {
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Database URL <span className="text-red-500">*</span></Label>
-            <Input value={tenantForm.databaseUrl} onChange={(e) => setTenantForm((f) => ({ ...f, databaseUrl: e.target.value }))} placeholder="mysql://user:pass@localhost:3306/teamwox_acme" type="password" />
+            <Input value={tenantForm.databaseUrl} onChange={(e) => setTenantForm((f) => ({ ...f, databaseUrl: e.target.value }))} placeholder="mysql://user:pass@localhost:3306/zeddash_acme" type="password" />
             <p className="text-[11px] text-slate-500">Run: <code>npx tsx scripts/setup-tenant.ts --db-url=&quot;...&quot; --admin-email=... --admin-password=...</code> first</p>
           </div>
           <div className="space-y-1.5">

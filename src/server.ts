@@ -1,5 +1,5 @@
 /**
- * Custom production server for TeamWox.
+ * Custom production server for ZedDash.
  * Supports plain HTTP and direct HTTPS with SSL cert files.
  *
  * Environment variables:

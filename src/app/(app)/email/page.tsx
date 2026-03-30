@@ -394,7 +394,7 @@ const DEFAULT_MAILBOX_EXTRAS: MailboxExtras = {
   defaultInboxLabel: "primary",
 };
 
-const MAILBOX_EXTRAS_STORAGE_KEY = "teamwox_mailbox_extras_v1";
+const MAILBOX_EXTRAS_STORAGE_KEY = "zeddash_mailbox_extras_v1";
 
 function loadMailboxExtrasMap(): Record<string, MailboxExtras> {
   if (typeof window === "undefined") return {};
@@ -483,7 +483,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
       setSignatureEmojiSearch("");
       setSignatureEmojiCategory("recent");
       try {
-        const raw = window.localStorage.getItem("teamwox_recent_emojis_v1");
+        const raw = window.localStorage.getItem("zeddash_recent_emojis_v1");
         if (raw) {
           const parsed = JSON.parse(raw) as string[];
           if (Array.isArray(parsed)) setSignatureRecentEmojis(parsed.slice(0, 24));
@@ -704,7 +704,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
     const next = [emoji, ...signatureRecentEmojis.filter((e) => e !== emoji)].slice(0, 24);
     setSignatureRecentEmojis(next);
     try {
-      window.localStorage.setItem("teamwox_recent_emojis_v1", JSON.stringify(next));
+      window.localStorage.setItem("zeddash_recent_emojis_v1", JSON.stringify(next));
     } catch {
       // ignore storage errors
     }
@@ -1394,7 +1394,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
       setAiResult(null);
       setAiPrompt("");
       try {
-        const raw = window.localStorage.getItem("teamwox_recent_emojis_v1");
+        const raw = window.localStorage.getItem("zeddash_recent_emojis_v1");
         if (raw) {
           const parsed = JSON.parse(raw) as string[];
           if (Array.isArray(parsed)) setRecentEmojis(parsed.slice(0, 24));
@@ -1525,7 +1525,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
     const next = [emoji, ...recentEmojis.filter((e) => e !== emoji)].slice(0, 24);
     setRecentEmojis(next);
     try {
-      window.localStorage.setItem("teamwox_recent_emojis_v1", JSON.stringify(next));
+      window.localStorage.setItem("zeddash_recent_emojis_v1", JSON.stringify(next));
     } catch {
       // ignore storage errors
     }
@@ -2378,7 +2378,7 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
     setShowReplyMore(false);
     setSummary(null);
     try {
-      const raw = window.localStorage.getItem("teamwox_recent_emojis_v1");
+      const raw = window.localStorage.getItem("zeddash_recent_emojis_v1");
       if (raw) {
         const parsed = JSON.parse(raw) as string[];
         if (Array.isArray(parsed)) setReplyRecentEmojis(parsed.slice(0, 24));
@@ -2523,7 +2523,7 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
     const next = [emoji, ...replyRecentEmojis.filter((e) => e !== emoji)].slice(0, 24);
     setReplyRecentEmojis(next);
     try {
-      window.localStorage.setItem("teamwox_recent_emojis_v1", JSON.stringify(next));
+      window.localStorage.setItem("zeddash_recent_emojis_v1", JSON.stringify(next));
     } catch {
       // ignore storage errors
     }
@@ -3038,7 +3038,7 @@ export default function EmailPage() {
   const canManage = can("email", "manage");
   const autoSyncInFlight = useRef(false);
   const cacheHydratedRef = useRef(false);
-  const cacheKey = "teamwox_email_cache_v1";
+  const cacheKey = "zeddash_email_cache_v1";
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);

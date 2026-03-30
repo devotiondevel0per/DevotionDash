@@ -1,4 +1,4 @@
-package com.example.teamwox_mobile
+package com.example.zeddash_mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

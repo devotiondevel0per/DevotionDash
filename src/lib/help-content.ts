@@ -62,7 +62,7 @@ export const TOPIC_TYPE_LABEL: Record<HelpTopicType, string> = {
 export const HELP_TOPICS: HelpTopic[] = [
   {
     id: "getting-started",
-    title: "Getting Started With Teamwox",
+    title: "Getting Started With ZedDash",
     summary: "Simple overview of navigation, profile setup, search, and daily workflow basics.",
     type: "documentation",
     module: "help",
@@ -71,7 +71,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     difficulty: "beginner",
     audience: ["All users", "New joiners"],
     whenToUse: [
-      "You are using Teamwox for the first time.",
+      "You are using ZedDash for the first time.",
       "You want a quick understanding of where each module lives.",
       "You need to set a clean daily workflow for your team.",
     ],

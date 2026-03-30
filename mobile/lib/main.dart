@@ -12,11 +12,11 @@ void main() async {
   await RuntimeConfig.init();
   // NotificationService.init() calls Firebase.initializeApp() internally
   await NotificationService.init();
-  runApp(const ProviderScope(child: TeamwoxApp()));
+  runApp(const ProviderScope(child: ZedDashApp()));
 }
 
-class TeamwoxApp extends ConsumerWidget {
-  const TeamwoxApp({super.key});
+class ZedDashApp extends ConsumerWidget {
+  const ZedDashApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

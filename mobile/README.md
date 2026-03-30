@@ -1,12 +1,12 @@
-# TeamWox Mobile App
+# ZedDash Mobile App
 
-Flutter mobile client for the TeamWox business groupware platform.
+Flutter mobile client for the ZedDash business groupware platform.
 
 ## Prerequisites
 
 - [Flutter SDK](https://flutter.dev/docs/get-started/install) ≥ 3.3.0
 - Android Studio / Xcode
-- TeamWox Next.js server running
+- ZedDash Next.js server running
 
 ## Setup
 
