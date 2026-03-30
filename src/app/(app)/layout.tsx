@@ -1,4 +1,5 @@
 import { AppHeader } from "@/components/layout/AppHeader";
+import { ModuleAccessGuard } from "@/components/layout/ModuleAccessGuard";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -8,7 +9,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar />
         <main className="flex-1 overflow-y-auto bg-background">
-          {children}
+          <ModuleAccessGuard>{children}</ModuleAccessGuard>
         </main>
       </div>
     </div>

@@ -17,6 +17,23 @@ async function isMobileTokenValid(req: Request): Promise<boolean> {
   }
 }
 
+function redirectToLoginAndClearAuth(req: Request) {
+  const response = NextResponse.redirect(new URL("/login", req.url));
+  for (const name of [
+    "authjs.session-token",
+    "__Secure-authjs.session-token",
+    "next-auth.session-token",
+    "__Secure-next-auth.session-token",
+    "authjs.callback-url",
+    "authjs.csrf-token",
+    "next-auth.callback-url",
+    "next-auth.csrf-token",
+  ]) {
+    response.cookies.delete(name);
+  }
+  return response;
+}
+
 export default auth(async (req) => {
   const sessionLoggedIn = !!req.auth;
   const mobileLoggedIn = await isMobileTokenValid(req);
@@ -98,10 +115,6 @@ export default auth(async (req) => {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 
-  if (isLoggedIn && isPublicAuthPage) {
-    return NextResponse.redirect(new URL("/home", req.nextUrl));
-  }
-
   if (isLoggedIn) {
     const authAt = Number((req.auth?.user as { authAt?: number } | undefined)?.authAt ?? 0);
     if (Number.isFinite(authAt) && authAt > 0) {
@@ -110,9 +123,13 @@ export default auth(async (req) => {
         if (isApiRoute) {
           return NextResponse.json({ error: "Session expired" }, { status: 401 });
         }
-        return NextResponse.redirect(new URL("/login", req.nextUrl));
+        return redirectToLoginAndClearAuth(req);
       }
     }
+  }
+
+  if (isLoggedIn && isPublicAuthPage) {
+    return NextResponse.redirect(new URL("/home", req.nextUrl));
   }
 
   const response = NextResponse.next();

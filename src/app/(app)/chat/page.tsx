@@ -335,11 +335,13 @@ function canonicalDialogSubject(subject: string | null | undefined) {
   if (!value) return null;
   const lower = value.toLowerCase();
   if (lower === "direct" || lower === "direct chat" || lower.startsWith("direct:")) return null;
+  if (lower.startsWith("chat with ") || lower.startsWith("dm:") || lower.startsWith("private chat")) return null;
   return value;
 }
 
 function directDialogKey(dialog: DialogSummary) {
   if (dialog.group || dialog.organization || dialog.members.length !== 2) return null;
+  if (canonicalDialogSubject(dialog.subject)) return null;
   const memberIds = Array.from(new Set(dialog.members.map((member) => member.userId))).sort();
   if (memberIds.length !== 2) return null;
   return memberIds.join(":");

@@ -81,6 +81,22 @@ type ReportPayload = {
   employees: ReportEmployee[];
   insight: ReportInsight | null;
 };
+type AdminSection =
+  | "overview"
+  | "users"
+  | "roles"
+  | "settings"
+  | "leadConfig"
+  | "workflowConfig"
+  | "modules"
+  | "security"
+  | "deployment"
+  | "reports"
+  | "logs"
+  | "livechat"
+  | "tenants"
+  | "ticketwidgets"
+  | "telephony";
 type DepartmentItem = {
   id: string;
   name: string;
@@ -261,6 +277,15 @@ type TicketWidgetForm = {
   position: string;
   defaultGroupId: string;
   allowDomains: string;
+};
+const EMPTY_TICKET_WIDGET_FORM: TicketWidgetForm = {
+  name: "",
+  brandLabel: "Support",
+  welcomeText: "Hi! How can we help you today?",
+  accentColor: "#B02B2C",
+  position: "right",
+  defaultGroupId: "",
+  allowDomains: "",
 };
 
 type TelProvider = { id: string; name: string; providerType: string; host: string; port: number; username: string; password: string; transport: string; fromDomain: string | null; callerIdName: string | null; callerIdNum: string | null; isActive: boolean; isDefault: boolean; notes: string | null };
@@ -467,7 +492,7 @@ function generateStrongPassword(length = 14) {
 
 export default function AdministrationPage() {
   const { data: session } = useSession();
-  const [section, setSection] = useState<"overview" | "users" | "roles" | "settings" | "leadConfig" | "workflowConfig" | "modules" | "security" | "deployment" | "reports" | "logs" | "livechat" | "tenants" | "ticketwidgets" | "telephony">("overview");
+  const [section, setSection] = useState<AdminSection>("overview");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -578,8 +603,9 @@ export default function AdministrationPage() {
   // ── Ticket Widget state ──
   const [ticketWidgets, setTicketWidgets] = useState<TicketWidgetItem[]>([]);
   const [twLoading, setTwLoading] = useState(false);
-  const [widgetForm, setWidgetForm] = useState<TicketWidgetForm>({ name: "", brandLabel: "Support", welcomeText: "Hi! How can we help you today?", accentColor: "#B02B2C", position: "right", defaultGroupId: "", allowDomains: "" });
+  const [widgetForm, setWidgetForm] = useState<TicketWidgetForm>(EMPTY_TICKET_WIDGET_FORM);
   const [createWidgetOpen, setCreateWidgetOpen] = useState(false);
+  const [editingTicketWidgetId, setEditingTicketWidgetId] = useState<string | null>(null);
   const [widgetSaving, setWidgetSaving] = useState(false);
   const [showEmbedFor, setShowEmbedFor] = useState<string | null>(null);
   const [twWidgetCopied, setTwWidgetCopied] = useState(false);
@@ -607,7 +633,61 @@ export default function AdministrationPage() {
   const [blReason, setBlReason] = useState("");
   const [blSaving, setBlSaving] = useState(false);
 
-  const canManage = (session?.user as { isAdmin?: boolean } | undefined)?.isAdmin || permissionData?.isAdmin || permissionData?.permissions?.administration?.manage;
+  const isAdminUser = Boolean((session?.user as { isAdmin?: boolean } | undefined)?.isAdmin || permissionData?.isAdmin);
+  const sectionPermissions = permissionData?.permissions ?? {};
+  const hasModuleAction = (moduleId: ModuleId, action: PermissionAction) => {
+    if (isAdminUser) return true;
+    const modulePermission = sectionPermissions[moduleId];
+    if (!modulePermission) return false;
+    if (action === "read") return Boolean(modulePermission.read || modulePermission.write || modulePermission.manage);
+    if (action === "write") return Boolean(modulePermission.write || modulePermission.manage);
+    return Boolean(modulePermission.manage);
+  };
+  const canManageAdministration = hasModuleAction("administration", "manage");
+  const canManageLivechat = hasModuleAction("livechat", "manage");
+  const canReadLivechat = hasModuleAction("livechat", "read");
+  const canManageServicedesk = hasModuleAction("servicedesk", "manage");
+  const canManageTelephony = hasModuleAction("telephony", "manage");
+  const canReadTelephony = hasModuleAction("telephony", "read");
+  const canManageTenants = isPlatform && isAdminUser;
+  const canReadSection = (sectionId: AdminSection) => {
+    if (sectionId === "livechat") return canReadLivechat;
+    if (sectionId === "ticketwidgets") return canManageServicedesk;
+    if (sectionId === "telephony") return canReadTelephony;
+    if (sectionId === "tenants") return canManageTenants;
+    return hasModuleAction("administration", "read");
+  };
+  const canManage = (() => {
+    if (section === "livechat") return canManageLivechat;
+    if (section === "ticketwidgets") return canManageServicedesk;
+    if (section === "telephony") return canManageTelephony;
+    if (section === "tenants") return canManageTenants;
+    return canManageAdministration;
+  })();
+  const sectionManageHint = (() => {
+    if (section === "livechat") return "Read-only mode: livechat.manage permission required for changes.";
+    if (section === "ticketwidgets") return "Read-only mode: servicedesk.manage permission required for changes.";
+    if (section === "telephony") return "Read-only mode: telephony.manage permission required for changes.";
+    if (section === "tenants") return "Read-only mode: platform admin access required for tenant changes.";
+    return "Read-only mode: administration.manage permission required for changes.";
+  })();
+  const sectionItems = [
+    { id: "overview" as AdminSection, label: "Overview", icon: LayoutDashboard, visible: canReadSection("overview") },
+    { id: "users" as AdminSection, label: "Users & Access", icon: Users, visible: canReadSection("users") },
+    { id: "roles" as AdminSection, label: "Roles", icon: Shield, visible: canReadSection("roles") },
+    { id: "settings" as AdminSection, label: "Settings", icon: Palette, visible: canReadSection("settings") },
+    { id: "leadConfig" as AdminSection, label: "Leads Config", icon: ClipboardList, visible: canReadSection("leadConfig") },
+    { id: "workflowConfig" as AdminSection, label: "Workflow Stages", icon: GitBranch, visible: canReadSection("workflowConfig") },
+    { id: "modules" as AdminSection, label: "Modules", icon: Blocks, visible: canReadSection("modules") },
+    { id: "security" as AdminSection, label: "Security", icon: KeyRound, visible: canReadSection("security") },
+    { id: "deployment" as AdminSection, label: "Deployment & SSL", icon: Server, visible: canReadSection("deployment") },
+    { id: "livechat" as AdminSection, label: "Live Chat", icon: MessageSquare, visible: canReadSection("livechat") },
+    { id: "ticketwidgets" as AdminSection, label: "Ticket Widgets", icon: TicketCheck, visible: canReadSection("ticketwidgets") },
+    { id: "telephony" as AdminSection, label: "Telephony", icon: Phone, visible: canReadSection("telephony") },
+    { id: "reports" as AdminSection, label: "Reports", icon: BarChart3, visible: canReadSection("reports") },
+    { id: "logs" as AdminSection, label: "Audit Logs", icon: FileClock, visible: canReadSection("logs") },
+    { id: "tenants" as AdminSection, label: "Tenants", icon: Globe, visible: canReadSection("tenants") },
+  ].filter((item) => item.visible);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
   const timezone = reports?.timezone || settingsForm.defaultTimezone || "UTC";
 
@@ -616,6 +696,18 @@ export default function AdministrationPage() {
     if (!q) return users;
     return users.filter((u) => `${u.fullname} ${u.login} ${u.email} ${u.department}`.toLowerCase().includes(q));
   }, [users, userSearch]);
+
+  async function responseErrorMessage(response: Response, fallback: string) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    return payload?.error?.trim() || fallback;
+  }
+
+  useEffect(() => {
+    if (sectionItems.length === 0) return;
+    if (!sectionItems.some((item) => item.id === section)) {
+      setSection(sectionItems[0].id);
+    }
+  }, [sectionItems, section]);
 
   async function loadUserGrants(userId: string) {
     try {
@@ -670,10 +762,12 @@ export default function AdministrationPage() {
     setLcAutomationLoading(true);
     try {
       const res = await fetch("/api/livechat/settings", { cache: "no-store" });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await responseErrorMessage(res, "Failed to load live chat automation settings"));
       const data = (await res.json()) as LiveChatAutomationForm;
       setLcAutomation(data);
-    } catch { /* ignore */ } finally { setLcAutomationLoading(false); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load live chat automation settings");
+    } finally { setLcAutomationLoading(false); }
   }
 
   async function saveLcAutomation() {
@@ -696,10 +790,12 @@ export default function AdministrationPage() {
     setLcWidgetsLoading(true);
     try {
       const res = await fetch("/api/administration/livechat/widgets", { cache: "no-store" });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await responseErrorMessage(res, "Failed to load live chat widgets"));
       const data = (await res.json()) as LiveChatWidgetRow[];
       setLcWidgets(Array.isArray(data) ? data : []);
-    } catch { /* ignore */ } finally { setLcWidgetsLoading(false); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load live chat widgets");
+    } finally { setLcWidgetsLoading(false); }
   }
 
   async function saveLcWidget() {
@@ -789,6 +885,14 @@ export default function AdministrationPage() {
         return;
       }
 
+      const failedResources: string[] = [];
+      if (!permRes.ok) failedResources.push("permissions");
+      if (!usersRes.ok) failedResources.push("users");
+      if (!rolesRes.ok) failedResources.push("roles");
+      if (!modulesRes.ok) failedResources.push("modules");
+      if (!settingsRes.ok) failedResources.push("settings");
+      if (!leadsConfigRes.ok) failedResources.push("leads config");
+
       const permJson = permRes.ok ? ((await permRes.json()) as PermissionResponse) : null;
       const usersJson = usersRes.ok ? ((await usersRes.json()) as AdminUser[]) : [];
       const rolesJson = rolesRes.ok ? ((await rolesRes.json()) as { roles: RoleSummary[] }) : { roles: [] };
@@ -845,9 +949,11 @@ export default function AdministrationPage() {
       if (!selectedUserId && usersJson.length > 0) {
         setSelectedUserId(usersJson[0].id);
         setSelectedUserRoleIds(usersJson[0].roles.map((role) => role.id));
-        await loadUserGrants(usersJson[0].id);
-        await loadUserLogs(usersJson[0].id);
-        await loadUserTwoFactor(usersJson[0].id);
+        await Promise.all([
+          loadUserGrants(usersJson[0].id),
+          loadUserLogs(usersJson[0].id),
+          loadUserTwoFactor(usersJson[0].id),
+        ]);
       }
       if (!selectedRoleId && rolesJson.roles?.length > 0) {
         const role = rolesJson.roles[0];
@@ -855,6 +961,9 @@ export default function AdministrationPage() {
         setRoleName(role.name);
         setRoleColor(role.color);
         setRolePermissions(clonePermissions(role.permissions));
+      }
+      if (failedResources.length > 0) {
+        setError(`Some administration resources failed to load: ${failedResources.join(", ")}`);
       }
       void loadWorkflowConfig();
     } catch (err) {
@@ -894,10 +1003,14 @@ export default function AdministrationPage() {
   useEffect(() => { void fetchAll(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (section === "livechat") {
+      if (!canReadSection("livechat")) {
+        setError("Missing livechat.read permission for this section.");
+        return;
+      }
       void loadLcAutomation();
       void loadLcWidgets();
     }
-  }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [section, canReadLivechat]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (section === "logs") void loadLogs();
     if (section === "reports" && !reports && !reportsLoading) void loadReports();
@@ -913,38 +1026,82 @@ export default function AdministrationPage() {
     setTenantsLoading(true);
     try {
       const r = await fetch("/api/platform/tenants");
-      if (r.ok) setTenants((await r.json()) as TenantItem[]);
+      if (!r.ok) {
+        throw new Error(await responseErrorMessage(r, "Failed to load tenants"));
+      }
+      setTenants((await r.json()) as TenantItem[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load tenants");
     } finally { setTenantsLoading(false); }
   }, []);
 
-  useEffect(() => { if (section === "tenants") void loadTenants(); }, [section, loadTenants]);
+  useEffect(() => {
+    if (section === "tenants") {
+      if (!canReadSection("tenants")) {
+        setError("Missing platform admin access for tenant management.");
+        return;
+      }
+      void loadTenants();
+    }
+  }, [section, loadTenants, canManageTenants]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadTicketWidgets = useCallback(async () => {
     setTwLoading(true);
     try {
       const r = await fetch("/api/ticket-widgets");
-      if (r.ok) setTicketWidgets((await r.json()) as TicketWidgetItem[]);
+      if (!r.ok) {
+        throw new Error(await responseErrorMessage(r, "Failed to load ticket widgets"));
+      }
+      setTicketWidgets((await r.json()) as TicketWidgetItem[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load ticket widgets");
     } finally { setTwLoading(false); }
   }, []);
 
-  useEffect(() => { if (section === "ticketwidgets") void loadTicketWidgets(); }, [section, loadTicketWidgets]);
+  useEffect(() => {
+    if (section === "ticketwidgets") {
+      if (!canReadSection("ticketwidgets")) {
+        setError("Missing servicedesk.manage permission for ticket widgets.");
+        return;
+      }
+      void loadTicketWidgets();
+    }
+  }, [section, loadTicketWidgets, canManageServicedesk]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadTelephony = useCallback(async () => {
     setTelLoading(true);
     try {
+      const [providerRes, extensionRes, blacklistRes] = await Promise.all([
+        fetch("/api/telephony/providers"),
+        fetch("/api/telephony/extensions"),
+        fetch("/api/telephony/blacklist"),
+      ]);
+      if (!providerRes.ok) throw new Error(await responseErrorMessage(providerRes, "Failed to load telephony providers"));
+      if (!extensionRes.ok) throw new Error(await responseErrorMessage(extensionRes, "Failed to load telephony extensions"));
+      if (!blacklistRes.ok) throw new Error(await responseErrorMessage(blacklistRes, "Failed to load telephony blacklist"));
       const [pr, ex, bl] = await Promise.all([
-        fetch("/api/telephony/providers").then(r => r.json()),
-        fetch("/api/telephony/extensions").then(r => r.json()),
-        fetch("/api/telephony/blacklist").then(r => r.json()),
+        providerRes.json(),
+        extensionRes.json(),
+        blacklistRes.json(),
       ]);
       setProviders(Array.isArray(pr) ? pr as TelProvider[] : []);
       setExtensions(Array.isArray(ex) ? ex as TelExtension[] : []);
       setBlacklist(Array.isArray(bl) ? bl as TelBlacklist[] : []);
-    } catch { /* ignore */ }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load telephony data");
+    }
     finally { setTelLoading(false); }
   }, []);
 
-  useEffect(() => { if (section === "telephony") void loadTelephony(); }, [section, loadTelephony]);
+  useEffect(() => {
+    if (section === "telephony") {
+      if (!canReadSection("telephony")) {
+        setError("Missing telephony.read permission for telephony administration.");
+        return;
+      }
+      void loadTelephony();
+    }
+  }, [section, loadTelephony, canReadTelephony]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selectedUserId) {
@@ -1415,10 +1572,12 @@ export default function AdministrationPage() {
   async function loadWorkflowConfig() {
     try {
       const res = await fetch("/api/administration/workflow-config");
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(await responseErrorMessage(res, "Failed to load workflow configuration"));
       const data = await res.json() as WorkflowConfig;
       setWorkflowConfig(data);
-    } catch { /* ignore */ }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load workflow configuration");
+    }
   }
 
   async function saveWorkflowConfig() {
@@ -1544,8 +1703,8 @@ export default function AdministrationPage() {
     <div className="flex h-full">
       <aside className="w-60 shrink-0 border-r bg-white p-3">
         <div className="mb-3 px-2"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Administration</p></div>
-        {[{ id: "overview", label: "Overview", icon: LayoutDashboard }, { id: "users", label: "Users & Access", icon: Users }, { id: "roles", label: "Roles", icon: Shield }, { id: "settings", label: "Settings", icon: Palette }, { id: "leadConfig", label: "Leads Config", icon: ClipboardList }, { id: "workflowConfig", label: "Workflow Stages", icon: GitBranch }, { id: "modules", label: "Modules", icon: Blocks }, { id: "security", label: "Security", icon: KeyRound }, { id: "deployment", label: "Deployment & SSL", icon: Server }, { id: "livechat", label: "Live Chat", icon: MessageSquare }, { id: "ticketwidgets", label: "Ticket Widgets", icon: TicketCheck }, { id: "telephony", label: "Telephony", icon: Phone }, { id: "reports", label: "Reports", icon: BarChart3 }, { id: "logs", label: "Audit Logs", icon: FileClock }, ...(isPlatform ? [{ id: "tenants", label: "Tenants", icon: Globe }] : [])].map((item) => (
-          <button key={item.id} onClick={() => setSection(item.id as typeof section)} className={cn("mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm", section === item.id ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-slate-600 hover:bg-slate-100")}><item.icon className="h-4 w-4" />{item.label}</button>
+        {sectionItems.map((item) => (
+          <button key={item.id} onClick={() => setSection(item.id)} className={cn("mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm", section === item.id ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-slate-600 hover:bg-slate-100")}><item.icon className="h-4 w-4" />{item.label}</button>
         ))}
         <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => void fetchAll()}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Refresh</Button>
       </aside>
@@ -1554,7 +1713,7 @@ export default function AdministrationPage() {
           <h1 className="text-xl font-semibold">Administration Control Center</h1>
           <p className="text-sm text-slate-500">Configure branding, module availability, access model, analytics, and governance logs.</p>
           {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-          {!canManage ? <p className="mt-2 text-sm text-amber-700">Read-only mode: administration.manage permission required for changes.</p> : null}
+          {!canManage ? <p className="mt-2 text-sm text-amber-700">{sectionManageHint}</p> : null}
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-5">
           {section === "overview" ? (
@@ -3982,7 +4141,7 @@ export default function AdministrationPage() {
                   <h2 className="text-sm font-semibold text-slate-800">Ticket Widgets</h2>
                   <p className="text-xs text-slate-500">Embed a support widget on any website. Each widget has its own token and configuration.</p>
                 </div>
-                <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={() => { setWidgetForm({ name: "", brandLabel: "Support", welcomeText: "Hi! How can we help you today?", accentColor: "#B02B2C", position: "right", defaultGroupId: "", allowDomains: "" }); setCreateWidgetOpen(true); }}>
+                <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={() => { setWidgetForm(EMPTY_TICKET_WIDGET_FORM); setEditingTicketWidgetId(null); setCreateWidgetOpen(true); }}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" />New Widget
                 </Button>
               </div>
@@ -4017,20 +4176,33 @@ export default function AdministrationPage() {
                           </Button>
                           <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => {
                             setWidgetForm({ name: w.name, brandLabel: w.brandLabel, welcomeText: w.welcomeText, accentColor: w.accentColor, position: w.position, defaultGroupId: w.defaultGroupId ?? "", allowDomains: w.allowDomains ?? "" });
+                            setEditingTicketWidgetId(w.id);
                             setShowEmbedFor(null);
                             setCreateWidgetOpen(true);
                           }}>
                             <Pencil className="mr-1 h-3 w-3" />Edit
                           </Button>
                           <Button size="sm" variant="outline" className="text-xs h-7" onClick={async () => {
-                            await fetch(`/api/ticket-widgets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !w.enabled }) });
+                            const response = await fetch(`/api/ticket-widgets/${w.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !w.enabled }) });
+                            if (!response.ok) {
+                              const message = await responseErrorMessage(response, "Failed to update widget");
+                              toast.error(message);
+                              return;
+                            }
+                            toast.success(`Widget ${w.enabled ? "disabled" : "enabled"}`);
                             void loadTicketWidgets();
                           }}>
                             {w.enabled ? "Disable" : "Enable"}
                           </Button>
                           <Button size="sm" variant="outline" className="text-xs h-7 text-rose-600 hover:bg-rose-50" onClick={async () => {
                             if (!confirm("Delete this widget?")) return;
-                            await fetch(`/api/ticket-widgets/${w.id}`, { method: "DELETE" });
+                            const response = await fetch(`/api/ticket-widgets/${w.id}`, { method: "DELETE" });
+                            if (!response.ok) {
+                              const message = await responseErrorMessage(response, "Failed to delete widget");
+                              toast.error(message);
+                              return;
+                            }
+                            toast.success("Widget deleted");
                             void loadTicketWidgets();
                           }}>
                             <Trash2 className="mr-1 h-3 w-3" />Delete
@@ -4059,11 +4231,24 @@ export default function AdministrationPage() {
               )}
 
               {/* Create Widget Dialog */}
-              <Dialog open={createWidgetOpen} onOpenChange={setCreateWidgetOpen}>
+              <Dialog
+                open={createWidgetOpen}
+                onOpenChange={(open) => {
+                  setCreateWidgetOpen(open);
+                  if (!open && !widgetSaving) {
+                    setEditingTicketWidgetId(null);
+                    setWidgetForm(EMPTY_TICKET_WIDGET_FORM);
+                  }
+                }}
+              >
                 <DialogContent className="sm:max-w-lg">
                   <DialogHeader>
-                    <DialogTitle>Create Ticket Widget</DialogTitle>
-                    <DialogDescription>Configure a new embeddable support widget for your website.</DialogDescription>
+                    <DialogTitle>{editingTicketWidgetId ? "Edit Ticket Widget" : "Create Ticket Widget"}</DialogTitle>
+                    <DialogDescription>
+                      {editingTicketWidgetId
+                        ? "Update your embeddable support widget configuration."
+                        : "Configure a new embeddable support widget for your website."}
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-3 py-2">
                     <div className="space-y-1.5">
@@ -4110,17 +4295,27 @@ export default function AdministrationPage() {
                       onClick={async () => {
                         setWidgetSaving(true);
                         try {
-                          const r = await fetch("/api/ticket-widgets", {
-                            method: "POST",
+                          const url = editingTicketWidgetId ? `/api/ticket-widgets/${editingTicketWidgetId}` : "/api/ticket-widgets";
+                          const r = await fetch(url, {
+                            method: editingTicketWidgetId ? "PUT" : "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify(widgetForm),
                           });
-                          if (r.ok) { setCreateWidgetOpen(false); void loadTicketWidgets(); toast.success("Widget created"); }
-                          else { const d = await r.json() as { error?: string }; toast.error(d.error ?? "Failed to create widget"); }
+                          if (r.ok) {
+                            setCreateWidgetOpen(false);
+                            setEditingTicketWidgetId(null);
+                            setWidgetForm(EMPTY_TICKET_WIDGET_FORM);
+                            void loadTicketWidgets();
+                            toast.success(editingTicketWidgetId ? "Widget updated" : "Widget created");
+                          } else {
+                            const d = await r.json() as { error?: string };
+                            toast.error(d.error ?? (editingTicketWidgetId ? "Failed to update widget" : "Failed to create widget"));
+                          }
                         } finally { setWidgetSaving(false); }
                       }}
                     >
-                      {widgetSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}Create Widget
+                      {widgetSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}
+                      {editingTicketWidgetId ? "Save Changes" : "Create Widget"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

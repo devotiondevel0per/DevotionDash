@@ -18,16 +18,24 @@ export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
   const visibleModules = useMemo(() => {
+    const canSeeModule = (module: (typeof modules)[number]) =>
+      !module.adminOnly || Boolean(isAdmin);
+
     if (loading) {
-      return modules.filter((module) => module.id === "home");
+      return modules.filter((module) => module.id === "home" && canSeeModule(module));
     }
     if (accessibleModules) {
-      return modules.filter((module) => accessibleModules.includes(module.id));
+      return modules.filter(
+        (module) => accessibleModules.includes(module.id) && canSeeModule(module)
+      );
     }
     if (isAdmin) {
       return modules;
     }
-    return modules.filter((module) => module.id === "home" || module.id === "search");
+    return modules.filter(
+      (module) =>
+        (module.id === "home" || module.id === "search") && canSeeModule(module)
+    );
   }, [accessibleModules, isAdmin, loading]);
 
   return (
