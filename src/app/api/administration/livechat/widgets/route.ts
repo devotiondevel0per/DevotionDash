@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { generateWidgetToken } from "@/lib/livechat-widget-auth";
+import { getClientIpAddress, writeAuditLog } from "@/lib/audit-log";
 
 export async function GET() {
-  const accessResult = await requireModuleAccess("administration", "manage");
+  const accessResult = await requireModuleAccess("livechat", "manage");
   if (!accessResult.ok) return accessResult.response;
+  const db = accessResult.ctx.db;
 
   try {
-    const widgets = await prisma.liveChatWidget.findMany({
+    const widgets = await db.liveChatWidget.findMany({
       orderBy: { createdAt: "asc" },
     });
     return NextResponse.json(widgets);
@@ -19,8 +20,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const accessResult = await requireModuleAccess("administration", "manage");
+  const accessResult = await requireModuleAccess("livechat", "manage");
   if (!accessResult.ok) return accessResult.response;
+  const db = accessResult.ctx.db;
 
   try {
     const body = (await req.json()) as {
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     const token = generateWidgetToken();
 
-    const widget = await prisma.liveChatWidget.create({
+    const widget = await db.liveChatWidget.create({
       data: {
         name,
         domain: typeof body.domain === "string" ? body.domain.trim() || null : null,
@@ -54,6 +56,15 @@ export async function POST(req: NextRequest) {
         position: body.position === "left" ? "left" : "right",
         allowDomains: typeof body.allowDomains === "string" ? body.allowDomains.trim() || null : null,
       },
+    });
+
+    await writeAuditLog({
+      userId: accessResult.ctx.userId,
+      action: "LIVECHAT_WIDGET_CREATED",
+      module: "livechat",
+      targetId: widget.id,
+      details: JSON.stringify({ name: widget.name, domain: widget.domain, enabled: widget.enabled }),
+      ipAddress: getClientIpAddress(req),
     });
 
     return NextResponse.json(widget, { status: 201 });

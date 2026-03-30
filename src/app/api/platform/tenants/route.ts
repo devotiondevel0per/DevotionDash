@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { invalidateTenantCache } from "@/lib/tenant-registry";
+import { getClientIpAddress, writeAuditLog } from "@/lib/audit-log";
 
 /**
  * Platform-only guard.
@@ -60,6 +61,15 @@ export async function POST(req: NextRequest) {
   if (!body.slug?.trim() || !body.name?.trim() || !body.databaseUrl?.trim() || !body.adminEmail?.trim() || !body.defaultDomain?.trim()) {
     return NextResponse.json({ error: "slug, name, defaultDomain, databaseUrl, and adminEmail are required" }, { status: 400 });
   }
+  if (!/^[a-z0-9-]+$/.test(body.slug.trim().toLowerCase())) {
+    return NextResponse.json({ error: "slug must contain only lowercase letters, numbers, and hyphen" }, { status: 400 });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.adminEmail.trim().toLowerCase())) {
+    return NextResponse.json({ error: "adminEmail must be a valid email address" }, { status: 400 });
+  }
+  if (!Number.isInteger(body.maxUsers) || body.maxUsers < 1) {
+    return NextResponse.json({ error: "maxUsers must be a positive integer" }, { status: 400 });
+  }
 
   const trialEndsAt = body.trialDays
     ? new Date(Date.now() + body.trialDays * 86400000)
@@ -94,5 +104,13 @@ export async function POST(req: NextRequest) {
   });
 
   invalidateTenantCache();
+  await writeAuditLog({
+    userId: adminId,
+    action: "TENANT_CREATED",
+    module: "administration",
+    targetId: tenant.id,
+    details: JSON.stringify({ slug: tenant.slug, name: tenant.name, plan: tenant.plan }),
+    ipAddress: getClientIpAddress(req),
+  });
   return NextResponse.json(tenant, { status: 201 });
 }

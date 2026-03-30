@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { invalidateTenantCache } from "@/lib/tenant-registry";
 import { invalidateTenantClient } from "@/lib/tenant-client";
+import { getClientIpAddress, writeAuditLog } from "@/lib/audit-log";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -31,6 +32,18 @@ export async function PUT(req: NextRequest, { params }: RouteCtx) {
   const { id } = await params;
 
   const body = await req.json() as Record<string, unknown>;
+  if (body.maxUsers !== undefined) {
+    const maxUsers = Number(body.maxUsers);
+    if (!Number.isInteger(maxUsers) || maxUsers < 1) {
+      return NextResponse.json({ error: "maxUsers must be a positive integer" }, { status: 400 });
+    }
+  }
+  if (body.adminEmail !== undefined) {
+    const adminEmail = String(body.adminEmail).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+      return NextResponse.json({ error: "adminEmail must be a valid email address" }, { status: 400 });
+    }
+  }
 
   const tenant = await prisma.tenant.update({
     where: { id },
@@ -42,7 +55,7 @@ export async function PUT(req: NextRequest, { params }: RouteCtx) {
       ...(body.plan !== undefined && { plan: String(body.plan) }),
       ...(body.maxUsers !== undefined && { maxUsers: Number(body.maxUsers) }),
       ...(body.databaseUrl !== undefined && { databaseUrl: String(body.databaseUrl) }),
-      ...(body.adminEmail !== undefined && { adminEmail: String(body.adminEmail) }),
+      ...(body.adminEmail !== undefined && { adminEmail: String(body.adminEmail).trim().toLowerCase() }),
       ...(body.notes !== undefined && { notes: body.notes ? String(body.notes) : null }),
       ...(body.brandName !== undefined && { brandName: body.brandName ? String(body.brandName) : null }),
       ...(body.brandLogoUrl !== undefined && { brandLogoUrl: body.brandLogoUrl ? String(body.brandLogoUrl) : null }),
@@ -85,6 +98,20 @@ export async function PUT(req: NextRequest, { params }: RouteCtx) {
   invalidateTenantCache();
   invalidateTenantClient(id);
 
+  await writeAuditLog({
+    userId: adminId,
+    action: "TENANT_UPDATED",
+    module: "administration",
+    targetId: id,
+    details: JSON.stringify({
+      name: tenant.name,
+      status: tenant.status,
+      plan: tenant.plan,
+      maxUsers: tenant.maxUsers,
+    }),
+    ipAddress: getClientIpAddress(req),
+  });
+
   return NextResponse.json(tenant);
 }
 
@@ -93,9 +120,20 @@ export async function DELETE(_req: NextRequest, { params }: RouteCtx) {
   if (!adminId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
 
+  const existing = await prisma.tenant.findUnique({ where: { id }, select: { id: true, slug: true, name: true } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await prisma.tenant.delete({ where: { id } });
   invalidateTenantCache();
   invalidateTenantClient(id);
+
+  await writeAuditLog({
+    userId: adminId,
+    action: "TENANT_DELETED",
+    module: "administration",
+    targetId: id,
+    details: JSON.stringify({ slug: existing.slug, name: existing.name }),
+    ipAddress: getClientIpAddress(_req),
+  });
 
   return NextResponse.json({ ok: true });
 }

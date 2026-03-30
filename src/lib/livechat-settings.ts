@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { PrismaClient } from "@prisma/client";
 
 export const LIVECHAT_AUTO_ASSIGN_KEY = "livechat.autoAssign.enabled";
 export const LIVECHAT_ROUTING_STRATEGY_KEY = "livechat.routing.strategy";
@@ -234,8 +235,8 @@ export function parseLiveChatSettingsFromMap(map: Map<string, string>): LiveChat
   };
 }
 
-export async function loadLiveChatSettings() {
-  const rows = await prisma.systemSetting.findMany({
+export async function loadLiveChatSettings(db: PrismaClient = prisma) {
+  const rows = await db.systemSetting.findMany({
     where: { key: { in: [...LIVECHAT_SETTING_KEYS] } },
     select: { key: true, value: true },
   });
@@ -269,8 +270,8 @@ export function parseLiveChatWidgetSettingsFromMap(map: Map<string, string>): Li
   };
 }
 
-export async function loadLiveChatWidgetSettings() {
-  const rows = await prisma.systemSetting.findMany({
+export async function loadLiveChatWidgetSettings(db: PrismaClient = prisma) {
+  const rows = await db.systemSetting.findMany({
     where: {
       key: {
         in: [

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { getClientIpAddress, writeAuditLog } from "@/lib/audit-log";
 import {
@@ -22,7 +21,7 @@ export async function GET() {
   if (!accessResult.ok) return accessResult.response;
 
   try {
-    const settings = await loadLiveChatSettings();
+    const settings = await loadLiveChatSettings(accessResult.ctx.db);
     return NextResponse.json(settings);
   } catch (error) {
     console.error("[GET /api/livechat/settings]", error);
@@ -33,6 +32,7 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   const accessResult = await requireModuleAccess("livechat", "manage");
   if (!accessResult.ok) return accessResult.response;
+  const db = accessResult.ctx.db;
 
   try {
     const body = (await req.json()) as unknown;
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest) {
     const upserts: Prisma.PrismaPromise<unknown>[] = [];
     if (sanitized.autoAssignEnabled !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_AUTO_ASSIGN_KEY },
           create: { key: LIVECHAT_AUTO_ASSIGN_KEY, value: String(sanitized.autoAssignEnabled) },
           update: { value: String(sanitized.autoAssignEnabled) },
@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (sanitized.routingStrategy !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_ROUTING_STRATEGY_KEY },
           create: { key: LIVECHAT_ROUTING_STRATEGY_KEY, value: sanitized.routingStrategy },
           update: { value: sanitized.routingStrategy },
@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (sanitized.maxOpenPerAgent !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_MAX_OPEN_PER_AGENT_KEY },
           create: {
             key: LIVECHAT_MAX_OPEN_PER_AGENT_KEY,
@@ -75,7 +75,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (sanitized.translatorEnabled !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_TRANSLATOR_ENABLED_KEY },
           create: {
             key: LIVECHAT_TRANSLATOR_ENABLED_KEY,
@@ -87,7 +87,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (sanitized.translatorSourceLang !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_TRANSLATOR_SOURCE_KEY },
           create: {
             key: LIVECHAT_TRANSLATOR_SOURCE_KEY,
@@ -99,7 +99,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (sanitized.translatorTargetLang !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_TRANSLATOR_TARGET_KEY },
           create: {
             key: LIVECHAT_TRANSLATOR_TARGET_KEY,
@@ -111,7 +111,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (sanitized.aiInsightsEnabled !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_AI_INSIGHTS_ENABLED_KEY },
           create: {
             key: LIVECHAT_AI_INSIGHTS_ENABLED_KEY,
@@ -123,7 +123,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (sanitized.autoCloseEnabled !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_AUTO_CLOSE_ENABLED_KEY },
           create: {
             key: LIVECHAT_AUTO_CLOSE_ENABLED_KEY,
@@ -135,7 +135,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (sanitized.autoCloseMinutes !== undefined) {
       upserts.push(
-        prisma.systemSetting.upsert({
+        db.systemSetting.upsert({
           where: { key: LIVECHAT_AUTO_CLOSE_MINUTES_KEY },
           create: {
             key: LIVECHAT_AUTO_CLOSE_MINUTES_KEY,
@@ -146,7 +146,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    await prisma.$transaction(upserts);
+    await db.$transaction(upserts);
 
     await writeAuditLog({
       userId: accessResult.ctx.userId,
@@ -156,7 +156,7 @@ export async function PATCH(req: NextRequest) {
       ipAddress: getClientIpAddress(req),
     });
 
-    const settings = await loadLiveChatSettings();
+    const settings = await loadLiveChatSettings(db);
     return NextResponse.json(settings);
   } catch (error) {
     console.error("[PATCH /api/livechat/settings]", error);

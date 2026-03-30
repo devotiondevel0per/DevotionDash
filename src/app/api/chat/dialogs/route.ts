@@ -6,6 +6,7 @@ import {
   compareDirectDialogs,
   getCanonicalDialogSubject,
   getDirectDialogKey,
+  isMalformedDirectDialog,
   withCanonicalDialogSubject,
 } from "@/lib/chat-dialogs";
 
@@ -66,6 +67,9 @@ export async function GET(req: NextRequest) {
     const directDialogs = new Map<string, (typeof dialogs)[number]>();
 
     for (const dialog of dialogs) {
+      if (isMalformedDirectDialog(dialog)) {
+        continue;
+      }
       const key = getDirectDialogKey(dialog);
       if (!key) {
         passthrough.push(dialog);
@@ -82,9 +86,35 @@ export async function GET(req: NextRequest) {
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
 
+    const dialogIds = deduped.map((dialog) => dialog.id);
+    const unreadByDialogId = new Map<string, number>();
+
+    if (dialogIds.length > 0) {
+      const unreadRows = await prisma.notification.findMany({
+        where: {
+          userId: accessResult.ctx.userId,
+          type: "chat",
+          isRead: false,
+          link: {
+            in: dialogIds.map((id) => `/chat?dialog=${id}`),
+          },
+        },
+        select: { link: true },
+      });
+
+      for (const row of unreadRows) {
+        const link = row.link ?? "";
+        if (!link.startsWith("/chat?dialog=")) continue;
+        const dialogId = link.slice("/chat?dialog=".length);
+        if (!dialogId) continue;
+        unreadByDialogId.set(dialogId, (unreadByDialogId.get(dialogId) ?? 0) + 1);
+      }
+    }
+
     return NextResponse.json(
       deduped.map((dialog) => ({
         ...withCanonicalDialogSubject(dialog),
+        unreadCount: unreadByDialogId.get(dialog.id) ?? 0,
         messages: dialog.messages.map((message) => ({
           ...message,
           payload: parseMessagePayload(message.content).payload,
@@ -109,8 +139,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "memberIds must be an array" }, { status: 400 });
     }
 
+    const currentUserId = String(accessResult.ctx.userId).trim();
+    const normalizedMemberIds = memberIds
+      .map((id) => (typeof id === "string" ? id.trim() : ""))
+      .filter((id): id is string => Boolean(id));
+
     // Deduplicate memberIds and always include the current user
-    const allMemberIds = Array.from(new Set([...memberIds, accessResult.ctx.userId])) as string[];
+    const allMemberIds = Array.from(
+      new Set([...normalizedMemberIds, currentUserId])
+    ) as string[];
+    const otherMemberIds = allMemberIds.filter((id) => id !== currentUserId);
+
+    if (allMemberIds.length < 2 || otherMemberIds.length === 0) {
+      return NextResponse.json(
+        { error: "Select at least one other member" },
+        { status: 400 }
+      );
+    }
+
+    const existingUsers = await prisma.user.findMany({
+      where: { id: { in: allMemberIds }, isActive: true },
+      select: { id: true },
+    });
+    if (existingUsers.length !== allMemberIds.length) {
+      return NextResponse.json(
+        { error: "One or more selected members are invalid or inactive" },
+        { status: 400 }
+      );
+    }
+
     const normalizedSubject = getCanonicalDialogSubject(
       typeof subject === "string" ? subject : null,
       allMemberIds.map((userId) => ({ userId }))
@@ -136,7 +193,7 @@ export async function POST(req: NextRequest) {
           isExternal: false,
           groupId: null,
           organizationId: null,
-          members: { some: { userId: accessResult.ctx.userId } },
+          members: { some: { userId: currentUserId } },
         },
         include: {
           ...include,

@@ -21,6 +21,28 @@ function normalizeSubjectValue(subject?: string | null) {
   return value ? value : null;
 }
 
+function normalizeComparableValue(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function collectKnownMemberNames(members: DialogMemberLike[] = []) {
+  return new Set(
+    members
+      .flatMap((member) => [member.user?.fullname, member.user?.name])
+      .map((value) => (value ? normalizeComparableValue(value) : ""))
+      .filter((value): value is string => Boolean(value))
+  );
+}
+
+function stripSyntheticPrefixes(value: string) {
+  return value
+    .replace(/^direct(?:\s*chat)?\s*[:\-]?\s*/i, "")
+    .replace(/^chat with\s+/i, "")
+    .replace(/^dm\s*[:\-]?\s*/i, "")
+    .replace(/^private(?:\s*chat)?\s*[:\-]?\s*/i, "")
+    .trim();
+}
+
 export function isSyntheticDirectDialogSubject(
   subject?: string | null,
   members: DialogMemberLike[] = []
@@ -28,21 +50,29 @@ export function isSyntheticDirectDialogSubject(
   const normalized = normalizeSubjectValue(subject);
   if (!normalized) return false;
 
-  const lower = normalized.toLowerCase();
+  const lower = normalizeComparableValue(normalized);
   if (lower === "direct" || lower === "direct chat") return true;
-  if (!lower.startsWith("direct:")) return false;
+  const knownNames = collectKnownMemberNames(members);
 
-  const suffix = normalized.slice(normalized.indexOf(":") + 1).trim().toLowerCase();
-  if (!suffix) return true;
+  if (lower.startsWith("direct:")) {
+    const suffix = normalizeComparableValue(normalized.slice(normalized.indexOf(":") + 1).trim());
+    if (!suffix) return true;
+    return knownNames.size === 0 || knownNames.has(suffix);
+  }
 
-  const knownNames = new Set(
-    members
-      .flatMap((member) => [member.user?.fullname, member.user?.name])
-      .map((value) => value?.trim().toLowerCase())
-      .filter((value): value is string => Boolean(value))
-  );
+  if (members.length !== 2 || knownNames.size === 0) return false;
 
-  return knownNames.size === 0 || knownNames.has(suffix);
+  if (knownNames.has(lower)) return true;
+
+  const stripped = normalizeComparableValue(stripSyntheticPrefixes(normalized));
+  if (stripped && knownNames.has(stripped)) return true;
+
+  const pairTokens = stripped
+    .split(/\s*(?:,|&|\/|\+|\||\band\b)\s*/i)
+    .map((value) => normalizeComparableValue(value))
+    .filter(Boolean);
+
+  return pairTokens.length === 2 && pairTokens.every((token) => knownNames.has(token));
 }
 
 export function getCanonicalDialogSubject(

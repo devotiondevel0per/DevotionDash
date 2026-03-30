@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireModuleAccess } from "@/lib/api-access";
+import { getClientIpAddress, writeAuditLog } from "@/lib/audit-log";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const r = await requireModuleAccess("servicedesk", "manage");
@@ -42,6 +43,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   });
 
+  await writeAuditLog({
+    userId: r.ctx.userId,
+    action: "TICKET_WIDGET_UPDATED",
+    module: "servicedesk",
+    targetId: id,
+    details: JSON.stringify({ name: widget.name, enabled: widget.enabled }),
+    ipAddress: getClientIpAddress(req),
+  });
+
   return NextResponse.json(widget);
 }
 
@@ -49,6 +59,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const r = await requireModuleAccess("servicedesk", "manage");
   if (!r.ok) return r.response;
   const { id } = await params;
+  const existing = await r.ctx.db.ticketWidget.findUnique({ where: { id }, select: { id: true, name: true } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await r.ctx.db.ticketWidget.delete({ where: { id } });
+  await writeAuditLog({
+    userId: r.ctx.userId,
+    action: "TICKET_WIDGET_DELETED",
+    module: "servicedesk",
+    targetId: id,
+    details: JSON.stringify({ name: existing.name }),
+    ipAddress: getClientIpAddress(_req),
+  });
   return NextResponse.json({ ok: true });
 }

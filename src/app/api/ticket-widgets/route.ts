@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireModuleAccess } from "@/lib/api-access";
 import { randomBytes } from "crypto";
+import { getClientIpAddress, writeAuditLog } from "@/lib/audit-log";
 
 export async function GET() {
   const r = await requireModuleAccess("servicedesk", "manage");
@@ -40,6 +41,15 @@ export async function POST(req: NextRequest) {
       allowDomains: body.allowDomains || null,
       logoUrl: body.logoUrl || null,
     },
+  });
+
+  await writeAuditLog({
+    userId: r.ctx.userId,
+    action: "TICKET_WIDGET_CREATED",
+    module: "servicedesk",
+    targetId: widget.id,
+    details: JSON.stringify({ name: widget.name, enabled: widget.enabled }),
+    ipAddress: getClientIpAddress(req),
   });
 
   return NextResponse.json(widget, { status: 201 });

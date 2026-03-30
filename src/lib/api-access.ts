@@ -5,7 +5,6 @@ import { jwtVerify } from "jose";
 import { assertModuleAccess, buildUserAccess, type UserAccess } from "@/lib/rbac";
 import { type ModuleId, type PermissionAction } from "@/lib/permissions";
 import { getDb } from "@/lib/get-db";
-import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@prisma/client";
 
 export interface AccessContext {
@@ -69,7 +68,7 @@ export async function requireModuleAccess(
     };
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true } });
 
   return {
     ok: true,
