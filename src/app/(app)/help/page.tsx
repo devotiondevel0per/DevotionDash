@@ -9,150 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BookOpenCheck, FileText, GraduationCap, LifeBuoy, Search } from "lucide-react";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ModuleId } from "@/lib/permissions";
-
-type HelpTopicType = "documentation" | "guide" | "tutorial";
-
-type HelpTopic = {
-  id: string;
-  title: string;
-  summary: string;
-  type: HelpTopicType;
-  module: ModuleId;
-  href: string;
-  tags: string[];
-};
-
-const MODULE_LABEL: Record<ModuleId, string> = {
-  home: "Home",
-  tasks: "Tasks",
-  projects: "Projects",
-  documents: "Documents",
-  email: "E-Mail",
-  board: "Board",
-  leads: "Leads",
-  clients: "Organizations",
-  contacts: "Contacts",
-  team: "Team",
-  calendar: "Calendar",
-  chat: "Chat",
-  livechat: "Live Chat",
-  servicedesk: "Ticket Desk",
-  products: "Products",
-  accounting: "Accounting",
-  ebank: "e-Bank",
-  telephony: "Telephony",
-  search: "Search",
-  help: "Help",
-  administration: "Administration",
-};
-
-const TOPIC_TYPE_LABEL: Record<HelpTopicType, string> = {
-  documentation: "Documentation",
-  guide: "Guide",
-  tutorial: "Tutorial",
-};
-
-const HELP_TOPICS: HelpTopic[] = [
-  {
-    id: "getting-started",
-    title: "Getting Started With Teamwox",
-    summary: "Overview of navigation, global search, notifications, and profile settings.",
-    type: "documentation",
-    module: "help",
-    href: "/home",
-    tags: ["onboarding", "basics"],
-  },
-  {
-    id: "tasks-lifecycle",
-    title: "Task Lifecycle and Stage Management",
-    summary: "How to create tasks, move between stages, assign users, and close work correctly.",
-    type: "guide",
-    module: "tasks",
-    href: "/tasks",
-    tags: ["workflow", "stages"],
-  },
-  {
-    id: "projects-kanban",
-    title: "Project Boards and Project Tasks",
-    summary: "Best practices for project structure, kanban usage, and progress tracking.",
-    type: "tutorial",
-    module: "projects",
-    href: "/projects",
-    tags: ["kanban", "planning"],
-  },
-  {
-    id: "documents-sharing",
-    title: "Document Upload, Sharing, and Access",
-    summary: "Manage folders, permissions, previews, and secure sharing links.",
-    type: "documentation",
-    module: "documents",
-    href: "/documents",
-    tags: ["sharing", "permissions"],
-  },
-  {
-    id: "chat-collaboration",
-    title: "Internal Chat Collaboration",
-    summary: "Create dialogs, groups, and handle links or media in conversations.",
-    type: "guide",
-    module: "chat",
-    href: "/chat",
-    tags: ["dialogs", "teams"],
-  },
-  {
-    id: "livechat-agent",
-    title: "Live Chat Agent Operations",
-    summary: "Queue handling, assignment flow, follow-up, and transcript controls.",
-    type: "tutorial",
-    module: "livechat",
-    href: "/livechat",
-    tags: ["queue", "support"],
-  },
-  {
-    id: "servicedesk-requests",
-    title: "Ticket Desk Request Handling",
-    summary: "Manage service desk requests, priorities, and SLA-friendly updates.",
-    type: "guide",
-    module: "servicedesk",
-    href: "/servicedesk",
-    tags: ["tickets", "sla"],
-  },
-  {
-    id: "crm-leads",
-    title: "Leads and Pipeline Flow",
-    summary: "Lead capture, stage progression, and conversion workflow.",
-    type: "documentation",
-    module: "leads",
-    href: "/leads",
-    tags: ["crm", "pipeline"],
-  },
-  {
-    id: "organizations-contacts",
-    title: "Organizations and Contacts Structure",
-    summary: "Relationship model between organizations, contacts, and account ownership.",
-    type: "documentation",
-    module: "clients",
-    href: "/clients",
-    tags: ["crm", "data model"],
-  },
-  {
-    id: "administration-permissions",
-    title: "Roles, Permissions, and Module Access",
-    summary: "Configure role templates, overrides, and secure access boundaries.",
-    type: "guide",
-    module: "administration",
-    href: "/administration",
-    tags: ["rbac", "security"],
-  },
-  {
-    id: "search-productivity",
-    title: "Cross-Module Search Productivity",
-    summary: "Use global search filters and query patterns to find records quickly.",
-    type: "tutorial",
-    module: "search",
-    href: "/search",
-    tags: ["search", "efficiency"],
-  },
-];
+import { HELP_TOPICS, MODULE_LABEL, TOPIC_TYPE_LABEL, type HelpTopicType } from "@/lib/help-content";
 
 export default function HelpPage() {
   const { access, loading } = usePermissions();
@@ -196,7 +53,7 @@ export default function HelpPage() {
             <div>
               <h1 className="text-xl font-semibold text-slate-900">Help Center</h1>
               <p className="text-sm text-slate-600">
-                Documentation, guides, and tutorials filtered by your module permissions.
+                Detailed documentation, guides, and tutorials with error-number reference.
               </p>
             </div>
           </div>
@@ -265,6 +122,9 @@ export default function HelpPage() {
                     <Badge variant="secondary" className="text-[10px]">
                       {MODULE_LABEL[topic.module]}
                     </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {topic.errorDetails.length} errors
+                    </Badge>
                   </div>
                   <CardTitle className="text-base text-slate-900">{topic.title}</CardTitle>
                 </CardHeader>
@@ -280,19 +140,27 @@ export default function HelpPage() {
                       </span>
                     ))}
                   </div>
-                  <Link
-                    href={topic.href}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-[#b00715] hover:text-[#91000f]"
-                  >
-                    {topic.type === "tutorial" ? (
-                      <GraduationCap className="h-4 w-4" />
-                    ) : topic.type === "guide" ? (
-                      <BookOpenCheck className="h-4 w-4" />
-                    ) : (
-                      <FileText className="h-4 w-4" />
-                    )}
-                    Open related module
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/help/${topic.id}`}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-[#b00715] hover:text-[#91000f]"
+                    >
+                      {topic.type === "tutorial" ? (
+                        <GraduationCap className="h-4 w-4" />
+                      ) : topic.type === "guide" ? (
+                        <BookOpenCheck className="h-4 w-4" />
+                      ) : (
+                        <FileText className="h-4 w-4" />
+                      )}
+                      Open detailed article
+                    </Link>
+                    <Link
+                      href={topic.relatedHref}
+                      className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                    >
+                      Open module
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             ))}
