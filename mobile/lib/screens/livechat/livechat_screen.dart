@@ -336,10 +336,12 @@ class _LiveChatScreenState extends ConsumerState<LiveChatScreen>
       });
       await _hardRefresh();
       if (!mounted) return;
-      context.push(
+      await context.push(
         '/chat/${dialog['id']}',
         extra: {'dialog': dialog, 'isLiveChat': true},
       );
+      if (!mounted) return;
+      await _hardRefresh();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -358,9 +360,9 @@ class _LiveChatScreenState extends ConsumerState<LiveChatScreen>
     final statusesAsync = ref.watch(liveChatAgentStatusesProvider);
     final currentUser = ref.watch(userProfileProvider).value;
     final groupItems =
-        groupsAsync.valueOrNull ?? const <Map<String, dynamic>>[];
+        groupsAsync.asData?.value ?? const <Map<String, dynamic>>[];
     final statusItems =
-        statusesAsync.valueOrNull ?? const <Map<String, dynamic>>[];
+        statusesAsync.asData?.value ?? const <Map<String, dynamic>>[];
     final selectedGroupValue =
         groupItems.any((group) => group['id']?.toString() == _groupId)
         ? _groupId
@@ -653,10 +655,15 @@ class _LiveChatList extends ConsumerWidget {
                 onTap: () {
                   final id = item['id']?.toString() ?? '';
                   if (id.isNotEmpty) {
-                    ctx.push(
-                      '/chat/$id',
-                      extra: {'dialog': item, 'isLiveChat': true},
-                    );
+                    ctx
+                        .push(
+                          '/chat/$id',
+                          extra: {'dialog': item, 'isLiveChat': true},
+                        )
+                        .then((_) {
+                          if (!ctx.mounted) return;
+                          onRefresh();
+                        });
                   }
                 },
               );

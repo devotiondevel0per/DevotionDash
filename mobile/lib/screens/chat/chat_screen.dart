@@ -277,7 +277,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with AutoRefreshMixin {
         ? Map<String, dynamic>.from(result['dialog'] as Map)
         : null;
     if (dialogId.isNotEmpty) {
-      context.push('/chat/$dialogId', extra: {'dialog': dialog});
+      await context.push('/chat/$dialogId', extra: {'dialog': dialog});
+      if (!mounted) return;
+      ref.invalidate(chatDialogsProvider);
+      ref.invalidate(chatGroupsProvider);
     }
   }
 
@@ -439,7 +442,11 @@ class _DialogsList extends ConsumerWidget {
                 onTap: () {
                   final id = dialog['id']?.toString() ?? '';
                   if (id.isNotEmpty) {
-                    ctx.push('/chat/$id', extra: {'dialog': dialog});
+                    ctx.push('/chat/$id', extra: {'dialog': dialog}).then((_) {
+                      if (!ctx.mounted) return;
+                      ref.invalidate(chatDialogsProvider);
+                      ref.invalidate(chatGroupsProvider);
+                    });
                   }
                 },
               );

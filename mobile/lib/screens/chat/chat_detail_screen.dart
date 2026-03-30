@@ -23,6 +23,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_client.dart';
 import '../../services/runtime_config.dart';
 import '../../providers/user_provider.dart';
+import 'chat_screen.dart' show chatDialogsProvider, chatGroupsProvider;
 import '../../utils/auto_refresh.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/user_avatar.dart';
@@ -408,6 +409,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   bool _updatingChat = false;
   bool _loadingLiveChatMeta = false;
   bool _updatingLiveChat = false;
+  bool _didRefreshUnreadCounters = false;
 
   io.Socket? _socket;
 
@@ -561,6 +563,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       await ref
           .read(apiClientProvider)
           .markNotificationsReadLink(link);
+      if (!_didRefreshUnreadCounters && !widget.isLiveChat) {
+        _didRefreshUnreadCounters = true;
+        ref.invalidate(chatDialogsProvider);
+        ref.invalidate(chatGroupsProvider);
+      }
     } catch (_) {
       // Best effort.
     }
