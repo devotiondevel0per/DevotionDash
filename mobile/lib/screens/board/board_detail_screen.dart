@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../providers/user_provider.dart';
 import '../../services/api_client.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/shimmer_loading.dart';
@@ -51,14 +52,28 @@ class BoardDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<BoardDetailScreen> createState() => _BoardDetailScreenState();
 }
 
+enum _TopicAction {
+  resolveToggle,
+  lockToggle,
+  pinToggle,
+  delete,
+}
+
 class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
   final _replyCtrl = TextEditingController();
   bool _submitting = false;
+  bool _mutatingTopic = false;
+  bool _summaryLoading = false;
+  Map<String, dynamic>? _summary;
 
   @override
   void dispose() {
     _replyCtrl.dispose();
     super.dispose();
+  }
+
+  void _refreshTopic() {
+    ref.invalidate(boardTopicDetailProvider(widget.topicId));
   }
 
   Future<void> _submitReply() async {
@@ -68,7 +83,7 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
     try {
       await ref.read(apiClientProvider).createBoardPost(widget.topicId, text);
       _replyCtrl.clear();
-      ref.invalidate(boardTopicDetailProvider(widget.topicId));
+      _refreshTopic();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -84,9 +99,148 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
     }
   }
 
+  Future<void> _patchTopic(
+    String topicId,
+    Map<String, dynamic> body, {
+    String? successMessage,
+  }) async {
+    setState(() => _mutatingTopic = true);
+    try {
+      await ref.read(apiClientProvider).updateBoardTopic(topicId, body);
+      _refreshTopic();
+      if (successMessage != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(successMessage)),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Update failed: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutatingTopic = false);
+    }
+  }
+
+  Future<void> _deleteTopic(String topicId) async {
+    setState(() => _mutatingTopic = true);
+    try {
+      await ref.read(apiClientProvider).deleteBoardTopic(topicId);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Topic deleted')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Delete failed: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutatingTopic = false);
+    }
+  }
+
+  Future<void> _generateSummary() async {
+    setState(() => _summaryLoading = true);
+    try {
+      final data = await ref.read(apiClientProvider).generateBoardSummary(widget.topicId);
+      if (mounted) {
+        setState(() => _summary = data);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Summary failed: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _summaryLoading = false);
+    }
+  }
+
+  Future<void> _handleAction(
+    _TopicAction action,
+    Map<String, dynamic> topic,
+    bool canChange,
+    bool canManage,
+  ) async {
+    final topicId = topic['id']?.toString() ?? widget.topicId;
+    final isResolved = topic['isResolved'] == true;
+    final isLocked = topic['isLocked'] == true;
+    final isPinned = topic['isPinned'] == true;
+
+    switch (action) {
+      case _TopicAction.resolveToggle:
+        if (!canChange) return;
+        await _patchTopic(
+          topicId,
+          {'isResolved': !isResolved},
+          successMessage: isResolved ? 'Topic reopened' : 'Topic resolved',
+        );
+        break;
+      case _TopicAction.lockToggle:
+        if (!canManage) return;
+        await _patchTopic(
+          topicId,
+          {'isLocked': !isLocked},
+          successMessage: isLocked ? 'Topic unlocked' : 'Topic locked',
+        );
+        break;
+      case _TopicAction.pinToggle:
+        if (!canManage) return;
+        await _patchTopic(
+          topicId,
+          {'isPinned': !isPinned},
+          successMessage: isPinned ? 'Topic unpinned' : 'Topic pinned',
+        );
+        break;
+      case _TopicAction.delete:
+        if (!canChange) return;
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete topic?'),
+            content: const Text('This action cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (confirm == true) {
+          await _deleteTopic(topicId);
+        }
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(boardTopicDetailProvider(widget.topicId));
+    final me = ref.watch(userProfileProvider).valueOrNull;
+    final topic = async.valueOrNull;
+    final creatorId = ((topic?['creator'] as Map<String, dynamic>?)?['id'] ?? '').toString();
+    final isCreator = me != null && creatorId == me.id;
+    final canManage = me?.isAdmin == true;
+    final canChange = canManage || isCreator;
+    final isLocked = topic?['isLocked'] == true;
+    final canReply = !isLocked || canManage || isCreator;
 
     return Scaffold(
       appBar: AppBar(
@@ -99,10 +253,61 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
             : const Text('Topic',
                 style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          if (topic != null)
+            IconButton(
+              icon: _summaryLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.auto_awesome_rounded),
+              onPressed: _summaryLoading ? null : _generateSummary,
+              tooltip: 'Generate summary',
+            ),
+          if (topic != null && (canChange || canManage))
+            PopupMenuButton<_TopicAction>(
+              enabled: !_mutatingTopic,
+              onSelected: (action) => _handleAction(action, topic, canChange, canManage),
+              itemBuilder: (_) {
+                final items = <PopupMenuEntry<_TopicAction>>[];
+                if (canChange) {
+                  items.add(
+                    PopupMenuItem<_TopicAction>(
+                      value: _TopicAction.resolveToggle,
+                      child: Text(topic['isResolved'] == true ? 'Reopen topic' : 'Resolve topic'),
+                    ),
+                  );
+                }
+                if (canManage) {
+                  items.add(
+                    PopupMenuItem<_TopicAction>(
+                      value: _TopicAction.lockToggle,
+                      child: Text(topic['isLocked'] == true ? 'Unlock topic' : 'Lock topic'),
+                    ),
+                  );
+                  items.add(
+                    PopupMenuItem<_TopicAction>(
+                      value: _TopicAction.pinToggle,
+                      child: Text(topic['isPinned'] == true ? 'Unpin topic' : 'Pin topic'),
+                    ),
+                  );
+                }
+                if (canChange) {
+                  items.add(const PopupMenuDivider());
+                  items.add(
+                    const PopupMenuItem<_TopicAction>(
+                      value: _TopicAction.delete,
+                      child: Text('Delete topic'),
+                    ),
+                  );
+                }
+                return items;
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            onPressed: () =>
-                ref.invalidate(boardTopicDetailProvider(widget.topicId)),
+            onPressed: _refreshTopic,
             tooltip: 'Refresh',
           ),
         ],
@@ -116,11 +321,14 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
         ),
         data: (topic) => _TopicBody(
           topic: topic,
+          summary: _summary,
+          summaryLoading: _summaryLoading,
           replyCtrl: _replyCtrl,
           submitting: _submitting,
+          canReply: canReply,
+          replyHint: canReply ? 'Write a reply...' : 'Topic is locked',
           onSubmitReply: _submitReply,
-          onRefresh: () async =>
-              ref.invalidate(boardTopicDetailProvider(widget.topicId)),
+          onRefresh: () async => _refreshTopic(),
         ),
       ),
     );
@@ -131,15 +339,23 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
 
 class _TopicBody extends StatelessWidget {
   final Map<String, dynamic> topic;
+  final Map<String, dynamic>? summary;
+  final bool summaryLoading;
   final TextEditingController replyCtrl;
   final bool submitting;
+  final bool canReply;
+  final String replyHint;
   final VoidCallback onSubmitReply;
   final Future<void> Function() onRefresh;
 
   const _TopicBody({
     required this.topic,
+    required this.summary,
+    required this.summaryLoading,
     required this.replyCtrl,
     required this.submitting,
+    required this.canReply,
+    required this.replyHint,
     required this.onSubmitReply,
     required this.onRefresh,
   });
@@ -235,6 +451,14 @@ class _TopicBody extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (summaryLoading) ...[
+                  const SizedBox(height: 12),
+                  const ShimmerBox(width: double.infinity, height: 110),
+                ],
+                if (summary != null) ...[
+                  const SizedBox(height: 12),
+                  _SummaryCard(summary: summary!),
+                ],
                 const SizedBox(height: 12),
 
                 // ── Posts heading ──
@@ -269,6 +493,8 @@ class _TopicBody extends StatelessWidget {
         _ReplyInputBar(
           controller: replyCtrl,
           submitting: submitting,
+          enabled: canReply,
+          hintText: replyHint,
           onSubmit: onSubmitReply,
         ),
       ],
@@ -277,6 +503,72 @@ class _TopicBody extends StatelessWidget {
 }
 
 // ─── Post card ────────────────────────────────────────────────────────────────
+
+class _SummaryCard extends StatelessWidget {
+  final Map<String, dynamic> summary;
+  const _SummaryCard({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final keyPoints = (summary['keyPoints'] as List<dynamic>? ?? const [])
+        .map((e) => e.toString())
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 16,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'AI Summary',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            (summary['summary'] ?? '').toString(),
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (keyPoints.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...keyPoints.take(5).map(
+                  (point) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('- '),
+                        Expanded(child: Text(point)),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _PostCard extends StatelessWidget {
   final Map<String, dynamic> post;
@@ -421,11 +713,15 @@ class _EmptyReplies extends StatelessWidget {
 class _ReplyInputBar extends StatelessWidget {
   final TextEditingController controller;
   final bool submitting;
+  final bool enabled;
+  final String hintText;
   final VoidCallback onSubmit;
 
   const _ReplyInputBar({
     required this.controller,
     required this.submitting,
+    required this.enabled,
+    required this.hintText,
     required this.onSubmit,
   });
 
@@ -449,8 +745,9 @@ class _ReplyInputBar extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: controller,
+                enabled: enabled,
                 decoration: InputDecoration(
-                  hintText: 'Write a reply…',
+                  hintText: hintText,
                   hintStyle: TextStyle(
                     color:
                         theme.colorScheme.onSurface.withValues(alpha: 0.45),
@@ -484,11 +781,11 @@ class _ReplyInputBar extends StatelessWidget {
                     ),
                   )
                 : IconButton.filled(
-                    onPressed: onSubmit,
+                    onPressed: enabled ? onSubmit : null,
                     icon: const Icon(Icons.send_rounded, size: 18),
                     style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFF8B5CF6),
-                      foregroundColor: Colors.white,
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
                     ),
                   ),
           ],
@@ -613,7 +910,9 @@ class _ErrorView extends StatelessWidget {
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Retry'),
               style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B5CF6)),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              ),
             ),
           ],
         ),

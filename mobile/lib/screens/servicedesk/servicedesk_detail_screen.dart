@@ -91,6 +91,88 @@ String? _resolvedCommentUrl(String value) {
   return resolveServerUrl(value);
 }
 
+Future<void> _openCommentUrl(String value) async {
+  final resolved = _resolvedCommentUrl(value);
+  final uri = resolved == null ? null : Uri.tryParse(resolved);
+  if (uri == null) return;
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
+List<InlineSpan> _buildInlineCommentSpans(
+  BuildContext context,
+  String line,
+) {
+  final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.45);
+  final linkStyle = textStyle?.copyWith(
+    color: _kPrimary,
+    fontWeight: FontWeight.w600,
+    decoration: TextDecoration.underline,
+  );
+  final markdownLinkRegex = RegExp(r'\[([^\]]+)\]\(([^)]+)\)');
+  final bareUrlRegex = RegExp(r'((?:https?:\/\/|\/uploads\/)[^\s]+)');
+  final spans = <InlineSpan>[];
+
+  void appendPlainWithUrls(String text) {
+    if (text.isEmpty) return;
+    var last = 0;
+    for (final match in bareUrlRegex.allMatches(text)) {
+      if (match.start > last) {
+        spans.add(TextSpan(text: text.substring(last, match.start), style: textStyle));
+      }
+      final rawUrl = match.group(1) ?? '';
+      if (_resolvedCommentUrl(rawUrl) != null) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: GestureDetector(
+              onTap: () => _openCommentUrl(rawUrl),
+              child: Text(rawUrl, style: linkStyle),
+            ),
+          ),
+        );
+      } else {
+        spans.add(TextSpan(text: match.group(0), style: textStyle));
+      }
+      last = match.end;
+    }
+    if (last < text.length) {
+      spans.add(TextSpan(text: text.substring(last), style: textStyle));
+    }
+  }
+
+  var cursor = 0;
+  for (final match in markdownLinkRegex.allMatches(line)) {
+    if (match.start > cursor) {
+      appendPlainWithUrls(line.substring(cursor, match.start));
+    }
+    final label = match.group(1) ?? 'Link';
+    final rawUrl = match.group(2) ?? '';
+    if (_resolvedCommentUrl(rawUrl) != null) {
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: GestureDetector(
+            onTap: () => _openCommentUrl(rawUrl),
+            child: Text(label, style: linkStyle),
+          ),
+        ),
+      );
+    } else {
+      spans.add(TextSpan(text: match.group(0), style: textStyle));
+    }
+    cursor = match.end;
+  }
+  if (cursor < line.length) {
+    appendPlainWithUrls(line.substring(cursor));
+  }
+  if (spans.isEmpty) {
+    spans.add(TextSpan(text: line, style: textStyle));
+  }
+  return spans;
+}
+
 List<dynamic> _extractComments(Map<String, dynamic> req) {
   final raw = req['comments'] ?? req['notes'] ?? [];
   return raw as List<dynamic>;
@@ -464,7 +546,7 @@ class _DetailBody extends StatelessWidget {
                         const SizedBox(height: 14),
                         // Requester
                         if (requesterName.isNotEmpty) ...[
-                          _SectionLabel('Requester'),
+                          const _SectionLabel('Requester'),
                           const SizedBox(height: 8),
                           Row(
                             children: [
@@ -522,7 +604,7 @@ class _DetailBody extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SectionLabel('Description'),
+                          const _SectionLabel('Description'),
                           const SizedBox(height: 10),
                           Text(
                             description,
@@ -811,9 +893,14 @@ class _CommentLine extends StatelessWidget {
       return _CommentLink(label: trimmed, url: directUrl);
     }
 
-    return Text(
-      line,
-      style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
+    return RichText(
+      text: TextSpan(
+        style: theme.textTheme.bodySmall?.copyWith(
+          height: 1.45,
+          color: theme.colorScheme.onSurface,
+        ),
+        children: _buildInlineCommentSpans(context, line),
+      ),
     );
   }
 }

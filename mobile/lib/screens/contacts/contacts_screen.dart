@@ -9,16 +9,76 @@ import '../../widgets/empty_state.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
+@immutable
+class _ContactsQuery {
+  final String search;
+  final String organizationId;
+  final String sort;
+  final bool mineOnly;
+  final bool? hasEmail;
+  final bool? hasPhone;
+
+  const _ContactsQuery({
+    this.search = '',
+    this.organizationId = 'all',
+    this.sort = 'updated',
+    this.mineOnly = false,
+    this.hasEmail,
+    this.hasPhone,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is _ContactsQuery &&
+      other.search == search &&
+      other.organizationId == organizationId &&
+      other.sort == sort &&
+      other.mineOnly == mineOnly &&
+      other.hasEmail == hasEmail &&
+      other.hasPhone == hasPhone;
+
+  @override
+  int get hashCode =>
+      Object.hash(search, organizationId, sort, mineOnly, hasEmail, hasPhone);
+}
+
 final contactsProvider =
-    FutureProvider.family<List<dynamic>, String?>((ref, search) async {
-  final res =
-      await ref.watch(apiClientProvider).getContacts(search: search);
+    FutureProvider.family<List<dynamic>, _ContactsQuery>((ref, query) async {
+  final res = await ref.watch(apiClientProvider).getContacts(
+        search: query.search,
+        organizationId: query.organizationId,
+        sort: query.sort,
+        mineOnly: query.mineOnly,
+        hasEmail: query.hasEmail,
+        hasPhone: query.hasPhone,
+        limit: 500,
+      );
   if (res is List) return res;
   if (res is Map) {
     final raw = res['items'] ?? res['data'] ?? res['contacts'] ?? [];
     return raw as List<dynamic>;
   }
   return [];
+});
+
+final _organizationsProvider = FutureProvider<List<Map<String, String>>>((ref) async {
+  try {
+    final data = await ref.watch(apiClientProvider).getClients(page: 1);
+    final raw =
+        (data['items'] ?? data['data'] ?? data['organizations'] ?? []) as List<dynamic>;
+    return raw
+        .map((item) => item as Map<String, dynamic>)
+        .map(
+          (org) => {
+            'id': (org['id'] ?? '').toString(),
+            'name': (org['name'] ?? '').toString(),
+          },
+        )
+        .where((org) => org['id']!.isNotEmpty && org['name']!.isNotEmpty)
+        .toList();
+  } catch (_) {
+    return const [];
+  }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,16 +121,42 @@ class ContactsScreen extends ConsumerStatefulWidget {
 
 class _ContactsScreenState extends ConsumerState<ContactsScreen>
     with AutoRefreshMixin {
+  static const _bucketOptions = <Map<String, String>>[
+    {'id': 'all', 'label': 'All'},
+    {'id': 'assigned', 'label': 'Assigned'},
+    {'id': 'unassigned', 'label': 'Unassigned'},
+    {'id': 'missing-email', 'label': 'No Email'},
+    {'id': 'missing-phone', 'label': 'No Phone'},
+  ];
+
   final _searchController = TextEditingController();
   bool _showSearch = false;
-  String? _searchQuery;
+  String _searchQuery = '';
+  String _organizationId = 'all';
+  String _sort = 'updated';
+  bool _mineOnly = false;
+  String _bucket = 'all';
+
+  _ContactsQuery _query() {
+    final hasEmail = _bucket == 'missing-email' ? false : null;
+    final hasPhone = _bucket == 'missing-phone' ? false : null;
+    final organizationId = _bucket == 'unassigned' ? 'none' : _organizationId;
+    return _ContactsQuery(
+      search: _searchQuery.trim(),
+      organizationId: organizationId,
+      sort: _sort,
+      mineOnly: _mineOnly,
+      hasEmail: hasEmail,
+      hasPhone: hasPhone,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     startAutoRefresh(
       const Duration(seconds: 120),
-      () => ref.invalidate(contactsProvider),
+      () => ref.invalidate(contactsProvider(_query())),
     );
   }
 
@@ -84,7 +170,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen>
     setState(() {
       _showSearch = !_showSearch;
       if (!_showSearch) {
-        _searchQuery = null;
+        _searchQuery = '';
         _searchController.clear();
       }
     });
@@ -101,10 +187,122 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen>
     );
   }
 
+  Widget _filtersBar(List<Map<String, String>> organizations) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color:
+                Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.45),
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 38,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: _bucketOptions
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        selected: _bucket == item['id'],
+                        label: Text(item['label']!),
+                        onSelected: (_) {
+                          setState(() {
+                            _bucket = item['id']!;
+                            if (_bucket == 'unassigned') {
+                              _organizationId = 'none';
+                            } else if (_organizationId == 'none') {
+                              _organizationId = 'all';
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 180,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _sort,
+                    decoration: const InputDecoration(
+                      labelText: 'Sort',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'updated', child: Text('Latest update')),
+                      DropdownMenuItem(value: 'name', child: Text('Name A-Z')),
+                      DropdownMenuItem(value: 'created', child: Text('Recently created')),
+                    ],
+                    onChanged: (value) => setState(() => _sort = value ?? 'updated'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 210,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _organizationId,
+                    decoration: const InputDecoration(
+                      labelText: 'Organization',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem(value: 'all', child: Text('All organizations')),
+                      const DropdownMenuItem(value: 'none', child: Text('Unassigned only')),
+                      ...organizations.map(
+                        (org) => DropdownMenuItem<String>(
+                          value: org['id'],
+                          child: Text(org['name'] ?? ''),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _organizationId = value ?? 'all';
+                        if (_organizationId == 'none') {
+                          _bucket = 'unassigned';
+                        } else if (_bucket == 'unassigned') {
+                          _bucket = 'all';
+                        }
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  selected: _mineOnly,
+                  label: const Text('My Contacts'),
+                  onSelected: (value) => setState(() => _mineOnly = value),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final contacts = ref.watch(contactsProvider(_searchQuery));
+    final query = _query();
+    final contacts = ref.watch(contactsProvider(query));
+    final organizations = ref.watch(_organizationsProvider).valueOrNull ?? const [];
 
     return Scaffold(
       appBar: AppBar(
@@ -122,8 +320,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen>
                   filled: false,
                 ),
                 style: theme.textTheme.bodyLarge,
-                onChanged: (v) =>
-                    setState(() => _searchQuery = v.isEmpty ? null : v),
+                onChanged: (v) => setState(() => _searchQuery = v),
               )
             : const Text('Contacts',
                 style: TextStyle(fontWeight: FontWeight.bold)),
@@ -139,71 +336,91 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen>
         loading: () => const ShimmerList(count: 10),
         error: (e, _) => ErrorState(
           message: e.toString(),
-          onRetry: () => ref.invalidate(contactsProvider(_searchQuery)),
+          onRetry: () => ref.invalidate(contactsProvider(query)),
         ),
         data: (list) {
-          if (list.isEmpty) {
-            return EmptyState(
-              icon: Icons.contacts_outlined,
-              title: _searchQuery != null ? 'No results' : 'No contacts',
-              subtitle: _searchQuery != null
-                  ? 'Try a different search term'
-                  : 'No contacts found',
-            );
-          }
+          final visible = _bucket == 'assigned'
+              ? list.where((item) => _contactOrg(item as Map<String, dynamic>).isNotEmpty).toList()
+              : list;
+          final hasFilter = _searchQuery.trim().isNotEmpty ||
+              _bucket != 'all' ||
+              _organizationId != 'all' ||
+              _sort != 'updated' ||
+              _mineOnly;
 
-          return RefreshIndicator(
-            color: _kPrimary,
-            onRefresh: () async =>
-                ref.invalidate(contactsProvider(_searchQuery)),
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => Divider(
-                height: 1,
-                indent: 72,
-                endIndent: 16,
-                color: theme.colorScheme.outline.withValues(alpha: 0.2),
+          return Column(
+            children: [
+              _filtersBar(organizations),
+              Expanded(
+                child: visible.isEmpty
+                    ? EmptyState(
+                        icon: Icons.contacts_outlined,
+                        title: hasFilter ? 'No results' : 'No contacts',
+                        subtitle: hasFilter
+                            ? 'Try a different filter or search term'
+                            : 'No contacts found',
+                      )
+                    : RefreshIndicator(
+                        color: _kPrimary,
+                        onRefresh: () async => ref.invalidate(contactsProvider(query)),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: visible.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            indent: 72,
+                            endIndent: 16,
+                            color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                          ),
+                          itemBuilder: (ctx, i) {
+                            final c = visible[i] as Map<String, dynamic>;
+                            final name = _contactName(c);
+                            final email = _contactEmail(c);
+                            final org = _contactOrg(c);
+                            final photo = _contactPhoto(c);
+
+                            return ListTile(
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              leading: _ContactAvatar(photo: photo, name: name),
+                              title: Text(
+                                name,
+                                style: theme.textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (org.isNotEmpty)
+                                    Text(
+                                      org,
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: _kPrimary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  if (email.isNotEmpty)
+                                    Text(
+                                      email,
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.5),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                              trailing: const Icon(Icons.chevron_right, size: 20),
+                              onTap: () => _showContactSheet(ctx, c),
+                            );
+                          },
+                        ),
+                      ),
               ),
-              itemBuilder: (ctx, i) {
-                final c = list[i] as Map<String, dynamic>;
-                final name = _contactName(c);
-                final email = _contactEmail(c);
-                final org = _contactOrg(c);
-                final photo = _contactPhoto(c);
-
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 4),
-                  leading: _ContactAvatar(photo: photo, name: name),
-                  title: Text(name,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (org.isNotEmpty)
-                        Text(org,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: _kPrimary,
-                                fontWeight: FontWeight.w500),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                      if (email.isNotEmpty)
-                        Text(email,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.5)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                  trailing:
-                      const Icon(Icons.chevron_right, size: 20),
-                  onTap: () => _showContactSheet(ctx, c),
-                );
-              },
-            ),
+            ],
           );
         },
       ),

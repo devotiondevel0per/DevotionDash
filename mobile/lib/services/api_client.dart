@@ -13,6 +13,36 @@ String? resolveServerUrl(String? value) {
   return RuntimeConfig.instance.resolveUrl(value);
 }
 
+String _normalizeComparable(String value) {
+  return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+}
+
+Set<String> _knownDialogMemberNames(Map<String, dynamic> dialog) {
+  final members = dialog['members'] as List<dynamic>? ?? const [];
+  final names = <String>{};
+  for (final rawMember in members) {
+    if (rawMember is! Map<String, dynamic>) continue;
+    final user = rawMember['user'] as Map<String, dynamic>?;
+    if (user == null) continue;
+    final fullName = user['fullname']?.toString() ?? '';
+    final name = user['name']?.toString() ?? '';
+    final fullNameNorm = _normalizeComparable(fullName);
+    final nameNorm = _normalizeComparable(name);
+    if (fullNameNorm.isNotEmpty) names.add(fullNameNorm);
+    if (nameNorm.isNotEmpty) names.add(nameNorm);
+  }
+  return names;
+}
+
+String _stripSyntheticDialogPrefix(String value) {
+  return value
+      .replaceFirst(RegExp(r'^direct(?:\s*chat)?\s*[:\-]?\s*', caseSensitive: false), '')
+      .replaceFirst(RegExp(r'^chat with\s+', caseSensitive: false), '')
+      .replaceFirst(RegExp(r'^dm\s*[:\-]?\s*', caseSensitive: false), '')
+      .replaceFirst(RegExp(r'^private(?:\s*chat)?\s*[:\-]?\s*', caseSensitive: false), '')
+      .trim();
+}
+
 List<String> _chatMemberIds(Map<String, dynamic> dialog) {
   final members = dialog['members'] as List<dynamic>? ?? const [];
   final ids = <String>{};
@@ -32,10 +62,31 @@ List<String> _chatMemberIds(Map<String, dynamic> dialog) {
 String? _canonicalChatSubject(Map<String, dynamic> dialog) {
   final raw = dialog['subject']?.toString().trim();
   if (raw == null || raw.isEmpty) return null;
-  final lower = raw.toLowerCase();
+  final lower = _normalizeComparable(raw);
   if (lower == 'direct' || lower == 'direct chat' || lower.startsWith('direct:')) {
     return null;
   }
+
+  final members = dialog['members'] as List<dynamic>? ?? const [];
+  if (members.length == 2) {
+    final knownNames = _knownDialogMemberNames(dialog);
+    if (knownNames.isNotEmpty) {
+      if (knownNames.contains(lower)) return null;
+
+      final stripped = _normalizeComparable(_stripSyntheticDialogPrefix(raw));
+      if (stripped.isNotEmpty && knownNames.contains(stripped)) return null;
+
+      final tokens = stripped
+          .split(RegExp(r'\s*(?:,|&|/|\+|\||and)\s*', caseSensitive: false))
+          .map(_normalizeComparable)
+          .where((token) => token.isNotEmpty)
+          .toList();
+      if (tokens.length == 2 && tokens.every(knownNames.contains)) {
+        return null;
+      }
+    }
+  }
+
   return raw;
 }
 
@@ -261,14 +312,33 @@ class ApiClient {
     return res.data as Map<String, dynamic>;
   }
 
-  Future<List<dynamic>> getChatMessages(String dialogId, {String? before}) async {
+  Future<Map<String, dynamic>> getChatMessagesPage(
+    String dialogId, {
+    String? before,
+  }) async {
     final res = await _dio.get('/chat/dialogs/$dialogId/messages',
         queryParameters: {
           if (before != null) 'before': before,
         });
     final data = res.data;
-    if (data is Map) return (data['items'] ?? []) as List<dynamic>;
-    return data as List<dynamic>;
+    if (data is Map) {
+      final itemsRaw = data['items'];
+      final items = itemsRaw is List ? List<dynamic>.from(itemsRaw) : const <dynamic>[];
+      return {
+        'items': items,
+        'hasMore': data['hasMore'] == true,
+      };
+    }
+    final items = data is List ? List<dynamic>.from(data) : const <dynamic>[];
+    return {
+      'items': items,
+      'hasMore': false,
+    };
+  }
+
+  Future<List<dynamic>> getChatMessages(String dialogId, {String? before}) async {
+    final page = await getChatMessagesPage(dialogId, before: before);
+    return page['items'] as List<dynamic>;
   }
 
   Future<Map<String, dynamic>> sendMessage(
@@ -350,14 +420,33 @@ class ApiClient {
     return res.data as Map<String, dynamic>;
   }
 
-  Future<List<dynamic>> getLiveChatMessages(String dialogId, {String? before}) async {
+  Future<Map<String, dynamic>> getLiveChatMessagesPage(
+    String dialogId, {
+    String? before,
+  }) async {
     final res = await _dio.get('/livechat/dialogs/$dialogId/messages',
         queryParameters: {
           if (before != null) 'before': before,
         });
     final data = res.data;
-    if (data is Map) return (data['items'] ?? []) as List<dynamic>;
-    return data as List<dynamic>;
+    if (data is Map) {
+      final itemsRaw = data['items'];
+      final items = itemsRaw is List ? List<dynamic>.from(itemsRaw) : const <dynamic>[];
+      return {
+        'items': items,
+        'hasMore': data['hasMore'] == true,
+      };
+    }
+    final items = data is List ? List<dynamic>.from(data) : const <dynamic>[];
+    return {
+      'items': items,
+      'hasMore': false,
+    };
+  }
+
+  Future<List<dynamic>> getLiveChatMessages(String dialogId, {String? before}) async {
+    final page = await getLiveChatMessagesPage(dialogId, before: before);
+    return page['items'] as List<dynamic>;
   }
 
   Future<Map<String, dynamic>> sendLiveChatMessage(
@@ -418,6 +507,30 @@ class ApiClient {
     return res.data as Map<String, dynamic>;
   }
 
+  Future<List<String>> getLiveChatTyping(String dialogId) async {
+    final res = await _dio.get('/livechat/dialogs/$dialogId/typing');
+    final data = res.data;
+    if (data is Map && data['typers'] is List) {
+      return List<dynamic>.from(data['typers'] as List)
+          .map((row) => row.toString().trim())
+          .where((name) => name.isNotEmpty)
+          .toList();
+    }
+    return const <String>[];
+  }
+
+  Future<void> sendLiveChatTyping(
+    String dialogId, {
+    String? name,
+  }) async {
+    await _dio.post(
+      '/livechat/dialogs/$dialogId/typing',
+      data: {
+        if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> getLiveChatInsights(String dialogId) async {
     final res = await _dio.get('/livechat/dialogs/$dialogId/insights');
     return res.data as Map<String, dynamic>;
@@ -441,8 +554,32 @@ class ApiClient {
   }
 
   // ─── Board ──────────────────────────────────────────────
-  Future<List<dynamic>> getBoardTopics() async {
-    final res = await _dio.get('/board');
+  Future<List<dynamic>> getBoardTopics({
+    String? search,
+    String? categoryId,
+    String? status,
+    String? visibility,
+    String? sort,
+    bool mineOnly = false,
+    String? teamId,
+    String? organizationId,
+    int limit = 200,
+  }) async {
+    final res = await _dio.get('/board', queryParameters: {
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (categoryId != null && categoryId.isNotEmpty && categoryId != 'all')
+        'categoryId': categoryId,
+      if (status != null && status.isNotEmpty && status != 'all')
+        'status': status,
+      if (visibility != null && visibility.isNotEmpty && visibility != 'all')
+        'visibility': visibility,
+      if (sort != null && sort.isNotEmpty) 'sort': sort,
+      if (mineOnly) 'mine': '1',
+      if (teamId != null && teamId.isNotEmpty) 'teamId': teamId,
+      if (organizationId != null && organizationId.isNotEmpty)
+        'organizationId': organizationId,
+      'limit': limit,
+    });
     return res.data as List<dynamic>;
   }
 
@@ -456,9 +593,26 @@ class ApiClient {
     return res.data as List<dynamic>;
   }
 
+  Future<Map<String, dynamic>> getBoardMeta() async {
+    final res = await _dio.get('/board/meta');
+    return res.data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> createBoardTopic(Map<String, dynamic> body) async {
     final res = await _dio.post('/board', data: body);
     return res.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateBoardTopic(
+    String topicId,
+    Map<String, dynamic> body,
+  ) async {
+    final res = await _dio.put('/board/$topicId', data: body);
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<void> deleteBoardTopic(String topicId) async {
+    await _dio.delete('/board/$topicId');
   }
 
   Future<Map<String, dynamic>> createBoardPost(String topicId, String content) async {
@@ -466,11 +620,34 @@ class ApiClient {
     return res.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> generateBoardSummary(String topicId) async {
+    final res = await _dio.post('/board/$topicId/summary');
+    return res.data as Map<String, dynamic>;
+  }
+
   // ─── Contacts ───────────────────────────────────────────
-  Future<dynamic> getContacts({String? search, int page = 1}) async {
+  Future<dynamic> getContacts({
+    String? search,
+    int page = 1,
+    String? organizationId,
+    String? sort,
+    bool mineOnly = false,
+    bool? hasEmail,
+    bool? hasPhone,
+    int limit = 200,
+  }) async {
     final res = await _dio.get('/contacts', queryParameters: {
-      if (search != null && search.isNotEmpty) 'search': search,
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (organizationId != null &&
+          organizationId.isNotEmpty &&
+          organizationId != 'all')
+        'organizationId': organizationId,
+      if (sort != null && sort.isNotEmpty) 'sort': sort,
+      if (mineOnly) 'mineOnly': '1',
+      if (hasEmail != null) 'hasEmail': hasEmail ? '1' : '0',
+      if (hasPhone != null) 'hasPhone': hasPhone ? '1' : '0',
       'page': page,
+      'limit': limit,
     });
     return res.data;
   }
@@ -686,6 +863,30 @@ class ApiClient {
     return res.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> createDocument({
+    required String name,
+    String? folderId,
+    String? content,
+    String accessLevel = 'private',
+  }) async {
+    final res = await _dio.post('/documents', data: {
+      'type': 'document',
+      'name': name,
+      if (folderId != null) 'folderId': folderId,
+      if (content != null) 'content': content,
+      'accessLevel': accessLevel == 'module' ? 'module' : 'private',
+    });
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateDocument(
+    String id,
+    Map<String, dynamic> body,
+  ) async {
+    final res = await _dio.put('/documents/$id', data: body);
+    return res.data as Map<String, dynamic>;
+  }
+
   Future<List<dynamic>> getDocumentFolders() async {
     final res = await _dio.get('/documents/folders');
     return res.data as List<dynamic>;
@@ -732,6 +933,16 @@ class ApiClient {
 
   Future<void> deleteDocumentFolder(String id) async {
     await _dio.delete('/documents/folders/$id');
+  }
+
+  Future<Map<String, dynamic>> renameDocumentFolder({
+    required String folderId,
+    required String name,
+  }) async {
+    final res = await _dio.put('/documents/folders/$folderId', data: {
+      'name': name,
+    });
+    return res.data as Map<String, dynamic>;
   }
 
   Future<List<dynamic>> getDocumentShareUsers({
@@ -817,9 +1028,17 @@ class ApiClient {
   }
 
   // ─── Service Desk ────────────────────────────────────────
-  Future<dynamic> getServiceDeskRequests({String? status}) async {
+  Future<dynamic> getServiceDeskRequests({
+    String? status,
+    String? groupId,
+    String? search,
+    int? limit,
+  }) async {
     final res = await _dio.get('/servicedesk', queryParameters: {
-      if (status != null) 'status': status,
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (groupId != null && groupId.isNotEmpty) 'groupId': groupId,
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (limit != null) 'limit': limit,
     });
     return res.data;
   }

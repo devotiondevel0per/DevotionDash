@@ -10,11 +10,37 @@ import '../../widgets/empty_state.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
+@immutable
+class _ServiceDeskQuery {
+  final String status;
+  final String search;
+  final String groupId;
+
+  const _ServiceDeskQuery({
+    required this.status,
+    required this.search,
+    required this.groupId,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is _ServiceDeskQuery &&
+      other.status == status &&
+      other.search == search &&
+      other.groupId == groupId;
+
+  @override
+  int get hashCode => Object.hash(status, search, groupId);
+}
+
 final _serviceDeskProvider =
-    FutureProvider.family<List<dynamic>, String>((ref, status) async {
+    FutureProvider.family<List<dynamic>, _ServiceDeskQuery>((ref, query) async {
   final api = ref.watch(apiClientProvider);
   final res = await api.getServiceDeskRequests(
-    status: status.isEmpty ? null : status,
+    status: query.status,
+    search: query.search,
+    groupId: query.groupId,
+    limit: 200,
   );
   if (res is List) return res;
   if (res is Map) {
@@ -99,6 +125,7 @@ String _capitalize(String s) =>
 const _kTabs = [
   ('All', ''),
   ('Open', 'open'),
+  ('Pending', 'pending'),
   ('In Progress', 'in_progress'),
   ('Closed', 'closed'),
 ];
@@ -115,18 +142,34 @@ class ServiceDeskScreen extends ConsumerStatefulWidget {
 class _ServiceDeskScreenState extends ConsumerState<ServiceDeskScreen>
     with SingleTickerProviderStateMixin, AutoRefreshMixin {
   late final TabController _tabs;
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+  String _groupId = '';
+
+  _ServiceDeskQuery _queryForStatus(String status) => _ServiceDeskQuery(
+        status: status,
+        search: _searchQuery.trim(),
+        groupId: _groupId,
+      );
+
+  void _invalidateFilteredTabs() {
+    for (final t in _kTabs) {
+      ref.invalidate(_serviceDeskProvider(_queryForStatus(t.$2)));
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: _kTabs.length, vsync: this);
     startAutoRefresh(const Duration(seconds: 60), () {
-      for (final t in _kTabs) { ref.invalidate(_serviceDeskProvider(t.$2)); }
+      _invalidateFilteredTabs();
     });
   }
 
   @override
   void dispose() {
+    _searchCtrl.dispose();
     _tabs.dispose();
     super.dispose();
   }
@@ -141,9 +184,7 @@ class _ServiceDeskScreenState extends ConsumerState<ServiceDeskScreen>
       ),
       builder: (_) => _CreateRequestSheet(
         onCreated: () {
-          for (final t in _kTabs) {
-            ref.invalidate(_serviceDeskProvider(t.$2));
-          }
+          _invalidateFilteredTabs();
         },
       ),
     );
@@ -151,6 +192,7 @@ class _ServiceDeskScreenState extends ConsumerState<ServiceDeskScreen>
 
   @override
   Widget build(BuildContext context) {
+    final groups = ref.watch(_serviceDeskGroupsProvider).valueOrNull ?? const [];
     return Scaffold(
       appBar: AppBar(
         title: const Text('Service Desk',
@@ -165,15 +207,76 @@ class _ServiceDeskScreenState extends ConsumerState<ServiceDeskScreen>
           tabs: _kTabs.map((t) => Tab(text: t.$1)).toList(),
         ),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: _kTabs
-            .map((t) => _RequestList(
-                  status: t.$2,
-                  onRefresh: () async =>
-                      ref.invalidate(_serviceDeskProvider(t.$2)),
-                ))
-            .toList(),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Search requests...',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() => _searchQuery = '');
+                                _invalidateFilteredTabs();
+                              },
+                            )
+                          : null,
+                      isDense: true,
+                    ),
+                    onChanged: (value) {
+                      setState(() => _searchQuery = value);
+                      _invalidateFilteredTabs();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                DropdownButton<String>(
+                  value: _groupId.isEmpty ? null : _groupId,
+                  hint: const Text('Group'),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('All groups'),
+                    ),
+                    ...groups.map((group) {
+                      final item = group as Map<String, dynamic>;
+                      return DropdownMenuItem<String>(
+                        value: item['id']?.toString() ?? '',
+                        child: Text((item['name'] ?? 'Group').toString()),
+                      );
+                    }),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _groupId = value ?? '');
+                    _invalidateFilteredTabs();
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabs,
+              children: _kTabs
+                  .map((t) => _RequestList(
+                        status: t.$2,
+                        searchQuery: _searchQuery.trim(),
+                        groupId: _groupId,
+                        onRefresh: () async => ref
+                            .invalidate(_serviceDeskProvider(_queryForStatus(t.$2))),
+                      ))
+                  .toList(),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateSheet,
@@ -190,28 +293,43 @@ class _ServiceDeskScreenState extends ConsumerState<ServiceDeskScreen>
 
 class _RequestList extends ConsumerWidget {
   final String status;
+  final String searchQuery;
+  final String groupId;
   final Future<void> Function() onRefresh;
 
-  const _RequestList({required this.status, required this.onRefresh});
+  const _RequestList({
+    required this.status,
+    required this.searchQuery,
+    required this.groupId,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(_serviceDeskProvider(status));
+    final query = _ServiceDeskQuery(
+      status: status,
+      search: searchQuery,
+      groupId: groupId,
+    );
+    final async = ref.watch(_serviceDeskProvider(query));
 
     return async.when(
       loading: () => const ShimmerList(count: 8),
       error: (e, _) => _ErrorView(
         message: e.toString(),
-        onRetry: () => ref.invalidate(_serviceDeskProvider(status)),
+        onRetry: () => ref.invalidate(_serviceDeskProvider(query)),
       ),
       data: (requests) {
         if (requests.isEmpty) {
+          final hasFilter = searchQuery.isNotEmpty || groupId.isNotEmpty;
           return EmptyState(
             icon: Icons.support_agent_rounded,
             title: 'No requests',
-            subtitle: status.isEmpty
-                ? 'No service desk requests found'
-                : 'No requests with this status',
+            subtitle: hasFilter
+                ? 'Try changing filters or search term'
+                : (status.isEmpty
+                    ? 'No service desk requests found'
+                    : 'No requests with this status'),
           );
         }
 
@@ -256,6 +374,14 @@ class _RequestCard extends StatelessWidget {
     final requester = _requesterName(request);
     final createdAt = _formatDate(
         request['createdAt']?.toString() ?? request['created_at']?.toString());
+    final groupName =
+        (request['group']?['name'] ?? request['groupName'] ?? '').toString();
+    final categoryName = (request['category']?['name'] ??
+            request['categoryName'] ??
+            '')
+        .toString();
+    final commentsCount = request['commentsCount'] ?? request['_count']?['comments'];
+    final commentsText = commentsCount == null ? '' : commentsCount.toString();
 
     final statusColor = _statusColor(status);
     final priorityColor = _priorityColor(priority);
@@ -304,6 +430,21 @@ class _RequestCard extends StatelessWidget {
                     _MetaItem(
                         icon: Icons.calendar_today_rounded,
                         label: createdAt),
+                  if (groupName.isNotEmpty)
+                    _MetaItem(
+                      icon: Icons.groups_rounded,
+                      label: groupName,
+                    ),
+                  if (categoryName.isNotEmpty)
+                    _MetaItem(
+                      icon: Icons.category_outlined,
+                      label: categoryName,
+                    ),
+                  if (commentsText.isNotEmpty)
+                    _MetaItem(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      label: '$commentsText comments',
+                    ),
                 ],
               ),
             ],

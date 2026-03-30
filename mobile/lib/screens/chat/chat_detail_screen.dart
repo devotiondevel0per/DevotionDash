@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
@@ -14,6 +15,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -382,6 +385,13 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   bool _sending = false;
   bool _showEmoji = false;
   String? _oldestMessageTime;
+  AudioRecorder? _voiceRecorder;
+  Timer? _voiceTicker;
+  bool _isRecordingVoice = false;
+  int _voiceRecordingSeconds = 0;
+  Timer? _liveChatTypingPollTimer;
+  Timer? _liveChatTypingDebounce;
+  List<String> _liveChatTypingUsers = const [];
 
   // Reply state
   Map<String, dynamic>? _replyingTo;
@@ -419,6 +429,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   @override
   void initState() {
     super.initState();
+    if (!kIsWeb) {
+      _voiceRecorder = AudioRecorder();
+    }
     _resolvedDialogId = widget.dialogId;
     _dialogMeta = widget.dialog != null
         ? Map<String, dynamic>.from(widget.dialog!)
@@ -434,10 +447,18 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     });
     _scrollCtrl.addListener(_onScroll);
     _connectSocket();
+    _startLiveChatTypingLoop();
   }
 
   @override
   void dispose() {
+    _liveChatTypingPollTimer?.cancel();
+    _liveChatTypingDebounce?.cancel();
+    _voiceTicker?.cancel();
+    if (_isRecordingVoice) {
+      _voiceRecorder?.stop();
+    }
+    _voiceRecorder?.dispose();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _socket?.disconnect();
@@ -1241,18 +1262,21 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     try {
       final api = ref.read(apiClientProvider);
       final dialogId = _resolvedDialogId;
-      final raw = widget.isLiveChat
-          ? await api.getLiveChatMessages(dialogId)
-          : await api.getChatMessages(dialogId);
-
-      final msgs = _sortMessagesAscending(raw.whereType<Map<String, dynamic>>());
+      final page = widget.isLiveChat
+          ? await api.getLiveChatMessagesPage(dialogId)
+          : await api.getChatMessagesPage(dialogId);
+      final rawItems = page['items'] as List<dynamic>? ?? const <dynamic>[];
+      final hasMore = page['hasMore'] == true;
+      final msgs = _sortMessagesAscending(
+        rawItems.whereType<Map<String, dynamic>>(),
+      );
       final shouldStick = refresh && (_messages.isEmpty || _isNearBottom());
       if (mounted) {
         setState(() {
           _messages = refresh
               ? (silent ? _mergeMessagesAscending(_messages, msgs) : msgs)
               : _mergeMessagesAscending(_messages, msgs);
-          _hasMore = msgs.isNotEmpty;
+          _hasMore = hasMore;
           if (_messages.isNotEmpty) {
             _oldestMessageTime = _messages.first['createdAt']?.toString();
           }
@@ -1284,14 +1308,24 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       final previousScrollExtent =
           _scrollCtrl.hasClients ? _scrollCtrl.position.maxScrollExtent : 0.0;
       final api = ref.read(apiClientProvider);
-      final raw = widget.isLiveChat
-          ? await api.getLiveChatMessages(_resolvedDialogId, before: _oldestMessageTime)
-          : await api.getChatMessages(_resolvedDialogId, before: _oldestMessageTime);
-      final msgs = _sortMessagesAscending(raw.whereType<Map<String, dynamic>>());
+      final page = widget.isLiveChat
+          ? await api.getLiveChatMessagesPage(
+              _resolvedDialogId,
+              before: _oldestMessageTime,
+            )
+          : await api.getChatMessagesPage(
+              _resolvedDialogId,
+              before: _oldestMessageTime,
+            );
+      final rawItems = page['items'] as List<dynamic>? ?? const <dynamic>[];
+      final hasMore = page['hasMore'] == true;
+      final msgs = _sortMessagesAscending(
+        rawItems.whereType<Map<String, dynamic>>(),
+      );
       if (mounted) {
         setState(() {
           _messages = _mergeMessagesAscending(_messages, msgs);
-          _hasMore = msgs.isNotEmpty;
+          _hasMore = hasMore;
           if (_messages.isNotEmpty) {
             _oldestMessageTime = _messages.first['createdAt']?.toString();
           }
@@ -1311,11 +1345,231 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   // ─── Send ─────────────────────────────────────────────────────────────────
 
+  String _voiceTimerLabel() {
+    final mins = (_voiceRecordingSeconds ~/ 60).toString().padLeft(2, '0');
+    final secs = (_voiceRecordingSeconds % 60).toString().padLeft(2, '0');
+    return '$mins:$secs';
+  }
+
+  Future<void> _toggleVoiceRecording() async {
+    if (_isRecordingVoice) {
+      await _stopVoiceRecording(attach: true);
+      return;
+    }
+    await _startVoiceRecording();
+  }
+
+  Future<void> _startVoiceRecording() async {
+    if (_sending || _isRecordingVoice) return;
+    if (kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Voice recording is not supported on web.')),
+        );
+      }
+      return;
+    }
+
+    final recorder = _voiceRecorder ?? AudioRecorder();
+    _voiceRecorder = recorder;
+
+    try {
+      var hasPermission = await recorder.hasPermission();
+      if (!hasPermission) {
+        final micPermission = await Permission.microphone.request();
+        hasPermission = micPermission.isGranted || micPermission.isLimited;
+      }
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission is required.')),
+          );
+        }
+        return;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final path =
+          '${tempDir.path}${Platform.pathSeparator}voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      await recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: path,
+      );
+
+      _voiceTicker?.cancel();
+      _voiceTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted || !_isRecordingVoice) return;
+        setState(() => _voiceRecordingSeconds += 1);
+      });
+
+      if (mounted) {
+        setState(() {
+          _isRecordingVoice = true;
+          _voiceRecordingSeconds = 0;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start recording: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopVoiceRecording({required bool attach}) async {
+    final recorder = _voiceRecorder;
+    if (recorder == null) return;
+
+    _voiceTicker?.cancel();
+    final durationSec = _voiceRecordingSeconds;
+
+    String? path;
+    try {
+      path = await recorder.stop();
+    } catch (_) {
+      path = null;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isRecordingVoice = false;
+        _voiceRecordingSeconds = 0;
+      });
+    } else {
+      _isRecordingVoice = false;
+      _voiceRecordingSeconds = 0;
+    }
+
+    if (!attach || path == null || path.isEmpty) return;
+
+    try {
+      final file = File(path);
+      if (!await file.exists()) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return;
+      const mime = 'audio/mp4';
+      final fileName =
+          'voice-${DateTime.now().millisecondsSinceEpoch}.m4a';
+      if (!mounted) return;
+      setState(() {
+        _pendingAttachments.add(
+          _Attachment(
+            fileName: fileName,
+            mimeType: mime,
+            dataUrl: 'data:$mime;base64,${base64Encode(bytes)}',
+            kind: 'audio',
+            sizeBytes: bytes.length,
+            localPath: path,
+            durationSec: durationSec > 0 ? durationSec.toDouble() : null,
+          ),
+        );
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save voice note: $error')),
+        );
+      }
+    }
+  }
+
+  void _startLiveChatTypingLoop() {
+    if (!widget.isLiveChat) return;
+    _liveChatTypingPollTimer?.cancel();
+    _liveChatTypingPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      _pollLiveChatTyping();
+    });
+    _pollLiveChatTyping();
+  }
+
+  Future<void> _pollLiveChatTyping() async {
+    if (!widget.isLiveChat || _resolvedDialogId.isEmpty) return;
+    try {
+      final typers =
+          await ref.read(apiClientProvider).getLiveChatTyping(_resolvedDialogId);
+      if (!mounted) return;
+      setState(() {
+        _liveChatTypingUsers = typers;
+      });
+    } catch (_) {
+      // Best-effort typing indicator.
+    }
+  }
+
+  Future<void> _sendLiveChatTypingHeartbeat() async {
+    if (!widget.isLiveChat || _resolvedDialogId.isEmpty) return;
+    try {
+      final me = ref.read(userProfileProvider).value;
+      final fullName = me?.fullname ?? '';
+      final name = fullName.trim().isNotEmpty ? fullName : me?.name;
+      await ref.read(apiClientProvider).sendLiveChatTyping(
+            _resolvedDialogId,
+            name: name,
+          );
+    } catch (_) {
+      // Best-effort typing indicator.
+    }
+  }
+
+  void _handleComposerChanged(String value) {
+    if (!widget.isLiveChat) return;
+    if (value.trim().isEmpty) return;
+    _liveChatTypingDebounce?.cancel();
+    _liveChatTypingDebounce =
+        Timer(const Duration(milliseconds: 300), _sendLiveChatTypingHeartbeat);
+  }
+
+  bool _isLiveChatAssignmentError(Object error) {
+    if (error is DioException) {
+      final status = error.response?.statusCode;
+      final data = error.response?.data;
+      final apiError = data is Map ? (data['error']?.toString() ?? '') : '';
+      if (status == 403 &&
+          apiError.toLowerCase().contains('assigned agent')) {
+        return true;
+      }
+    }
+    final text = error.toString().toLowerCase();
+    return text.contains('only assigned agent') ||
+        text.contains('assigned agent can send');
+  }
+
+  Future<Map<String, dynamic>?> _assignToMeAndRetryLiveChatSend({
+    required String text,
+    required List<Map<String, dynamic>> attachments,
+    Map<String, dynamic>? replyTo,
+  }) async {
+    if (!widget.isLiveChat) return null;
+    final me = await ref.read(userProfileProvider.future);
+    if (me == null) return null;
+
+    final api = ref.read(apiClientProvider);
+    await api.assignLiveChatDialog(_resolvedDialogId, agentId: me.id);
+    final retried = await api.sendLiveChatMessage(
+      _resolvedDialogId,
+      text,
+      attachments: attachments,
+      replyTo: replyTo,
+    );
+    return retried;
+  }
+
   Future<void> _sendMessage() async {
+    if (_isRecordingVoice) {
+      await _stopVoiceRecording(attach: true);
+    }
+
     final text = _inputCtrl.text.trim();
     if ((text.isEmpty && _pendingAttachments.isEmpty) || _sending) return;
 
-    final attachments = _pendingAttachments.map((a) => a.toJson()).toList();
+    final pendingSnapshot = List<_Attachment>.from(_pendingAttachments);
+    final attachments = pendingSnapshot.map((a) => a.toJson()).toList();
     final replyTo = _replyingTo != null
         ? {
             'id': (_replyingTo!['id'] ?? '').toString(),
@@ -1334,7 +1588,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
     try {
       final api = ref.read(apiClientProvider);
-      final result = widget.isLiveChat
+      Map<String, dynamic> result = widget.isLiveChat
           ? await api.sendLiveChatMessage(
               _resolvedDialogId,
               text,
@@ -1343,6 +1597,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
             )
           : await api.sendMessage(_resolvedDialogId, text,
               attachments: attachments, replyTo: replyTo);
+
+      if (widget.isLiveChat) {
+        await _sendLiveChatTypingHeartbeat();
+      }
       if (mounted) {
         setState(() => _messages = _mergeMessagesAscending(_messages, [result]));
         _scrollToBottom(animated: true);
@@ -1353,11 +1611,42 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         }
       }
     } catch (e) {
+      var recovered = false;
+      if (widget.isLiveChat && _isLiveChatAssignmentError(e)) {
+        try {
+          final retried = await _assignToMeAndRetryLiveChatSend(
+            text: text,
+            attachments: attachments,
+            replyTo: replyTo,
+          );
+          if (retried != null && mounted) {
+            setState(() => _messages = _mergeMessagesAscending(_messages, [retried]));
+            _scrollToBottom(animated: true);
+            await _loadLiveChatMeta(silent: true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Auto-assigned to you. Message sent successfully.'),
+              ),
+            );
+            recovered = true;
+          }
+        } catch (_) {
+          recovered = false;
+        }
+      }
+
       if (mounted) {
-        _inputCtrl.text = text;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send: $e')),
-        );
+        if (!recovered) {
+          _inputCtrl.text = text;
+          setState(() {
+            _pendingAttachments
+              ..clear()
+              ..addAll(pendingSnapshot);
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to send: $e')),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -1380,6 +1669,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       text: newText,
       selection: TextSelection.collapsed(offset: base + emoji.emoji.length),
     );
+    _handleComposerChanged(newText);
   }
 
   // ─── Image attachment ─────────────────────────────────────────────────────
@@ -1420,6 +1710,20 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               leading: const Icon(Icons.camera_alt_rounded, color: _kPrimary),
               title: const Text('Camera'),
               onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); },
+            ),
+            ListTile(
+              leading: Icon(
+                _isRecordingVoice ? Icons.stop_circle_rounded : Icons.mic_rounded,
+                color: _isRecordingVoice ? Colors.red : _kPrimary,
+              ),
+              title: Text(_isRecordingVoice ? 'Stop Voice Note' : 'Voice Note'),
+              subtitle: _isRecordingVoice
+                  ? Text('Recording ${_voiceTimerLabel()}')
+                  : null,
+              onTap: () {
+                Navigator.pop(context);
+                _toggleVoiceRecording();
+              },
             ),
             ListTile(
               leading: const Icon(Icons.attach_file_rounded, color: _kPrimary),
@@ -1776,6 +2080,34 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   ),
           ),
 
+          if (widget.isLiveChat && _liveChatTypingUsers.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${_liveChatTypingUsers.join(", ")} ${_liveChatTypingUsers.length == 1 ? "is" : "are"} typing…',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           if (_replyingTo != null)
             _ReplyBar(
               senderName: _senderName(_replyingTo!),
@@ -1796,6 +2128,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
             onSend: _sendMessage,
             onToggleEmoji: _toggleEmoji,
             onAttach: _showAttachMenu,
+            onToggleVoiceRecording: _toggleVoiceRecording,
+            recordingVoice: _isRecordingVoice,
+            recordingSeconds: _voiceRecordingSeconds,
+            onChanged: _handleComposerChanged,
           ),
 
           if (_showEmoji)
@@ -1831,6 +2167,7 @@ class _Attachment {
   final String dataUrl;
   final String kind;
   final int sizeBytes;
+  final double? durationSec;
   final String? localPath;
   final Uint8List? previewBytes;
 
@@ -1840,6 +2177,7 @@ class _Attachment {
     required this.dataUrl,
     required this.kind,
     required this.sizeBytes,
+    this.durationSec,
     this.localPath,
     this.previewBytes,
   });
@@ -1850,6 +2188,7 @@ class _Attachment {
     'dataUrl': dataUrl,
     'kind': kind,
     'sizeBytes': sizeBytes,
+    if (durationSec != null) 'durationSec': durationSec,
   };
 }
 
@@ -2570,22 +2909,33 @@ class _InputBar extends StatelessWidget {
   final TextEditingController controller;
   final bool sending;
   final bool showEmoji;
+  final bool recordingVoice;
+  final int recordingSeconds;
   final VoidCallback onSend;
   final VoidCallback onToggleEmoji;
   final VoidCallback onAttach;
+  final VoidCallback onToggleVoiceRecording;
+  final ValueChanged<String>? onChanged;
 
   const _InputBar({
     required this.controller,
     required this.sending,
     required this.showEmoji,
+    required this.recordingVoice,
+    required this.recordingSeconds,
     required this.onSend,
     required this.onToggleEmoji,
     required this.onAttach,
+    required this.onToggleVoiceRecording,
+    this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final mins = (recordingSeconds ~/ 60).toString().padLeft(2, '0');
+    final secs = (recordingSeconds % 60).toString().padLeft(2, '0');
+    final recordingLabel = '$mins:$secs';
 
     return SafeArea(
       child: Container(
@@ -2594,7 +2944,109 @@ class _InputBar extends StatelessWidget {
           border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5))),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        child: recordingVoice
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.mic_rounded, size: 14, color: Colors.red),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Recording $recordingLabel',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: Colors.red.shade700,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Tap mic to stop',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.65),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  
+                  // Emoji toggle
+                  IconButton(
+                    icon: Icon(showEmoji ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
+                        color: _kPrimary),
+                    onPressed: onToggleEmoji,
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                  ),
+                  // Attachment
+                  IconButton(
+                    icon: const Icon(Icons.attach_file_rounded, color: _kPrimary),
+                    onPressed: onAttach,
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      recordingVoice ? Icons.stop_circle_rounded : Icons.mic_none_rounded,
+                      color: recordingVoice ? Colors.red : _kPrimary,
+                    ),
+                    onPressed: onToggleVoiceRecording,
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 4),
+                  // Text field
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: TextField(
+                        controller: controller,
+                        onChanged: onChanged,
+                        minLines: 1,
+                        maxLines: 5,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: InputDecoration(
+                          hintText: 'Type a message...',
+                          hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.45)),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          isDense: true,
+                        ),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Send
+                  sending
+                      ? const SizedBox(
+                          width: 44, height: 44,
+                          child: Padding(
+                            padding: EdgeInsets.all(10),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: _kPrimary),
+                          ))
+                      : Material(
+                          color: _kPrimary,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: onSend,
+                            child: const SizedBox(
+                              width: 44, height: 44,
+                              child: Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                            ),
+                          ),
+                        ),
+                ]),
+                ],
+              )
+            : Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           // Emoji toggle
           IconButton(
             icon: Icon(showEmoji ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
@@ -2610,6 +3062,15 @@ class _InputBar extends StatelessWidget {
             padding: const EdgeInsets.all(4),
             constraints: const BoxConstraints(),
           ),
+          IconButton(
+            icon: Icon(
+              recordingVoice ? Icons.stop_circle_rounded : Icons.mic_none_rounded,
+              color: recordingVoice ? Colors.red : _kPrimary,
+            ),
+            onPressed: onToggleVoiceRecording,
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(),
+          ),
           const SizedBox(width: 4),
           // Text field
           Expanded(
@@ -2620,11 +3081,12 @@ class _InputBar extends StatelessWidget {
               ),
               child: TextField(
                 controller: controller,
+                onChanged: onChanged,
                 minLines: 1,
                 maxLines: 5,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
-                  hintText: 'Type a message…',
+                  hintText: 'Type a message...',
                   hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.45)),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

@@ -412,6 +412,21 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
     );
   }
 
+  void _showCreateDocumentSheet() {
+    setState(() => _fabExpanded = false);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _CreateDocumentSheet(
+        folderId: _currentFolderIdNullable,
+        onCreated: _invalidate,
+      ),
+    );
+  }
+
   Future<void> _pickAndUpload() async {
     setState(() => _fabExpanded = false);
 
@@ -642,6 +657,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                     final folder = folders[i] as Map<String, dynamic>;
                     return _FolderTile(
                       folder: folder,
+                      onChanged: _invalidate,
                       onTap: () {
                         final id = folder['id']?.toString() ?? '';
                         if (id.isNotEmpty) {
@@ -718,6 +734,13 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
                 label: 'New Folder',
                 color: const Color(0xFFF59E0B),
                 onTap: _showCreateFolderSheet,
+              ),
+              const SizedBox(height: 10),
+              _SpeedDialItem(
+                icon: Icons.note_add_outlined,
+                label: 'New Document',
+                color: const Color(0xFF6366F1),
+                onTap: _showCreateDocumentSheet,
               ),
               const SizedBox(height: 10),
               _SpeedDialItem(
@@ -841,23 +864,337 @@ class _BreadcrumbBar extends StatelessWidget {
 
 // ─── Folder tile ──────────────────────────────────────────────────────────────
 
-class _FolderTile extends StatelessWidget {
+class _FolderTile extends ConsumerWidget {
   final Map<String, dynamic> folder;
   final VoidCallback onTap;
-  const _FolderTile({required this.folder, required this.onTap});
+  final VoidCallback? onChanged;
+  const _FolderTile({
+    required this.folder,
+    required this.onTap,
+    this.onChanged,
+  });
+
+  int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  bool _canRename() =>
+      folder['permission']?['canWrite'] == true ||
+      folder['myAccess']?['canWrite'] == true;
+
+  bool _canDelete() =>
+      folder['permission']?['canDelete'] == true ||
+      folder['myAccess']?['canDelete'] == true;
+
+  bool _canManageShare() =>
+      folder['permission']?['isOwner'] == true ||
+      folder['permission']?['canWrite'] == true ||
+      folder['myAccess']?['canWrite'] == true ||
+      folder['myAccess']?['canDelete'] == true;
+
+  Future<void> _showShareSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: _FolderShareSheet(
+          folderId: folder['id']?.toString() ?? '',
+          folderName: _docName(folder),
+          onSaved: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _renameFolder(BuildContext context, WidgetRef ref) async {
+    final folderId = folder['id']?.toString() ?? '';
+    if (folderId.isEmpty) return;
+    final ctrl = TextEditingController(text: _docName(folder));
+    final nextName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename folder'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 100,
+          decoration: const InputDecoration(labelText: 'Folder name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final trimmed = (nextName ?? '').trim();
+    if (trimmed.isEmpty || trimmed == _docName(folder).trim()) return;
+
+    try {
+      await ref.read(apiClientProvider).renameDocumentFolder(
+            folderId: folderId,
+            name: trimmed,
+          );
+      if (!context.mounted) return;
+      onChanged?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Folder renamed'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Rename failed: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteFolder(BuildContext context, WidgetRef ref) async {
+    final folderId = folder['id']?.toString() ?? '';
+    if (folderId.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete folder?'),
+        content: Text('"${_docName(folder)}" will be permanently deleted.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(apiClientProvider).deleteDocumentFolder(folderId);
+      if (!context.mounted) return;
+      onChanged?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Folder deleted'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Delete failed: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  void _showFolderOptions(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool canRename,
+    required bool canDelete,
+    required bool canManageShare,
+    required bool isEmptyFolder,
+    required int totalItems,
+    required String owner,
+  }) {
+    final accessLevel = (folder['accessLevel'] ?? 'private').toString();
+    final visibility = accessLevel == 'module' ? 'Company' : 'Private';
+
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.folder_rounded,
+                        color: Color(0xFFF59E0B),
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _docName(folder),
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          _MetaBadge(
+                            label: visibility,
+                            color: accessLevel == 'module'
+                                ? _kPrimary
+                                : Colors.grey.shade600,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Column(
+                  children: [
+                    _DetailRow(
+                      icon: Icons.folder_copy_outlined,
+                      label: 'Items',
+                      value: '$totalItems',
+                    ),
+                    if (owner.isNotEmpty)
+                      _DetailRow(
+                        icon: Icons.person_outline,
+                        label: 'Owner',
+                        value: owner,
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.folder_open_outlined),
+                title: const Text('Open'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  onTap();
+                },
+              ),
+              if (canRename)
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Rename'),
+                  onTap: () async {
+                    Navigator.pop(sheetCtx);
+                    await _renameFolder(context, ref);
+                  },
+                ),
+              if (canManageShare)
+                ListTile(
+                  leading: const Icon(Icons.share_outlined),
+                  title: const Text('Share'),
+                  onTap: () async {
+                    Navigator.pop(sheetCtx);
+                    await _showShareSheet(context);
+                  },
+                ),
+              if (canDelete)
+                ListTile(
+                  leading: Icon(
+                    Icons.delete_outline_rounded,
+                    color: isEmptyFolder
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.35),
+                  ),
+                  title: Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: isEmptyFolder
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5),
+                    ),
+                  ),
+                  subtitle: isEmptyFolder
+                      ? null
+                      : const Text('Folder must be empty before deleting'),
+                  enabled: isEmptyFolder,
+                  onTap: !isEmptyFolder
+                      ? null
+                      : () async {
+                          Navigator.pop(sheetCtx);
+                          await _deleteFolder(context, ref);
+                        },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final name = _docName(folder);
     const color = Color(0xFFF59E0B);
     final count = folder['_count'] as Map<String, dynamic>?;
-    final subfolders = (count?['children'] ?? 0) as int;
-    final files = (count?['documents'] ?? 0) as int;
+    final subfolders = _asInt(count?['children']);
+    final files = _asInt(count?['documents']);
     final total = subfolders + files;
     final owner = _ownerName(folder);
     final isShared = (folder['shareCount'] as int? ?? 0) > 0;
     final accessLevel = (folder['accessLevel'] ?? 'private').toString();
+    final canRename = _canRename();
+    final canDelete = _canDelete();
+    final canManageShare = _canManageShare();
+    final isEmptyFolder = total == 0;
 
     return ListTile(
       contentPadding:
@@ -903,8 +1240,36 @@ class _FolderTile extends StatelessWidget {
         style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
       ),
-      trailing: const Icon(Icons.chevron_right, size: 20),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.more_vert, size: 20),
+            onPressed: () => _showFolderOptions(
+              context,
+              ref,
+              canRename: canRename,
+              canDelete: canDelete,
+              canManageShare: canManageShare,
+              isEmptyFolder: isEmptyFolder,
+              totalItems: total,
+              owner: owner,
+            ),
+          ),
+          const Icon(Icons.chevron_right, size: 20),
+        ],
+      ),
       onTap: onTap,
+      onLongPress: () => _showFolderOptions(
+        context,
+        ref,
+        canRename: canRename,
+        canDelete: canDelete,
+        canManageShare: canManageShare,
+        isEmptyFolder: isEmptyFolder,
+        totalItems: total,
+        owner: owner,
+      ),
     );
   }
 }
@@ -1235,6 +1600,27 @@ class _FileTile extends ConsumerWidget {
     );
   }
 
+  Future<void> _showEditDocumentSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: _EditDocumentSheet(
+          documentId: doc['id']?.toString() ?? '',
+          initialName: _docName(doc),
+          initialContent: (doc['content'] ?? '').toString(),
+          initialAccessLevel: (doc['accessLevel'] ?? 'private').toString(),
+          onSaved: onChanged,
+        ),
+      ),
+    );
+  }
+
   void _showFileOptions(BuildContext context, WidgetRef ref) {
     final fileUrl = resolveServerUrl(doc['fileUrl']?.toString()) ?? '';
     final name = _docName(doc);
@@ -1246,6 +1632,9 @@ class _FileTile extends ConsumerWidget {
     final accessLevel = (doc['accessLevel'] ?? 'private').toString();
     final signedAt = _formatDate(doc['signedAt']?.toString());
     final hasContent = (doc['content']?.toString() ?? '').isNotEmpty;
+    final canEdit =
+        doc['permission']?['canWrite'] == true ||
+        doc['myAccess']?['canWrite'] == true;
     final canManageShare =
         doc['permission']?['isOwner'] == true ||
         doc['permission']?['canWrite'] == true ||
@@ -1395,6 +1784,15 @@ class _FileTile extends ConsumerWidget {
                 title: const Text('Details'),
                 onTap: () => Navigator.pop(sheetCtx),
               ),
+              if (canEdit)
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Edit'),
+                  onTap: () async {
+                    Navigator.pop(sheetCtx);
+                    await _showEditDocumentSheet(context);
+                  },
+                ),
               if (canManageShare)
                 ListTile(
                   leading: const Icon(Icons.share_outlined),
@@ -1878,6 +2276,766 @@ class _DocumentShareSheetState extends ConsumerState<_DocumentShareSheet> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _FolderShareSheet extends ConsumerStatefulWidget {
+  final String folderId;
+  final String folderName;
+  final VoidCallback? onSaved;
+
+  const _FolderShareSheet({
+    required this.folderId,
+    required this.folderName,
+    this.onSaved,
+  });
+
+  @override
+  ConsumerState<_FolderShareSheet> createState() => _FolderShareSheetState();
+}
+
+class _FolderShareSheetState extends ConsumerState<_FolderShareSheet> {
+  bool _loading = true;
+  bool _saving = false;
+  String _accessLevel = 'private';
+  List<Map<String, dynamic>> _shares = const [];
+  List<Map<String, dynamic>> _users = const [];
+  String _selectedUserId = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (widget.folderId.isEmpty) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final result = await Future.wait([
+        api.getFolderShareSettings(widget.folderId),
+        api.getDocumentShareUsers(limit: 200),
+      ]);
+      final shareData = result[0] as Map<String, dynamic>;
+      final usersRaw = result[1] as List<dynamic>;
+      final sharesRaw = (shareData['shares'] as List<dynamic>? ?? const []);
+
+      if (!mounted) return;
+      setState(() {
+        _accessLevel = (shareData['accessLevel'] ?? 'private').toString();
+        _shares = sharesRaw
+            .whereType<Map>()
+            .map((entry) => {
+                  'userId': entry['userId']?.toString() ?? '',
+                  'userName': entry['userName']?.toString() ?? '',
+                  'userEmail': entry['userEmail']?.toString() ?? '',
+                  'canRead': entry['canRead'] == true,
+                  'canWrite': entry['canWrite'] == true,
+                  'canDelete': entry['canDelete'] == true,
+                })
+            .where((entry) => (entry['userId'] as String).isNotEmpty)
+            .toList();
+        _users = usersRaw
+            .whereType<Map>()
+            .map((entry) => {
+                  'id': entry['id']?.toString() ?? '',
+                  'name': entry['name']?.toString() ?? '',
+                  'email': entry['email']?.toString() ?? '',
+                })
+            .where((entry) => (entry['id'] as String).isNotEmpty)
+            .toList();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load sharing settings: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _toggleShare(String userId, String key, bool value) {
+    setState(() {
+      _shares = _shares.map((entry) {
+        if (entry['userId']?.toString() != userId) return entry;
+        final updated = Map<String, dynamic>.from(entry);
+        if (key == 'canWrite' && value) {
+          updated['canWrite'] = true;
+          updated['canRead'] = true;
+          return updated;
+        }
+        if (key == 'canDelete' && value) {
+          updated['canDelete'] = true;
+          updated['canRead'] = true;
+          return updated;
+        }
+        if (key == 'canRead' && !value) {
+          updated['canRead'] = false;
+          updated['canWrite'] = false;
+          updated['canDelete'] = false;
+          return updated;
+        }
+        updated[key] = value;
+        return updated;
+      }).toList();
+    });
+  }
+
+  void _addSelectedUser() {
+    if (_selectedUserId.isEmpty) return;
+    final user = _users.firstWhere(
+      (entry) => entry['id']?.toString() == _selectedUserId,
+      orElse: () => const {},
+    );
+    if (user.isEmpty) return;
+    if (_shares.any((entry) => entry['userId']?.toString() == _selectedUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User already added')),
+      );
+      return;
+    }
+    setState(() {
+      _shares = [
+        ..._shares,
+        {
+          'userId': user['id']?.toString() ?? '',
+          'userName': user['name']?.toString() ?? '',
+          'userEmail': user['email']?.toString() ?? '',
+          'canRead': true,
+          'canWrite': false,
+          'canDelete': false,
+        },
+      ];
+      _selectedUserId = '';
+    });
+  }
+
+  void _removeUser(String userId) {
+    setState(() {
+      _shares = _shares
+          .where((entry) => entry['userId']?.toString() != userId)
+          .toList();
+    });
+  }
+
+  Future<void> _save() async {
+    if (widget.folderId.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final payload = _shares
+          .map((entry) => {
+                'userId': entry['userId']?.toString() ?? '',
+                'canRead': entry['canRead'] == true,
+                'canWrite': entry['canWrite'] == true,
+                'canDelete': entry['canDelete'] == true,
+              })
+          .where((entry) =>
+              (entry['userId'] as String).isNotEmpty &&
+              (entry['canRead'] == true ||
+                  entry['canWrite'] == true ||
+                  entry['canDelete'] == true))
+          .toList();
+      await ref.read(apiClientProvider).updateFolderShareSettings(
+            folderId: widget.folderId,
+            accessLevel: _accessLevel == 'module' ? 'module' : 'private',
+            shares: payload,
+          );
+      if (!mounted) return;
+      widget.onSaved?.call();
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sharing updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save sharing: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Share Folder',
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.folderName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_loading)
+            const Expanded(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            DropdownButtonFormField<String>(
+              value: _accessLevel == 'module' ? 'module' : 'private',
+              decoration: const InputDecoration(
+                labelText: 'Access level',
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: 'module',
+                  child: Text('Module users can view'),
+                ),
+                DropdownMenuItem(
+                  value: 'private',
+                  child: Text('Private (shared users only)'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _accessLevel = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedUserId.isEmpty ? null : _selectedUserId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Add user',
+                    ),
+                    items: _users
+                        .where((user) => !_shares.any((entry) =>
+                            entry['userId']?.toString() ==
+                            user['id']?.toString()))
+                        .map((user) => DropdownMenuItem<String>(
+                              value: user['id']?.toString() ?? '',
+                              child: Text(
+                                '${user['name']} (${user['email']})',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedUserId = value ?? ''),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonal(
+                  onPressed: _selectedUserId.isEmpty ? null : _addSelectedUser,
+                  child: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _shares.isEmpty
+                  ? const Center(
+                      child: Text('No user-specific shares configured.'),
+                    )
+                  : ListView.separated(
+                      itemCount: _shares.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, index) {
+                        final entry = _shares[index];
+                        final userId = entry['userId']?.toString() ?? '';
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          entry['userName']?.toString() ??
+                                              'User',
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        Text(
+                                          entry['userEmail']?.toString() ?? '',
+                                          style: theme.textTheme.bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () => _removeUser(userId),
+                                    icon: const Icon(Icons.delete_outline),
+                                    tooltip: 'Remove',
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: CheckboxListTile(
+                                      value: entry['canRead'] == true,
+                                      onChanged: (value) => _toggleShare(
+                                        userId,
+                                        'canRead',
+                                        value == true,
+                                      ),
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('View'),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: CheckboxListTile(
+                                      value: entry['canWrite'] == true,
+                                      onChanged: (value) => _toggleShare(
+                                        userId,
+                                        'canWrite',
+                                        value == true,
+                                      ),
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Edit'),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: CheckboxListTile(
+                                      value: entry['canDelete'] == true,
+                                      onChanged: (value) => _toggleShare(
+                                        userId,
+                                        'canDelete',
+                                        value == true,
+                                      ),
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Delete'),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        _saving ? null : () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(backgroundColor: _kPrimary),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EditDocumentSheet extends ConsumerStatefulWidget {
+  final String documentId;
+  final String initialName;
+  final String initialContent;
+  final String initialAccessLevel;
+  final VoidCallback? onSaved;
+
+  const _EditDocumentSheet({
+    required this.documentId,
+    required this.initialName,
+    required this.initialContent,
+    required this.initialAccessLevel,
+    this.onSaved,
+  });
+
+  @override
+  ConsumerState<_EditDocumentSheet> createState() => _EditDocumentSheetState();
+}
+
+class _EditDocumentSheetState extends ConsumerState<_EditDocumentSheet> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _contentCtrl;
+  bool _saving = false;
+  late String _accessLevel;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName);
+    _contentCtrl = TextEditingController(text: widget.initialContent);
+    _accessLevel =
+        widget.initialAccessLevel == 'module' ? 'module' : 'private';
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _contentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final id = widget.documentId.trim();
+    final name = _nameCtrl.text.trim();
+    if (id.isEmpty || name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document name is required')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiClientProvider).updateDocument(
+            id,
+            {
+              'name': name,
+              'content': _contentCtrl.text.trim(),
+              'accessLevel': _accessLevel,
+            },
+          );
+      if (!mounted) return;
+      widget.onSaved?.call();
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update document: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(
+              'Edit Document',
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _nameCtrl,
+              autofocus: true,
+              maxLength: 180,
+              decoration: const InputDecoration(
+                labelText: 'Name *',
+                prefixIcon: Icon(Icons.description_outlined),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _contentCtrl,
+              minLines: 4,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                labelText: 'Content',
+                alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _accessLevel,
+              decoration: const InputDecoration(
+                labelText: 'Access level',
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: 'module',
+                  child: Text('Company'),
+                ),
+                DropdownMenuItem(
+                  value: 'private',
+                  child: Text('Private'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _accessLevel = value);
+              },
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        _saving ? null : () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(backgroundColor: _kPrimary),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateDocumentSheet extends ConsumerStatefulWidget {
+  final String? folderId;
+  final VoidCallback onCreated;
+
+  const _CreateDocumentSheet({
+    required this.folderId,
+    required this.onCreated,
+  });
+
+  @override
+  ConsumerState<_CreateDocumentSheet> createState() =>
+      _CreateDocumentSheetState();
+}
+
+class _CreateDocumentSheetState extends ConsumerState<_CreateDocumentSheet> {
+  final _nameCtrl = TextEditingController();
+  final _contentCtrl = TextEditingController();
+  bool _submitting = false;
+  String _accessLevel = 'private';
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _contentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document name is required')),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      await ref.read(apiClientProvider).createDocument(
+            name: name,
+            folderId: widget.folderId,
+            content: _contentCtrl.text.trim().isEmpty
+                ? null
+                : _contentCtrl.text.trim(),
+            accessLevel: _accessLevel,
+          );
+      if (!mounted) return;
+      Navigator.pop(context);
+      widget.onCreated();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document created')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create document: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(
+              'New Document',
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _nameCtrl,
+              autofocus: true,
+              maxLength: 180,
+              decoration: const InputDecoration(
+                labelText: 'Document name *',
+                hintText: 'Enter document name...',
+                prefixIcon: Icon(Icons.description_outlined),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _contentCtrl,
+              minLines: 4,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                labelText: 'Content (optional)',
+                alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.lock_outline, size: 18),
+                const SizedBox(width: 10),
+                const Text('Visibility:'),
+                const SizedBox(width: 12),
+                ChoiceChip(
+                  label: const Text('Company'),
+                  selected: _accessLevel == 'module',
+                  onSelected: (_) => setState(() => _accessLevel = 'module'),
+                  selectedColor: _kPrimary.withValues(alpha: 0.15),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Private'),
+                  selected: _accessLevel == 'private',
+                  onSelected: (_) => setState(() => _accessLevel = 'private'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            FilledButton(
+              onPressed: _submitting ? null : _submit,
+              style: FilledButton.styleFrom(
+                backgroundColor: _kPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'Create Document',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
