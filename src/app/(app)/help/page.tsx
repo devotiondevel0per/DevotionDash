@@ -34,10 +34,22 @@ export default function HelpPage() {
       if (typeFilter !== "all" && topic.type !== typeFilter) return false;
       if (moduleFilter !== "all" && topic.module !== moduleFilter) return false;
       if (!q) return true;
+      const errorSearchText = topic.errorDetails
+        .map((error) => `${error.errorNumber} ${error.code} ${error.title} ${error.meaning} ${error.commonCause}`)
+        .join(" ")
+        .toLowerCase();
+      const articleSearchText = topic.articleSections
+        .flatMap((section) => [section.heading, ...section.paragraphs, ...(section.checklist ?? []), ...(section.warnings ?? [])])
+        .join(" ")
+        .toLowerCase();
+      const flowSearchText = `${topic.whenToUse.join(" ")} ${topic.steps.join(" ")} ${topic.tips.join(" ")}`.toLowerCase();
       return (
         topic.title.toLowerCase().includes(q) ||
         topic.summary.toLowerCase().includes(q) ||
-        topic.tags.some((tag) => tag.toLowerCase().includes(q))
+        topic.tags.some((tag) => tag.toLowerCase().includes(q)) ||
+        articleSearchText.includes(q) ||
+        flowSearchText.includes(q) ||
+        errorSearchText.includes(q)
       );
     });
   }, [moduleFilter, query, typeFilter, visibleTopics]);
@@ -170,4 +182,3 @@ export default function HelpPage() {
     </div>
   );
 }
-

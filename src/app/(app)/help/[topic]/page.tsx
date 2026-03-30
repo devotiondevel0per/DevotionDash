@@ -93,6 +93,56 @@ export default function HelpTopicDetailPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
+              <CardTitle className="text-base">Detailed Article</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {topic.articleSections.map((section, index) => (
+                <div key={`${topic.id}-section-${index + 1}`} className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-sm font-semibold text-slate-900">{section.heading}</p>
+                  <div className="mt-2 space-y-2 text-sm text-slate-700">
+                    {section.paragraphs.map((paragraph, paragraphIndex) => (
+                      <p key={`${topic.id}-section-${index + 1}-paragraph-${paragraphIndex + 1}`}>{paragraph}</p>
+                    ))}
+                  </div>
+                  {section.checklist && section.checklist.length > 0 ? (
+                    <div className="mt-3 text-xs text-slate-700">
+                      <p className="font-medium text-slate-800">Checklist</p>
+                      <ul className="mt-1 space-y-1">
+                        {section.checklist.map((item, checklistIndex) => (
+                          <li
+                            key={`${topic.id}-section-${index + 1}-check-${checklistIndex + 1}`}
+                            className="flex items-start gap-2"
+                          >
+                            <span className="mt-[2px] inline-block h-1.5 w-1.5 rounded-full bg-slate-500" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {section.warnings && section.warnings.length > 0 ? (
+                    <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+                      <p className="font-medium">Warnings</p>
+                      <ul className="mt-1 space-y-1">
+                        {section.warnings.map((item, warningIndex) => (
+                          <li
+                            key={`${topic.id}-section-${index + 1}-warn-${warningIndex + 1}`}
+                            className="flex items-start gap-2"
+                          >
+                            <span className="mt-[2px] inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
               <CardTitle className="text-base">When To Use This</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-slate-700">
@@ -204,4 +254,3 @@ export default function HelpTopicDetailPage() {
     </div>
   );
 }
-
