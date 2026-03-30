@@ -20,6 +20,7 @@ const MODULE_LINK_PREFIXES: Array<{ moduleId: ModuleId; prefix: string }> = [
   { moduleId: "ebank", prefix: "/ebank" },
   { moduleId: "telephony", prefix: "/telephony" },
   { moduleId: "search", prefix: "/search" },
+  { moduleId: "help", prefix: "/help" },
   { moduleId: "administration", prefix: "/administration" },
 ];
 

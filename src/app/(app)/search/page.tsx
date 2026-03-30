@@ -54,6 +54,7 @@ const moduleFilters = [
   { value: "projects", label: "Projects" },
   { value: "board", label: "Board" },
   { value: "calendar", label: "Calendar" },
+  { value: "help", label: "Help" },
 ];
 
 const quickSearches = ["Q1 report", "Acme Corporation", "login bug", "API documentation", "team meeting"];
@@ -70,6 +71,7 @@ const moduleMeta: Record<string, { icon: React.ComponentType<{ className?: strin
   projects: { icon: FolderOpen, iconColor: "text-green-600", iconBg: "bg-green-50", label: "Projects" },
   board: { icon: MessageSquare, iconColor: "text-yellow-600", iconBg: "bg-yellow-50", label: "Board" },
   calendar: { icon: Calendar, iconColor: "text-pink-600", iconBg: "bg-pink-50", label: "Calendar" },
+  help: { icon: Search, iconColor: "text-blue-700", iconBg: "bg-blue-50", label: "Help" },
 };
 
 export default function SearchPage() {
@@ -113,15 +115,15 @@ export default function SearchPage() {
   }, [results, moduleFilter]);
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      <div className={cn("bg-white border-b transition-all", hasSearched ? "py-4 px-6" : "py-12 px-6")}>
+    <div className="flex h-full flex-col bg-gray-50">
+      <div className={cn("border-b bg-white transition-all", hasSearched ? "px-6 py-3" : "px-6 py-5")}>
         {!hasSearched && (
-          <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-[#FE0000] text-white mb-4">
-              <Search className="h-7 w-7" />
+          <div className="mb-3 text-center">
+            <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#FE0000] text-white">
+              <Search className="h-5 w-5" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Search Everything</h1>
-            <p className="text-gray-500 text-sm">Find tasks, documents, emails, contacts and more across all modules</p>
+            <h1 className="mb-0.5 text-xl font-bold text-gray-900">Search Everything</h1>
+            <p className="text-xs text-gray-500">Find tasks, documents, emails, contacts and more across all modules</p>
           </div>
         )}
 
@@ -135,7 +137,7 @@ export default function SearchPage() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <Input
               placeholder="Search tasks, documents, emails, contacts..."
-              className={cn("pl-10 text-sm", hasSearched ? "h-9" : "h-12 text-base")}
+              className={cn("pl-10 text-sm", hasSearched ? "h-9" : "h-10")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -169,7 +171,7 @@ export default function SearchPage() {
           )}
           <Button
             onClick={() => void performSearch()}
-            className={cn(hasSearched ? "h-9 w-full sm:w-auto" : "h-12 px-6")}
+            className={cn(hasSearched ? "h-9 w-full sm:w-auto" : "h-10 px-6")}
             disabled={searching}
           >
             <Search className="h-4 w-4 mr-1.5" />
@@ -178,7 +180,7 @@ export default function SearchPage() {
         </div>
 
         {!hasSearched && (
-          <div className="max-w-2xl mx-auto mt-4">
+          <div className="mx-auto mt-3 max-w-2xl">
             <p className="text-xs text-gray-400 mb-2">Quick searches:</p>
             <div className="flex flex-wrap gap-2">
               {quickSearches.map((quickSearch) => (
@@ -199,7 +201,7 @@ export default function SearchPage() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         {hasSearched ? (
           <div className="max-w-3xl">
             <div className="flex items-center justify-between mb-4">
@@ -258,9 +260,9 @@ export default function SearchPage() {
             )}
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto">
+          <div className="mx-auto max-w-5xl">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Browse Modules</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 { label: "Tasks", icon: CheckSquare, color: "text-primary", bg: "bg-primary/10" },
                 { label: "Documents", icon: FileText, color: "text-red-600", bg: "bg-red-50" },
@@ -273,6 +275,7 @@ export default function SearchPage() {
                 { label: "Projects", icon: FolderOpen, color: "text-green-600", bg: "bg-green-50" },
                 { label: "Board", icon: MessageSquare, color: "text-yellow-600", bg: "bg-yellow-50" },
                 { label: "Calendar", icon: Calendar, color: "text-pink-600", bg: "bg-pink-50" },
+                { label: "Help", icon: Search, color: "text-blue-700", bg: "bg-blue-50" },
               ].map((moduleItem) => (
                 <Card key={moduleItem.label} className="hover:shadow-md transition-shadow cursor-pointer">
                   <CardContent className="p-4 flex items-center gap-3">

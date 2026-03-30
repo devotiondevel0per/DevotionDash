@@ -292,7 +292,7 @@ type TelProvider = { id: string; name: string; providerType: string; host: strin
 type TelExtension = { id: string; number: string; userId: string | null; isActive: boolean };
 type TelBlacklist = { id: string; number: string; reason: string | null; createdAt: string };
 
-const moduleLabels: Record<ModuleId, string> = { home: "Home", tasks: "Tasks", projects: "Projects", documents: "Documents", email: "E-Mail", board: "Board", leads: "Leads", clients: "Organizations", contacts: "Contacts", team: "Team", calendar: "Calendar", chat: "Chat", livechat: "Live Chat", servicedesk: "Ticket Desk", products: "Products", accounting: "Accounting", ebank: "e-Bank", telephony: "Telephony", search: "Search", administration: "Administration" };
+const moduleLabels: Record<ModuleId, string> = { home: "Home", tasks: "Tasks", projects: "Projects", documents: "Documents", email: "E-Mail", board: "Board", leads: "Leads", clients: "Organizations", contacts: "Contacts", team: "Team", calendar: "Calendar", chat: "Chat", livechat: "Live Chat", servicedesk: "Ticket Desk", products: "Products", accounting: "Accounting", ebank: "e-Bank", telephony: "Telephony", search: "Search", help: "Help", administration: "Administration" };
 const DEFAULT_SETTINGS: SettingsForm = { appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, supportEmail: "", defaultTimezone: "UTC", themePrimary: "#FE0000", sidebarFrom: "#6e0d14", sidebarMid: "#560d14", sidebarTo: "#45111a", topbarFrom: "#670b11", topbarMid: "#8e0c14", topbarTo: "#bf101a", topbarAccent: "#FE0000", aiModel: "qwen2.5:7b" };
 const DEFAULT_LEAD_STAGE_FLOW = ["new", "qualified", "proposal", "negotiation", "won"];
 const DEFAULT_LEAD_SOURCE_OPTIONS = ["Website", "Referral", "Cold Call", "Social Media", "Campaign", "Partner"];

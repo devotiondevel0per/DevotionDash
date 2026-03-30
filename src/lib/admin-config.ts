@@ -11,7 +11,7 @@ export interface UserPermissionOverrideSetting {
   denies: RolePermissionConfig | null;
 }
 
-const PROTECTED_ALWAYS_ENABLED: ModuleId[] = ["home", "search", "administration"];
+const PROTECTED_ALWAYS_ENABLED: ModuleId[] = ["home", "search", "help", "administration"];
 
 export function getDefaultEnabledModules(): ModuleId[] {
   // Keep finance modules hidden by default until explicitly enabled.

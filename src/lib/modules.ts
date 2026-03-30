@@ -14,6 +14,7 @@ import {
   BookOpen,
   CreditCard,
   Search,
+  LifeBuoy,
   Headphones,
   TicketCheck,
   Settings,
@@ -51,5 +52,6 @@ export const modules: Module[] = [
   { id: "ebank",        label: "e-Bank",         href: "/ebank",        icon: CreditCard,  color: "#818b4b" },
   { id: "telephony",    label: "Telephony",      href: "/telephony",    icon: Phone,       color: "#818b4b" },
   { id: "search",       label: "Search",         href: "/search",       icon: Search,      color: "#000000" },
+  { id: "help",         label: "Help",           href: "/help",         icon: LifeBuoy,    color: "#2E5AAC" },
   { id: "administration", label: "Administration", href: "/administration", icon: Settings, color: "#D15600", adminOnly: true },
 ];

@@ -83,6 +83,7 @@ export async function buildUserAccess(userId: string, db?: PrismaClient): Promis
   applyRolePermissions(permissions, {
     home: ["read"],
     search: ["read"],
+    help: ["read"],
   });
 
   if (user.isAdmin) {

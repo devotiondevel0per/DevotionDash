@@ -18,6 +18,7 @@ export const moduleIds = [
   "ebank",
   "telephony",
   "search",
+  "help",
   "administration",
 ] as const;
 
@@ -69,6 +70,7 @@ export const roleTemplates: RoleTemplate[] = [
       ebank: ["read"],
       telephony: ["read"],
       search: ["read"],
+      help: ["read"],
     },
   },
   {
@@ -92,6 +94,7 @@ export const roleTemplates: RoleTemplate[] = [
       livechat: ["read", "write"],
       servicedesk: ["read", "write"],
       search: ["read"],
+      help: ["read"],
     },
   },
   {
@@ -109,6 +112,7 @@ export const roleTemplates: RoleTemplate[] = [
       email: ["read", "write"],
       chat: ["read", "write"],
       search: ["read"],
+      help: ["read"],
     },
   },
   {
@@ -123,6 +127,7 @@ export const roleTemplates: RoleTemplate[] = [
       ebank: ["read", "write", "manage"],
       documents: ["read", "write"],
       search: ["read"],
+      help: ["read"],
     },
   },
   {
@@ -138,6 +143,7 @@ export const roleTemplates: RoleTemplate[] = [
       board: ["read", "write", "manage"],
       livechat: ["read", "write", "manage"],
       search: ["read"],
+      help: ["read"],
     },
   },
 ];
