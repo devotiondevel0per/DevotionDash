@@ -43,7 +43,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with AutoRefreshMixin {
     final statsAsync = ref.watch(homeStatsProvider);
     final permsAsync = ref.watch(permissionsProvider);
     final branding =
-        ref.watch(appBrandingProvider).valueOrNull ?? AppBranding.fallback();
+        ref.watch(appBrandingProvider).asData?.value ?? AppBranding.fallback();
     final cols = Breakpoints.gridColumns(context);
     final padding = Breakpoints.pagePadding(context);
     final cs = Theme.of(context).colorScheme;
@@ -74,12 +74,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with AutoRefreshMixin {
       loading: () => fallbackModules,
       error: (_, __) => fallbackModules,
     );
+    final dashboardTitleFontSize = Breakpoints.isPhone(context) ? 26.0 : 30.0;
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: Breakpoints.isPhone(context) ? 68 : 74,
         title: Text(
           branding.appName,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: dashboardTitleFontSize,
+            height: 1.05,
+          ),
         ),
         actions: [
           IconButton(
