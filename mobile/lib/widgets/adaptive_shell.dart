@@ -24,6 +24,7 @@ class _NavItem {
 }
 
 const _moreRoute = '/more';
+const _logoAsset = 'assets/images/logo.png';
 
 class AdaptiveShell extends ConsumerWidget {
   const AdaptiveShell({super.key, required this.child});
@@ -31,7 +32,7 @@ class AdaptiveShell extends ConsumerWidget {
   final Widget child;
 
   List<_NavItem> _navItems(WidgetRef ref) {
-    final permissions = ref.watch(permissionsProvider).valueOrNull;
+    final permissions = ref.watch(permissionsProvider).asData?.value;
     final accessible = permissions == null
         ? mobileModulesForAccess(
             accessibleModules: const ['home', 'tasks', 'chat', 'livechat'],
@@ -89,7 +90,7 @@ class AdaptiveShell extends ConsumerWidget {
     final navItems = _navItems(ref);
     final selectedIndex = _selectedIndex(context, navItems);
     final unreadChat = ref.watch(_unreadChatProvider).value ?? 0;
-    final branding = ref.watch(appBrandingProvider).valueOrNull ??
+    final branding = ref.watch(appBrandingProvider).asData?.value ??
         AppBranding.fallback();
 
     return Breakpoints.isPhone(context)
@@ -196,7 +197,12 @@ class _WideShell extends StatelessWidget {
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.hub_rounded, size: 28),
+                        Image.asset(
+                          _logoAsset,
+                          width: 28,
+                          height: 28,
+                          fit: BoxFit.contain,
+                        ),
                         const SizedBox(width: 12),
                         Flexible(
                           child: Text(
@@ -210,7 +216,12 @@ class _WideShell extends StatelessWidget {
                         ),
                       ],
                     )
-                  : const Icon(Icons.hub_rounded, size: 28),
+                  : Image.asset(
+                      _logoAsset,
+                      width: 28,
+                      height: 28,
+                      fit: BoxFit.contain,
+                    ),
             ),
             destinations: navItems.map((item) {
               final isChatItem = item.route == '/chat';

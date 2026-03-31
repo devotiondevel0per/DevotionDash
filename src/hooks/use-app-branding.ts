@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   BRANDING_UPDATED_EVENT,
+  DEFAULT_APP_LOGO,
   DEFAULT_APP_NAME,
   DEFAULT_APP_TAGLINE,
   RUNTIME_SETTINGS_STORAGE_KEY,
@@ -12,12 +13,14 @@ import {
 type BrandingState = {
   appName: string;
   appTagline: string;
+  logoUrl: string;
 };
 
 export function useAppBranding() {
   const [branding, setBranding] = useState<BrandingState>({
     appName: DEFAULT_APP_NAME,
     appTagline: DEFAULT_APP_TAGLINE,
+    logoUrl: DEFAULT_APP_LOGO,
   });
 
   useEffect(() => {
@@ -58,6 +61,7 @@ export function useAppBranding() {
       setBranding({
         appName: detail.appName || DEFAULT_APP_NAME,
         appTagline: detail.appTagline || DEFAULT_APP_TAGLINE,
+        logoUrl: detail.logoUrl || DEFAULT_APP_LOGO,
       });
     };
 
@@ -70,4 +74,3 @@ export function useAppBranding() {
 
   return branding;
 }
-

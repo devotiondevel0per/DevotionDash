@@ -17,6 +17,7 @@ export const BRANDING_UPDATED_EVENT = "zeddash:branding-updated";
 
 export const DEFAULT_APP_NAME = "ZedDash";
 export const DEFAULT_APP_TAGLINE = "Workspace";
+export const DEFAULT_APP_LOGO = "/logo.png";
 
 export type RuntimeBrandingSettings = Record<string, string>;
 
@@ -31,9 +32,10 @@ export function resolveAppTagline(value: string | undefined | null) {
 }
 
 export function resolveBranding(settings: Record<string, string | undefined | null>) {
+  const rawLogo = (settings[APP_LOGO_KEY] ?? "").trim();
   return {
     appName: resolveAppName(settings[APP_NAME_KEY] ?? settings[LEGACY_APP_NAME_KEY]),
     appTagline: resolveAppTagline(settings[APP_TAGLINE_KEY]),
-    logoUrl: (settings[APP_LOGO_KEY] ?? "").trim() || null,
+    logoUrl: rawLogo || DEFAULT_APP_LOGO,
   };
 }

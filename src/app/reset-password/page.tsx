@@ -17,7 +17,7 @@ type ValidateResponse = {
 
 function ResetPasswordContent() {
   const router = useRouter();
-  const { appName } = useAppBranding();
+  const { appName, logoUrl } = useAppBranding();
   const searchParams = useSearchParams();
   const token = useMemo(() => (searchParams.get("token") ?? "").trim(), [searchParams]);
 
@@ -100,6 +100,11 @@ function ResetPasswordContent() {
     <div className="min-h-screen flex items-center justify-center bg-[#1e2433] px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
+          <img
+            src={logoUrl}
+            alt={`${appName} logo`}
+            className="mx-auto mb-4 h-14 w-14 rounded-xl object-contain"
+          />
           <h1 className="text-3xl font-bold text-white tracking-tight">{appName}</h1>
           <p className="text-white/50 text-sm mt-1">Set a new password</p>
         </div>

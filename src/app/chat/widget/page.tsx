@@ -294,6 +294,7 @@ function WidgetPageContent() {
   }, [session, resetSession]);
 
   const accent = config?.accentColor || "#FE0000";
+  const widgetLogoUrl = config?.logoUrl?.trim() || "/logo.png";
 
   function startDrag(e: React.PointerEvent<HTMLElement>) {
     const root = window.parent.document.getElementById("zeddash-livechat-root");
@@ -323,9 +324,7 @@ function WidgetPageContent() {
         onPointerCancel={endDrag}
       >
         <div className="flex items-center gap-2">
-          {config?.logoUrl ? (
-            <img src={config.logoUrl} alt="logo" className="h-6 w-6 rounded-full object-cover bg-white/20" />
-          ) : null}
+          <img src={widgetLogoUrl} alt="logo" className="h-6 w-6 rounded-full object-cover bg-white/20" />
           <div>
             <p className="text-xs font-semibold leading-tight">{config?.brandLabel || "Live Support"}</p>
             <p className="text-[10px] text-white/80 leading-tight">{session ? "Connected" : "Start a conversation"}</p>

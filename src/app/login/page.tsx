@@ -25,7 +25,7 @@ type FormData = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { appName, appTagline } = useAppBranding();
+  const { appName, appTagline, logoUrl } = useAppBranding();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [otpRequired, setOtpRequired] = useState(false);
@@ -134,6 +134,11 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#1e2433]">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
+          <img
+            src={logoUrl}
+            alt={`${appName} logo`}
+            className="mx-auto mb-4 h-14 w-14 rounded-xl object-contain"
+          />
           <h1 className="text-3xl font-bold text-white tracking-tight">{appName}</h1>
           <p className="text-white/50 text-sm mt-1">{appTagline}</p>
         </div>

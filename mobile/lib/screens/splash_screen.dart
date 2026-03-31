@@ -13,6 +13,7 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
+  static const _logoAsset = 'assets/images/logo.png';
   @override
   void initState() {
     super.initState();
@@ -30,7 +31,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final branding = ref.watch(appBrandingProvider).valueOrNull ??
+    final branding = ref.watch(appBrandingProvider).asData?.value ??
         AppBranding.fallback();
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.primary,
@@ -38,7 +39,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.hub_rounded, size: 80, color: Colors.white),
+            Image.asset(_logoAsset, width: 80, height: 80, fit: BoxFit.contain),
             const SizedBox(height: 24),
             Text(
               branding.appName,

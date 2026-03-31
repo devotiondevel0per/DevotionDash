@@ -177,6 +177,7 @@ function WidgetContent() {
   const brandLabel = config?.brandLabel ?? "Support";
   const welcomeText = config?.welcomeText ?? "Hi! How can we help you today?";
   const categories = config?.categories ?? [];
+  const widgetLogoUrl = config?.logoUrl?.trim() || "/logo.png";
 
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "8px 10px", border: "1px solid #D1D5DB",
@@ -197,7 +198,7 @@ function WidgetContent() {
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", height: "100vh", display: "flex", flexDirection: "column", background: "#fff" }}>
       {/* Header */}
       <div style={{ background: accent, padding: "14px 16px", color: "#fff", display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-        {config?.logoUrl && <img src={config.logoUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />}
+        <img src={widgetLogoUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
         <div>
           <div style={{ fontWeight: 700, fontSize: "15px" }}>{brandLabel}</div>
           {!ticketToken && <div style={{ fontSize: "11px", opacity: 0.85 }}>{welcomeText}</div>}

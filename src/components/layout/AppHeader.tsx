@@ -526,13 +526,11 @@ export function AppHeader() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_-30%,rgba(255,255,255,0.34),transparent_43%),radial-gradient(circle_at_86%_130%,rgba(255,255,255,0.18),transparent_46%)]" />
 
       <div className="relative flex w-[220px] shrink-0 items-center gap-3">
-        {appLogoUrl ? (
-          <img src={appLogoUrl} alt="logo" className="h-9 w-9 rounded-xl object-cover border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" />
-        ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/30 bg-white/15 text-xs font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
-            TW
-          </div>
-        )}
+        <img
+          src={appLogoUrl?.trim() || "/logo.png"}
+          alt="logo"
+          className="h-9 w-9 rounded-xl object-cover border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
+        />
         <div className="min-w-0 leading-tight">
           <span className="app-topbar-title block truncate text-base font-semibold tracking-wide text-white">
             {appName}

@@ -1789,7 +1789,7 @@ export default function AdministrationPage() {
                       {appLogoUrl ? (
                         <img src={appLogoUrl} alt="logo" className="h-10 w-10 rounded-lg object-cover border" />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border bg-slate-100 text-xs font-bold text-slate-500">TW</div>
+                        <img src="/logo.png" alt="logo" className="h-10 w-10 rounded-lg object-cover border" />
                       )}
                       <div>
                         <input
