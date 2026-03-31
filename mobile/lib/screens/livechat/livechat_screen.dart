@@ -89,6 +89,19 @@ Color _statusColor(String? status) {
   }
 }
 
+Color _agentStatusColor(String? status) {
+  switch ((status ?? '').toLowerCase()) {
+    case 'online':
+      return const Color(0xFF22C55E);
+    case 'away':
+      return const Color(0xFFF59E0B);
+    case 'offline':
+      return const Color(0xFFEF4444);
+    default:
+      return const Color(0xFF9CA3AF);
+  }
+}
+
 class LiveChatScreen extends ConsumerStatefulWidget {
   const LiveChatScreen({super.key});
 
@@ -173,134 +186,13 @@ class _LiveChatScreenState extends ConsumerState<LiveChatScreen>
     List<Map<String, dynamic>> groups,
   ) async {
     if (_creatingDialog) return;
-    final subjectCtrl = TextEditingController();
-    final nameCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-    final firstMessageCtrl = TextEditingController();
-    var selectedGroupId = 'all';
-    var assignToSelf = true;
-
     final created = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 8,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'New Live Chat',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Visitor name',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Visitor email',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: subjectCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Subject',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedGroupId,
-                  decoration: const InputDecoration(
-                    labelText: 'Queue',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: 'all',
-                      child: Text('No queue'),
-                    ),
-                    ...groups.map(
-                      (group) => DropdownMenuItem(
-                        value: group['id']?.toString() ?? '',
-                        child: Text(group['name']?.toString() ?? 'Queue'),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setSheetState(() => selectedGroupId = value ?? 'all');
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: firstMessageCtrl,
-                  minLines: 3,
-                  maxLines: 6,
-                  decoration: const InputDecoration(
-                    labelText: 'First message',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Assign to me'),
-                  subtitle: const Text(
-                    'Turn this off to let the server auto-route or leave unassigned.',
-                  ),
-                  value: assignToSelf,
-                  onChanged: (value) {
-                    setSheetState(() => assignToSelf = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: () async {
-                    Navigator.of(sheetContext).pop({
-                      'subject': subjectCtrl.text.trim(),
-                      'visitorName': nameCtrl.text.trim(),
-                      'visitorEmail': emailCtrl.text.trim(),
-                      'groupId': selectedGroupId == 'all'
-                          ? null
-                          : selectedGroupId,
-                      'firstMessage': firstMessageCtrl.text.trim(),
-                      'assignToSelf': assignToSelf,
-                    });
-                  },
-                  icon: const Icon(Icons.support_agent_rounded),
-                  label: const Text('Continue'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      useSafeArea: true,
+      builder: (_) => _CreateLiveChatSheet(groups: groups),
     );
-
-    subjectCtrl.dispose();
-    nameCtrl.dispose();
-    emailCtrl.dispose();
-    firstMessageCtrl.dispose();
 
     if (created == null) return;
     final hasAnyIdentity =
@@ -399,7 +291,7 @@ class _LiveChatScreenState extends ConsumerState<LiveChatScreen>
                   Icon(
                     Icons.circle,
                     size: 10,
-                    color: _statusColor(
+                    color: _agentStatusColor(
                       myStatus?['agentStatus']?.toString() ?? 'online',
                     ),
                   ),
@@ -817,6 +709,154 @@ class _MiniChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+    );
+  }
+}
+
+class _CreateLiveChatSheet extends StatefulWidget {
+  const _CreateLiveChatSheet({required this.groups});
+
+  final List<Map<String, dynamic>> groups;
+
+  @override
+  State<_CreateLiveChatSheet> createState() => _CreateLiveChatSheetState();
+}
+
+class _CreateLiveChatSheetState extends State<_CreateLiveChatSheet> {
+  late final TextEditingController _subjectCtrl;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _firstMessageCtrl;
+  String _selectedGroupId = 'all';
+  bool _assignToSelf = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _subjectCtrl = TextEditingController();
+    _nameCtrl = TextEditingController();
+    _emailCtrl = TextEditingController();
+    _firstMessageCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _subjectCtrl.dispose();
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _firstMessageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'New Live Chat',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Visitor name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Visitor email',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _subjectCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Subject',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _selectedGroupId,
+              decoration: const InputDecoration(
+                labelText: 'Queue',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem(
+                  value: 'all',
+                  child: Text('No queue'),
+                ),
+                ...widget.groups.map(
+                  (group) => DropdownMenuItem(
+                    value: group['id']?.toString() ?? '',
+                    child: Text(group['name']?.toString() ?? 'Queue'),
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() => _selectedGroupId = value ?? 'all');
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _firstMessageCtrl,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'First message',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Assign to me'),
+              subtitle: const Text(
+                'Turn this off to let the server auto-route or leave unassigned.',
+              ),
+              value: _assignToSelf,
+              onChanged: (value) {
+                setState(() => _assignToSelf = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop({
+                  'subject': _subjectCtrl.text.trim(),
+                  'visitorName': _nameCtrl.text.trim(),
+                  'visitorEmail': _emailCtrl.text.trim(),
+                  'groupId': _selectedGroupId == 'all' ? null : _selectedGroupId,
+                  'firstMessage': _firstMessageCtrl.text.trim(),
+                  'assignToSelf': _assignToSelf,
+                });
+              },
+              icon: const Icon(Icons.support_agent_rounded),
+              label: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

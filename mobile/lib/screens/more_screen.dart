@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../modules.dart';
+import '../providers/live_updates_provider.dart';
 import '../services/auth_service.dart';
 import '../providers/user_provider.dart';
 import '../widgets/user_avatar.dart';
@@ -15,7 +16,10 @@ class MoreScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final userAsync = ref.watch(userProfileProvider);
-    final permissions = ref.watch(permissionsProvider).valueOrNull;
+    final permissions = ref.watch(permissionsProvider).asData?.value;
+    final liveUpdatesAsync = ref.watch(liveUpdatesControllerProvider);
+    final liveUpdatesEnabled = liveUpdatesAsync.value ?? true;
+    final liveUpdatesBusy = liveUpdatesAsync.isLoading;
     final primaryRoutes = const {'/home', '/tasks', '/chat', '/livechat'};
     final moduleItems = permissions == null
         ? <_MoreItem>[]
@@ -98,6 +102,29 @@ class MoreScreen extends ConsumerWidget {
             title: const Text('Notifications', style: TextStyle(fontWeight: FontWeight.w500)),
             trailing: Icon(Icons.chevron_right, color: cs.onSurface.withValues(alpha: 0.35), size: 20),
             onTap: () => context.push('/notifications'),
+          ),
+          ListTile(
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.sync_rounded, color: Color(0xFF22C55E), size: 22),
+            ),
+            title: const Text('Live State Updates', style: TextStyle(fontWeight: FontWeight.w500)),
+            subtitle: const Text('Auto-refresh data across modules in background'),
+            trailing: Switch.adaptive(
+              value: liveUpdatesEnabled,
+              onChanged: liveUpdatesBusy
+                  ? null
+                  : (value) async {
+                      await ref
+                          .read(liveUpdatesControllerProvider.notifier)
+                          .setEnabled(value);
+                    },
+            ),
           ),
           ...moduleItems.map((item) => ListTile(
             leading: Container(

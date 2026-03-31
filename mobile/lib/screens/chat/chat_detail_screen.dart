@@ -202,6 +202,31 @@ List<Map<String, dynamic>> _mergeMessagesAscending(
   return _sortMessagesAscending(merged.values);
 }
 
+bool _sameMessageCollection(
+  List<Map<String, dynamic>> current,
+  List<Map<String, dynamic>> next,
+) {
+  if (identical(current, next)) return true;
+  if (current.length != next.length) return false;
+  for (var i = 0; i < current.length; i++) {
+    final a = current[i];
+    final b = next[i];
+    if ((a['id']?.toString() ?? '') != (b['id']?.toString() ?? '')) {
+      return false;
+    }
+    if ((a['updatedAt']?.toString() ?? '') != (b['updatedAt']?.toString() ?? '')) {
+      return false;
+    }
+    if ((a['content']?.toString() ?? '') != (b['content']?.toString() ?? '')) {
+      return false;
+    }
+    if ((a['text']?.toString() ?? '') != (b['text']?.toString() ?? '')) {
+      return false;
+    }
+  }
+  return true;
+}
+
 String _inferMimeFromName(String fileName) {
   final lower = fileName.toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
@@ -410,6 +435,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   bool _loadingLiveChatMeta = false;
   bool _updatingLiveChat = false;
   bool _didRefreshUnreadCounters = false;
+  int _silentMetaPollCounter = 0;
 
   io.Socket? _socket;
 
@@ -444,7 +470,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     } else {
       _loadChatMeta(silent: widget.dialog != null);
     }
-    startAutoRefresh(const Duration(seconds: 4), () {
+    startAutoRefresh(const Duration(seconds: 6), () {
       _refreshConversationSilently();
     });
     _scrollCtrl.addListener(_onScroll);
@@ -538,11 +564,14 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   Future<void> _refreshConversationSilently() async {
     if (_sending || _loadingMore) return;
-    await _loadMessages(refresh: true, silent: true);
-    if (widget.isLiveChat) {
-      await _loadLiveChatMeta(silent: true);
-    } else {
-      await _loadChatMeta(silent: true);
+    await _loadMessages(silent: true);
+    _silentMetaPollCounter++;
+    if (_silentMetaPollCounter % 4 == 0) {
+      if (widget.isLiveChat) {
+        await _loadLiveChatMeta(silent: true);
+      } else {
+        await _loadChatMeta(silent: true);
+      }
     }
   }
 
@@ -581,9 +610,20 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     try {
       final dialog =
           await ref.read(apiClientProvider).getChatDialog(_resolvedDialogId);
+      final nextMeta = Map<String, dynamic>.from(dialog);
+      final currentMeta = _dialogMeta;
+      final hasMeaningfulChange =
+          currentMeta == null ||
+          (currentMeta['updatedAt']?.toString() ?? '') !=
+              (nextMeta['updatedAt']?.toString() ?? '') ||
+          (currentMeta['status']?.toString() ?? '') !=
+              (nextMeta['status']?.toString() ?? '') ||
+          (currentMeta['subject']?.toString() ?? '') !=
+              (nextMeta['subject']?.toString() ?? '');
       if (!mounted) return;
+      if (silent && !hasMeaningfulChange) return;
       setState(() {
-        _dialogMeta = Map<String, dynamic>.from(dialog);
+        _dialogMeta = nextMeta;
         _loadingChatMeta = false;
       });
     } catch (error) {
@@ -618,7 +658,24 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
+      final currentMeta = _dialogMeta;
+      final currentAssignedCount =
+          (currentMeta?['assignedTo'] as List<dynamic>?)?.length ?? 0;
+      final nextAssignedCount =
+          (dialog['assignedTo'] as List<dynamic>?)?.length ?? 0;
+      final hasMeaningfulChange =
+          currentMeta == null ||
+          (currentMeta['updatedAt']?.toString() ?? '') !=
+              (dialog['updatedAt']?.toString() ?? '') ||
+          (currentMeta['status']?.toString() ?? '') !=
+              (dialog['status']?.toString() ?? '') ||
+          (currentMeta['groupId']?.toString() ?? '') !=
+              (dialog['groupId']?.toString() ?? '') ||
+          currentAssignedCount != nextAssignedCount ||
+          _liveChatAgents.length != agents.length ||
+          _liveChatGroups.length != groups.length;
       if (!mounted) return;
+      if (silent && !hasMeaningfulChange) return;
       setState(() {
         _dialogMeta = dialog;
         _liveChatAgents = agents;
@@ -1277,22 +1334,36 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       final msgs = _sortMessagesAscending(
         rawItems.whereType<Map<String, dynamic>>(),
       );
-      final shouldStick = refresh && (_messages.isEmpty || _isNearBottom());
+      final nextMessages = refresh
+          ? (silent ? _mergeMessagesAscending(_messages, msgs) : msgs)
+          : _mergeMessagesAscending(_messages, msgs);
+      final messagesChanged = !_sameMessageCollection(_messages, nextMessages);
+      final computedOldest = nextMessages.isNotEmpty
+          ? nextMessages.first['createdAt']?.toString()
+          : null;
+      final nextOldest = silent ? _oldestMessageTime : computedOldest;
+      final oldestChanged = _oldestMessageTime != nextOldest;
+      final nextHasMore = silent ? _hasMore : hasMore;
+      final shouldStick = refresh &&
+          (_messages.isEmpty || _isNearBottom()) &&
+          messagesChanged;
       if (mounted) {
-        setState(() {
-          _messages = refresh
-              ? (silent ? _mergeMessagesAscending(_messages, msgs) : msgs)
-              : _mergeMessagesAscending(_messages, msgs);
-          _hasMore = hasMore;
-          if (_messages.isNotEmpty) {
-            _oldestMessageTime = _messages.first['createdAt']?.toString();
-          }
-          _loading = false;
-        });
+        final requiresStateUpdate =
+            !silent || messagesChanged || (_hasMore != nextHasMore) || oldestChanged || _loading;
+        if (requiresStateUpdate) {
+          setState(() {
+            _messages = nextMessages;
+            _hasMore = nextHasMore;
+            _oldestMessageTime = nextOldest;
+            _loading = false;
+          });
+        }
         if (shouldStick) {
           _scrollToBottom(animated: false);
         }
-        await _markConversationNotificationsRead();
+        if (!silent || messagesChanged) {
+          await _markConversationNotificationsRead();
+        }
       }
     } catch (e) {
       if (mounted) {

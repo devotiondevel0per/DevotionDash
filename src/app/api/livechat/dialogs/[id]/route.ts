@@ -101,11 +101,15 @@ export async function PUT(
       return NextResponse.json({ error: "Live chat dialog not found" }, { status: 404 });
     }
 
-    const canManage = canManageLiveChat(accessResult.ctx.access);
     const memberIds = existing.members.map((member) => member.userId);
-    const isMember = memberIds.includes(accessResult.ctx.userId);
+    const canUpdateDialog = canAccessLiveChatDialog(
+      accessResult.ctx.access,
+      accessResult.ctx.userId,
+      memberIds
+    );
+    const canManage = canManageLiveChat(accessResult.ctx.access);
 
-    if (!canManage && !isMember) {
+    if (!canUpdateDialog) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

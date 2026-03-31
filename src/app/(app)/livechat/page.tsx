@@ -401,13 +401,12 @@ function LiveChatPageContent() {
     [can]
   );
 
-  const selectedDialogSummary = useMemo(
-    () => dialogs.find((dialog) => dialog.id === selectedDialogId) ?? null,
-    [dialogs, selectedDialogId]
-  );
-
   const isAssignedToCurrent = Boolean(
-    selectedDialogSummary?.assignedTo.some((agent) => agent.id === currentUserId)
+    selectedDialog?.assignedTo.some((agent) => agent.id === currentUserId)
+  );
+  const isSelectedDialogUnassigned = (selectedDialog?.assignedTo.length ?? 0) === 0;
+  const canToggleSelectedStatus = Boolean(
+    selectedDialog && (canManage || isAssignedToCurrent || (canWrite && isSelectedDialogUnassigned))
   );
 
   const sortMessages = useCallback((items: DialogMessage[]) => {
@@ -566,9 +565,38 @@ function LiveChatPageContent() {
         if (!silent || !prev || prev.id !== detailData.id) {
           return { ...detailData, messages: sortMessages(incomingMessages) };
         }
+        const mergedMessages = mergeMessages(prev.messages, incomingMessages);
+        const messagesUnchanged =
+          mergedMessages.length === prev.messages.length &&
+          mergedMessages.every((message, index) => {
+            const current = prev.messages[index];
+            if (!current) return false;
+            if (message.id !== current.id) return false;
+            if (message.createdAt !== current.createdAt) return false;
+            if ((message.payload?.type ?? "") !== (current.payload?.type ?? "")) return false;
+            if ((message.payload?.text ?? "") !== (current.payload?.text ?? "")) return false;
+            const nextAttachmentCount = message.payload?.attachments?.length ?? 0;
+            const currentAttachmentCount = current.payload?.attachments?.length ?? 0;
+            return nextAttachmentCount === currentAttachmentCount;
+          });
+        const assignmentUnchanged =
+          detailData.assignedTo.length === prev.assignedTo.length &&
+          detailData.assignedTo.every((agent, index) => agent.id === prev.assignedTo[index]?.id);
+        const detailUnchanged =
+          detailData.status === prev.status &&
+          detailData.updatedAt === prev.updatedAt &&
+          detailData.messageCount === prev.messageCount &&
+          (detailData.subject ?? "") === (prev.subject ?? "") &&
+          (detailData.group?.id ?? "") === (prev.group?.id ?? "") &&
+          assignmentUnchanged;
+
+        if (detailUnchanged && messagesUnchanged) {
+          return prev;
+        }
+
         return {
           ...detailData,
-          messages: mergeMessages(prev.messages, incomingMessages),
+          messages: mergedMessages,
         };
       });
       setHasOlderMessages((prev) => (silent ? prev || Boolean(messageData.hasMore) : Boolean(messageData.hasMore)));
@@ -1473,7 +1501,7 @@ function LiveChatPageContent() {
                               <Button size="sm" variant="outline" disabled={loadingState.action || targetAgentId === "none"} onClick={assignToAgent}>Assign</Button>
                               <Button size="sm" variant="outline" disabled={loadingState.action || targetAgentId === "none" || (!canManage && !isAssignedToCurrent)} onClick={transferToAgent}>Transfer</Button>
                             </div>
-                            <Button size="sm" variant="outline" className="w-full" disabled={loadingState.action || (!canManage && !isAssignedToCurrent)} onClick={toggleStatus}>Mark {selectedDialog.status === "open" ? "Closed" : "Open"}</Button>
+                            <Button size="sm" variant="outline" className="w-full" disabled={loadingState.action || !canToggleSelectedStatus} onClick={toggleStatus}>Mark {selectedDialog.status === "open" ? "Closed" : "Open"}</Button>
                           </>
                         ) : null}
                         <Button

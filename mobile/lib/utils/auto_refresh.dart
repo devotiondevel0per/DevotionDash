@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/live_updates_provider.dart';
 
 /// Mixin for [ConsumerState] that adds periodic auto-refresh.
 ///
@@ -17,17 +18,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// ```
 mixin AutoRefreshMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   Timer? _autoRefreshTimer;
+  ProviderSubscription<AsyncValue<bool>>? _liveUpdatesSub;
+  Duration? _refreshInterval;
+  VoidCallback? _refreshCallback;
+
+  void _applyAutoRefreshEnabled(bool enabled) {
+    _autoRefreshTimer?.cancel();
+    final interval = _refreshInterval;
+    final callback = _refreshCallback;
+    if (!enabled || interval == null || callback == null) return;
+    _autoRefreshTimer = Timer.periodic(interval, (_) {
+      if (mounted) callback();
+    });
+  }
 
   void startAutoRefresh(Duration interval, VoidCallback onRefresh) {
-    _autoRefreshTimer?.cancel();
-    _autoRefreshTimer = Timer.periodic(interval, (_) {
-      if (mounted) onRefresh();
-    });
+    _refreshInterval = interval;
+    _refreshCallback = onRefresh;
+    _liveUpdatesSub?.close();
+
+    final enabled = ref.read(liveUpdatesControllerProvider).value ?? true;
+    _applyAutoRefreshEnabled(enabled);
+
+    _liveUpdatesSub = ref.listenManual<AsyncValue<bool>>(
+      liveUpdatesControllerProvider,
+      (_, next) {
+        _applyAutoRefreshEnabled(next.value ?? true);
+      },
+    );
   }
 
   @override
   void dispose() {
     _autoRefreshTimer?.cancel();
+    _liveUpdatesSub?.close();
     super.dispose();
   }
 }
@@ -52,18 +76,34 @@ class AutoRefreshScope extends ConsumerStatefulWidget {
 
 class _AutoRefreshScopeState extends ConsumerState<AutoRefreshScope> {
   Timer? _timer;
+  ProviderSubscription<AsyncValue<bool>>? _liveUpdatesSub;
 
-  @override
-  void initState() {
-    super.initState();
+  void _applyAutoRefreshEnabled(bool enabled) {
+    _timer?.cancel();
+    if (!enabled) return;
     _timer = Timer.periodic(widget.interval, (_) {
       if (mounted) widget.onRefresh(ref);
     });
   }
 
   @override
+  void initState() {
+    super.initState();
+    final enabled = ref.read(liveUpdatesControllerProvider).value ?? true;
+    _applyAutoRefreshEnabled(enabled);
+
+    _liveUpdatesSub = ref.listenManual<AsyncValue<bool>>(
+      liveUpdatesControllerProvider,
+      (_, next) {
+        _applyAutoRefreshEnabled(next.value ?? true);
+      },
+    );
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
+    _liveUpdatesSub?.close();
     super.dispose();
   }
 
