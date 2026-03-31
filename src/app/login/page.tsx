@@ -131,7 +131,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#1e2433]">
+    <div className="min-h-screen flex items-center justify-center bg-white">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img
@@ -139,11 +139,11 @@ export default function LoginPage() {
             alt={`${appName} logo`}
             className="mx-auto mb-4 h-14 w-14 rounded-xl object-contain"
           />
-          <h1 className="text-3xl font-bold text-white tracking-tight">{appName}</h1>
-          <p className="text-white/50 text-sm mt-1">{appTagline}</p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{appName}</h1>
+          <p className="text-slate-500 text-sm mt-1">{appTagline}</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-2xl p-8">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_20px_48px_rgba(15,23,42,0.18)]">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Sign in</h2>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -233,7 +233,9 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-white/30 text-xs mt-6">Copyright {new Date().getFullYear()} {appName}. All rights reserved.</p>
+        <p className="text-center text-slate-400 text-xs mt-6">
+          Copyright {new Date().getFullYear()} {appName}. All rights reserved.
+        </p>
       </div>
     </div>
   );
