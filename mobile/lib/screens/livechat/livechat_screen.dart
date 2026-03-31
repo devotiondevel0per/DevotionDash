@@ -17,7 +17,6 @@ typedef _LiveChatFilterArgs = ({
   String queue,
   String groupId,
   String search,
-  int refreshNonce,
 });
 
 final liveChatDialogsProvider = FutureProvider.autoDispose
@@ -124,7 +123,6 @@ class _LiveChatScreenState extends ConsumerState<LiveChatScreen>
   String _queue = 'all';
   String _groupId = 'all';
   String _search = '';
-  int _refreshNonce = 0;
   bool _creatingDialog = false;
   bool _updatingAgentStatus = false;
 
@@ -147,9 +145,7 @@ class _LiveChatScreenState extends ConsumerState<LiveChatScreen>
     ref.invalidate(liveChatOverviewProvider);
     ref.invalidate(liveChatGroupsProvider);
     ref.invalidate(liveChatAgentStatusesProvider);
-    if (mounted) {
-      setState(() => _refreshNonce++);
-    }
+    ref.invalidate(liveChatDialogsProvider);
   }
 
   void _onSearchChanged(String value) {
@@ -420,7 +416,6 @@ class _LiveChatScreenState extends ConsumerState<LiveChatScreen>
                         queue: _queue,
                         groupId: selectedGroupValue,
                         search: _search,
-                        refreshNonce: _refreshNonce,
                       ),
                       onRefresh: _hardRefresh,
                     ),
@@ -500,48 +495,74 @@ class _OverviewStrip extends StatelessWidget {
   }
 }
 
-class _LiveChatList extends ConsumerWidget {
+class _LiveChatList extends ConsumerStatefulWidget {
   final _LiveChatFilterArgs filterArgs;
   final Future<void> Function() onRefresh;
 
   const _LiveChatList({required this.filterArgs, required this.onRefresh});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(liveChatDialogsProvider(filterArgs));
+  ConsumerState<_LiveChatList> createState() => _LiveChatListState();
+}
 
-    return async.when(
-      loading: () => const ShimmerList(count: 8),
-      error: (e, _) =>
-          ErrorState(message: e.toString(), onRetry: () => onRefresh()),
-      data: (items) {
-        if (items.isEmpty) {
-          return RefreshIndicator(
-            onRefresh: onRefresh,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                const SizedBox(height: 120),
-                EmptyState(
-                  icon: Icons.support_agent_outlined,
-                  title: 'No conversations',
-                  subtitle: filterArgs.search.isNotEmpty
-                      ? 'No live chats match your search'
-                      : 'No live chat conversations for this view',
-                ),
-              ],
+class _LiveChatListState extends ConsumerState<_LiveChatList> {
+  List<Map<String, dynamic>> _cachedItems = const [];
+
+  @override
+  void didUpdateWidget(covariant _LiveChatList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filterArgs != widget.filterArgs) {
+      _cachedItems = const [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(liveChatDialogsProvider(widget.filterArgs));
+    final latestItems = async.asData?.value;
+    if (latestItems != null) {
+      _cachedItems = latestItems;
+    }
+    final resolvedItems = latestItems ?? _cachedItems;
+
+    if (resolvedItems.isEmpty && async.isLoading) {
+      return const ShimmerList(count: 8);
+    }
+    if (resolvedItems.isEmpty && async.hasError) {
+      return ErrorState(
+        message: async.error.toString(),
+        onRetry: () => widget.onRefresh(),
+      );
+    }
+    if (resolvedItems.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: widget.onRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            const SizedBox(height: 120),
+            EmptyState(
+              icon: Icons.support_agent_outlined,
+              title: 'No conversations',
+              subtitle: widget.filterArgs.search.isNotEmpty
+                  ? 'No live chats match your search'
+                  : 'No live chat conversations for this view',
             ),
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: onRefresh,
+          ],
+        ),
+      );
+    }
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: widget.onRefresh,
           child: ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: items.length,
+            itemCount: resolvedItems.length,
             separatorBuilder: (_, __) =>
                 const Divider(height: 1, indent: 72, endIndent: 16),
             itemBuilder: (ctx, i) {
-              final item = items[i];
+              final item = resolvedItems[i];
               return _LiveChatTile(
                 item: item,
                 onTap: () {
@@ -554,15 +575,22 @@ class _LiveChatList extends ConsumerWidget {
                         )
                         .then((_) {
                           if (!ctx.mounted) return;
-                          onRefresh();
+                          widget.onRefresh();
                         });
                   }
                 },
               );
             },
           ),
-        );
-      },
+        ),
+        if (async.isLoading)
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+      ],
     );
   }
 }

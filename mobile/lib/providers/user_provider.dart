@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import '../services/api_client.dart';
+import '../services/auth_service.dart';
 import '../modules.dart';
 
 // ─── Models ──────────────────────────────────────────────────────────────────
@@ -94,6 +95,10 @@ class AppPermissions {
 // ─── Providers ───────────────────────────────────────────────────────────────
 
 final userProfileProvider = FutureProvider<UserProfile?>((ref) async {
+  final authAsync = ref.watch(authStateProvider);
+  final authUser = authAsync.asData?.value;
+  if (authUser == null) return null;
+
   const storage = FlutterSecureStorage();
   final userJson = await storage.read(key: 'auth_user');
   if (userJson == null) return null;

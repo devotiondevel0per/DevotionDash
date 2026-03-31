@@ -172,10 +172,15 @@ class ApiClient {
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        const storage = FlutterSecureStorage();
-        final token = await storage.read(key: 'auth_token');
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
+        final path = options.path.toLowerCase();
+        final isAuthOrPublicRoute =
+            path.endsWith('/auth/mobile') || path.startsWith('/public/');
+        if (!isAuthOrPublicRoute) {
+          const storage = FlutterSecureStorage();
+          final token = await storage.read(key: 'auth_token');
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
         }
         // Only set Content-Type for requests with a body (POST, PUT, PATCH).
         // GET/DELETE/HEAD must NOT have Content-Type — Windows http.sys rejects them.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/user_provider.dart';
 import '../services/auth_service.dart';
 import '../services/branding_service.dart';
 import '../utils/breakpoints.dart';
@@ -40,6 +41,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             _passwordCtrl.text,
             otp: _requires2FA ? _otpCtrl.text.trim() : null,
           );
+      ref.invalidate(userProfileProvider);
+      ref.invalidate(permissionsProvider);
       // State is now updated — router redirect handles navigation automatically
     } catch (e) {
       final msg = e.toString();
@@ -59,7 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final isWide = Breakpoints.isWide(context);
-    final branding = ref.watch(appBrandingProvider).valueOrNull ??
+    final branding = ref.watch(appBrandingProvider).asData?.value ??
         AppBranding.fallback();
 
     return Scaffold(

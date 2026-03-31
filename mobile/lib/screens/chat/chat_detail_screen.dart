@@ -1903,6 +1903,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
     return Scaffold(
       appBar: AppBar(
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actionsIconTheme: const IconThemeData(color: Colors.white),
         titleSpacing: 0,
         title: Row(
           children: [
@@ -1928,6 +1931,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                     _dialogTitle,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1943,7 +1947,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
+                            color: Colors.white,
                           ),
                     ),
                 ],
