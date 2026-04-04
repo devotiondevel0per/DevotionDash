@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,9 @@ import {
   CheckSquare,
   Calendar,
   CalendarDays,
+  Loader2,
+  MessageSquare,
+  Send,
   Users,
   ArrowLeft,
   Pencil,
@@ -113,6 +116,13 @@ type ProjectTask = {
   createdAt: string;
   assignee: { id: string; name: string; fullname: string; photoUrl: string | null } | null;
   phase: { id: string; name: string } | null;
+};
+
+type ProjectTaskComment = {
+  id: string;
+  content: string;
+  createdAt: string;
+  user: { id: string; name: string; fullname: string };
 };
 
 type ProjectPhaseItem = {
@@ -189,6 +199,12 @@ function formatDate(iso?: string | null): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function toHtml(value: string | null | undefined): string {
+  if (!value) return "";
+  if (/<[^>]+>/.test(value)) return value;
+  return value.replace(/\n/g, "<br/>");
 }
 
 function normalizeTaskStatus(status?: string | null): string {
@@ -677,6 +693,283 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
 
 // ─── Add Phase Dialog ─────────────────────────────────────────────────────────
 
+type ProjectTaskDetailDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  task: ProjectTask | null;
+  projectId: string;
+  meId: string;
+  stages: WorkflowStage[];
+  canWrite: boolean;
+  canManageConversation: boolean;
+  onEditTask: (task: ProjectTask) => void;
+};
+
+function ProjectTaskDetailDialog({
+  open,
+  onClose,
+  task,
+  projectId,
+  meId,
+  stages,
+  canWrite,
+  canManageConversation,
+  onEditTask,
+}: ProjectTaskDetailDialogProps) {
+  const [comments, setComments] = useState<ProjectTaskComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentHtml, setEditingCommentHtml] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open || !task) return;
+    setComments([]);
+    setCommentText("");
+    setEditingCommentId(null);
+    setEditingCommentHtml("");
+    setLoadingComments(true);
+    fetch(`/api/projects/${projectId}/tasks/${task.id}/comments`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: unknown) => {
+        if (Array.isArray(data)) setComments(data as ProjectTaskComment[]);
+      })
+      .catch(() => toast.error("Failed to load comments"))
+      .finally(() => setLoadingComments(false));
+  }, [open, projectId, task]);
+
+  useEffect(() => {
+    if (comments.length > 0) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [comments]);
+
+  async function postComment() {
+    if (!task || !hasRichTextContent(commentText)) return;
+    const content = normalizeRichText(commentText);
+    if (!content) return;
+    setPosting(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/tasks/${task.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      const data = (await response.json().catch(() => null)) as ProjectTaskComment | { error?: string } | null;
+      if (!response.ok || !data || "error" in data) {
+        throw new Error((data as { error?: string } | null)?.error ?? "Failed to post comment");
+      }
+      setComments((prev) => [...prev, data as ProjectTaskComment]);
+      setCommentText("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to post comment");
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  async function saveCommentEdit() {
+    if (!task || !editingCommentId) return;
+    const content = normalizeRichText(editingCommentHtml);
+    if (!hasRichTextContent(content)) {
+      toast.error("Comment cannot be empty");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/tasks/${task.id}/comments/${editingCommentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      const data = (await response.json().catch(() => null)) as ProjectTaskComment | { error?: string } | null;
+      if (!response.ok || !data || "error" in data) {
+        throw new Error((data as { error?: string } | null)?.error ?? "Failed to update comment");
+      }
+      const updated = data as ProjectTaskComment;
+      setComments((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingCommentId(null);
+      setEditingCommentHtml("");
+      toast.success("Conversation updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update comment");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  if (!task) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
+      <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-[760px]">
+        <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-lg leading-tight">
+            <MessageSquare className="h-5 w-5 shrink-0 text-[#FE0000]" />
+            <span className="line-clamp-2">{task.title}</span>
+          </DialogTitle>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Badge variant="outline" style={stageStyle(getTaskStage(stages, task.status).color)} className="h-5 px-1.5 text-[10px]">
+              {getTaskStageLabel(stages, task.status)}
+            </Badge>
+            <Badge variant="secondary" className={cn("h-5 px-1.5 text-[10px]", TASK_PRIORITY_CONFIG[task.priority]?.className ?? "bg-gray-100 text-gray-600")}>
+              {TASK_PRIORITY_CONFIG[task.priority]?.label ?? task.priority}
+            </Badge>
+            {task.dueDate ? (
+              <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                <CalendarDays className="h-3 w-3" />
+                {formatDate(task.dueDate)}
+              </span>
+            ) : null}
+            {canWrite ? (
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-[11px] font-medium text-[#c70000] hover:bg-[#FE0000]/10"
+                onClick={() => onEditTask(task)}
+              >
+                Edit task
+              </button>
+            ) : null}
+          </div>
+        </DialogHeader>
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 space-y-3 border-b bg-white px-6 py-4 text-sm">
+            <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+              <span>Created: <span className="font-medium text-slate-800">{formatDate(task.createdAt)}</span></span>
+              <span>Assigned: <span className="font-medium text-slate-800">{task.assignee ? displayName(task.assignee) : "Unassigned"}</span></span>
+              <span>Phase: <span className="font-medium text-slate-800">{task.phase?.name ?? "—"}</span></span>
+            </div>
+            {task.description ? (
+              <div
+                dir="ltr"
+                className="max-h-28 overflow-auto rounded border bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700"
+                dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(task.description)) }}
+              />
+            ) : (
+              <p className="text-xs text-slate-400 italic">No description</p>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Comments ({comments.length})</p>
+            {loadingComments ? (
+              <div className="flex items-center justify-center py-6 text-slate-400">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : comments.length === 0 ? (
+              <p className="text-sm text-slate-400 italic">No comments yet. Be the first to add one.</p>
+            ) : (
+              comments.map((comment) => {
+                const isMe = comment.user.id === meId;
+                const canEditComment = (isMe || canManageConversation) && canWrite;
+                const isEditing = editingCommentId === comment.id;
+                return (
+                  <div
+                    key={comment.id}
+                    className={cn(
+                      "rounded-xl border px-3 py-3 shadow-sm",
+                      isMe ? "border-[#FE0000]/25 bg-[#FE0000]/[0.03]" : "border-slate-200 bg-white"
+                    )}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                        <span className="font-medium text-slate-700">{comment.user.fullname || comment.user.name}</span>
+                        {isMe ? (
+                          <span className="rounded-full bg-[#FE0000]/10 px-2 py-0.5 text-[10px] font-semibold text-[#c70000]">
+                            You
+                          </span>
+                        ) : null}
+                        <span>{new Date(comment.createdAt).toLocaleString()}</span>
+                        {canEditComment && !isEditing ? (
+                          <button
+                            type="button"
+                            className="rounded px-1 py-0.5 text-[11px] font-medium text-[#c70000] hover:bg-[#FE0000]/10"
+                            onClick={() => {
+                              setEditingCommentId(comment.id);
+                              setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
+                            }}
+                          >
+                            Edit
+                          </button>
+                        ) : null}
+                      </div>
+                      {isEditing ? (
+                        <div className="space-y-2 rounded-lg border bg-white p-2">
+                          <RichTextEditor
+                            value={editingCommentHtml}
+                            onChange={setEditingCommentHtml}
+                            placeholder="Edit conversation..."
+                            minHeight={100}
+                            disabled={savingEdit}
+                          />
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingCommentId(null);
+                                setEditingCommentHtml("");
+                              }}
+                              disabled={savingEdit}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="bg-[#FE0000] text-white hover:bg-[#d40000]"
+                              onClick={() => void saveCommentEdit()}
+                              disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
+                            >
+                              {savingEdit ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
+                          dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          <div className="shrink-0 border-t bg-white px-6 py-3">
+            <div className="space-y-2">
+              <RichTextEditor
+                value={commentText}
+                onChange={setCommentText}
+                placeholder={canWrite ? "Write a comment..." : "Read-only"}
+                minHeight={110}
+                disabled={posting || !canWrite}
+              />
+              <div className="flex justify-end">
+                <Button
+                  className="h-10 bg-[#FE0000] text-white hover:bg-[#d40000]"
+                  size="icon"
+                  onClick={() => void postComment()}
+                  disabled={posting || !canWrite || !hasRichTextContent(commentText)}
+                >
+                  {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 type AddPhaseDialogProps = {
   open: boolean;
   onClose: () => void;
@@ -892,6 +1185,8 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
 
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | undefined>(undefined);
+  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
+  const [activeTask, setActiveTask] = useState<ProjectTask | null>(null);
   const [taskLayout, setTaskLayout] = useState<"list" | "kanban">("list");
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [addPhaseOpen, setAddPhaseOpen] = useState(false);
@@ -977,6 +1272,12 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
     }
     return buckets;
   }, [taskStages, tasks]);
+  useEffect(() => {
+    setActiveTask((prev) => {
+      if (!prev) return null;
+      return tasks.find((item) => item.id === prev.id) ?? null;
+    });
+  }, [tasks]);
   const currentUserId = access?.userId ?? "";
   const myMembership = useMemo(
     () => members.find((member) => member.user.id === currentUserId),
@@ -986,6 +1287,17 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   const isProjectManager = myMembership?.role === "manager";
   const canProjectWrite = canWrite && (canManage || isProjectMember);
   const canProjectManage = canWrite && (canManage || isProjectManager);
+
+  function openTaskDetails(task: ProjectTask) {
+    setActiveTask(task);
+    setTaskDetailOpen(true);
+  }
+
+  function openTaskEditor(task?: ProjectTask) {
+    setTaskDetailOpen(false);
+    setEditingTask(task);
+    setTaskDialogOpen(true);
+  }
 
   async function moveTaskToStage(task: ProjectTask, nextStatus: string) {
     if (normalizeTaskStatus(task.status) === normalizeTaskStatus(nextStatus)) return;
@@ -999,6 +1311,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
       if (!res.ok) throw new Error("Failed to update task");
       const updated = normalizeProjectTask((await res.json()) as ProjectTask);
       setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+      setActiveTask((prev) => (prev && prev.id === updated.id ? updated : prev));
     } catch {
       toast.error("Failed to update task status");
     } finally {
@@ -1204,7 +1517,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                     <Button
                       size="sm"
                       style={{ backgroundColor: "#FE0000", color: "#fff" }}
-                      onClick={() => { setEditingTask(undefined); setTaskDialogOpen(true); }}
+                      onClick={() => openTaskEditor(undefined)}
                     >
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Add Task
@@ -1221,7 +1534,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                         size="sm"
                         variant="outline"
                         className="mt-3"
-                        onClick={() => { setEditingTask(undefined); setTaskDialogOpen(true); }}
+                        onClick={() => openTaskEditor(undefined)}
                       >
                         <Plus className="h-3.5 w-3.5 mr-1" />
                         Add first task
@@ -1248,8 +1561,8 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                         return (
                           <TableRow
                             key={task.id}
-                            className={cn("hover:bg-gray-50/80", canProjectWrite && "cursor-pointer")}
-                            onClick={() => { if (!canProjectWrite) return; setEditingTask(task); setTaskDialogOpen(true); }}
+                            className="cursor-pointer hover:bg-gray-50/80"
+                            onClick={() => openTaskDetails(task)}
                           >
                             <TableCell className="pl-4">
                               <span className="text-sm font-medium text-gray-800">{task.title}</span>
@@ -1298,7 +1611,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                             <TableCell className="text-xs text-gray-500">{formatDate(task.dueDate)}</TableCell>
                             <TableCell className="pr-4" onClick={(e) => e.stopPropagation()}>
                               <button
-                                onClick={() => { if (!canProjectWrite) return; setEditingTask(task); setTaskDialogOpen(true); }}
+                                onClick={() => { if (!canProjectWrite) return; openTaskEditor(task); }}
                                 className="text-gray-300 hover:text-gray-600 transition-colors p-1 rounded"
                                 title="Edit task"
                                 disabled={!canProjectWrite}
@@ -1364,7 +1677,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                     <button
                                       type="button"
                                       className="line-clamp-2 text-left text-sm font-semibold text-slate-800 hover:text-[#FE0000] hover:underline"
-                                      onClick={() => { if (!canProjectWrite) return; setEditingTask(task); setTaskDialogOpen(true); }}
+                                      onClick={() => openTaskDetails(task)}
                                     >
                                       {task.title}
                                     </button>
@@ -1543,18 +1856,36 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
       </div>
 
       {/* Dialogs */}
+      <ProjectTaskDetailDialog
+        open={taskDetailOpen}
+        onClose={() => {
+          setTaskDetailOpen(false);
+          setActiveTask(null);
+        }}
+        task={activeTask}
+        projectId={projectId}
+        meId={currentUserId}
+        stages={taskStages}
+        canWrite={canProjectWrite}
+        canManageConversation={canProjectManage}
+        onEditTask={(task) => openTaskEditor(task)}
+      />
       <TaskDialog
         open={taskDialogOpen}
         onClose={() => { setTaskDialogOpen(false); setEditingTask(undefined); }}
         onSaved={(task) => {
           const normalizedTask = normalizeProjectTask(task);
-          if (editingTask) {
-            setTasks((prev) => prev.map((t) => (t.id === normalizedTask.id ? normalizedTask : t)));
-          } else {
-            setTasks((prev) => [normalizedTask, ...prev]);
-          }
+          setTasks((prev) => {
+            const exists = prev.some((t) => t.id === normalizedTask.id);
+            return exists ? prev.map((t) => (t.id === normalizedTask.id ? normalizedTask : t)) : [normalizedTask, ...prev];
+          });
+          setActiveTask((prev) => (prev && prev.id === normalizedTask.id ? normalizedTask : prev));
         }}
-        onDeleted={(id) => setTasks((prev) => prev.filter((t) => t.id !== id))}
+        onDeleted={(id) => {
+          setTasks((prev) => prev.filter((t) => t.id !== id));
+          setActiveTask((prev) => (prev?.id === id ? null : prev));
+          if (activeTask?.id === id) setTaskDetailOpen(false);
+        }}
         projectId={projectId}
         stages={taskStages}
         phases={phases}
