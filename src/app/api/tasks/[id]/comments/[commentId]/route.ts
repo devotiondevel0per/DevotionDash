@@ -45,12 +45,12 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     }
 
     const isAdmin = accessResult.ctx.access.isAdmin;
-    if (!isAdmin) {
-      const isNoteOwner = existing.task.creatorId === accessResult.ctx.userId;
+    const canManageTasks = accessResult.ctx.access.permissions.tasks.manage;
+    if (!isAdmin && !canManageTasks) {
       const isCommentAuthor = existing.userId === accessResult.ctx.userId;
-      if (!isNoteOwner || !isCommentAuthor) {
+      if (!isCommentAuthor) {
         return NextResponse.json(
-          { error: "You can edit only your own conversation in personal notes" },
+          { error: "You can edit only your own conversation in notes" },
           { status: 403 }
         );
       }
@@ -74,4 +74,3 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   return PUT(req, ctx);
 }
-

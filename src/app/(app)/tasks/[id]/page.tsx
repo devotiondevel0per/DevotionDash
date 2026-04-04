@@ -412,7 +412,7 @@ export default function TaskDetailPage() {
   const priorityMeta = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
   const timeline = buildTimeline(task);
-  const canEditConversation = task.type === "note" && task.creatorId === meId;
+  const canEditConversation = task.type === "note";
 
   return (
     <div className="min-h-screen bg-slate-50">

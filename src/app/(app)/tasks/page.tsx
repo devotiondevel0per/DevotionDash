@@ -694,7 +694,7 @@ function TaskDetailDialog({
   if (!task) return null;
   const stageMeta = getStageMeta(stages, task.status);
   const isClosed = stages.find((s) => s.key === task.status)?.isClosed ?? false;
-  const canEditConversation = task.type === "note" && task.creatorId === meId;
+  const canEditConversation = task.type === "note";
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
