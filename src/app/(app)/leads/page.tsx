@@ -31,7 +31,7 @@ type LeadRecord = {
   followUpAt: string | null; closedAt: string | null;
   ownerId: string | null; organizationId: string | null; contactId: string | null;
   createdAt: string; updatedAt: string;
-  owner: { id: string; name: string; fullname: string } | null;
+  owner: { id: string; name: string; fullname: string; login?: string } | null;
   organization: { id: string; name: string } | null;
   contact: { id: string; firstName: string; lastName: string } | null;
   activitiesCount: number;
@@ -54,6 +54,7 @@ type LeadCustomField = {
 
 type LeadOwnerOption = {
   id: string;
+  login?: string;
   name: string;
   fullname: string;
   email: string | null;
@@ -63,8 +64,7 @@ type LeadsResponse = {
   stageFlow: string[]; sourceOptions: string[];
   formFields: Array<{ id: string; label: string; enabled: boolean; required: boolean; order: number; placeholder: string }>;
   customFields: LeadCustomField[];
-  owners?: Array<{ id: string; name: string; fullname: string; email: string | null }>;
-  currentUserId?: string;
+  owners?: Array<{ id: string; login?: string; name: string; fullname: string; email: string | null }>;
   leads: LeadRecord[];
 };
 
@@ -142,8 +142,22 @@ function fmtDateTime(value: string) {
   return dt.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function fullName(user: { name: string; fullname: string } | null) {
-  return user?.fullname?.trim() || user?.name || "Unassigned";
+function fullName(user: { id?: string; name?: string; fullname?: string; login?: string } | null) {
+  const label = user?.fullname?.trim() || user?.name?.trim() || user?.login?.trim();
+  if (label) return label;
+  if (user?.id) return `User ${user.id.slice(0, 8)}`;
+  return "Unassigned";
+}
+
+function ownerOptionLabel(owner: LeadOwnerOption) {
+  const label = owner.fullname?.trim() || owner.name?.trim() || owner.login?.trim() || owner.email?.trim();
+  if (label) return label;
+  return `User ${owner.id.slice(0, 8)}`;
+}
+
+function companyLabel(name: string | null | undefined) {
+  const value = name?.trim();
+  return value && value.length > 0 ? value : "No company";
 }
 
 function stageLabel(s: string) {
@@ -269,7 +283,7 @@ function MonthlyBarChart({ stats }: { stats: Array<{ label: string; newLeads: nu
 // ─── Lead Detail Sheet ────────────────────────────────────────────────────────
 
 function LeadDetailSheet({
-  lead, stageFlow, sourceOptions, customFields, owners, currentUserId, canWrite, canManage,
+  lead, stageFlow, sourceOptions, customFields, owners, canWrite, canManage,
   onClose, onSaved, onDeleted, onConverted,
 }: {
   lead: LeadDetail;
@@ -277,7 +291,6 @@ function LeadDetailSheet({
   sourceOptions: string[];
   customFields: LeadCustomField[];
   owners: LeadOwnerOption[];
-  currentUserId: string;
   canWrite: boolean;
   canManage: boolean;
   onClose: () => void;
@@ -303,10 +316,14 @@ function LeadDetailSheet({
   const [activities, setActivities] = useState<LeadActivity[]>(lead.activities);
   const [actForm, setActForm] = useState({ type: "note", content: "", scheduledAt: "" });
   const [addingAct, setAddingAct] = useState(false);
+  const stageOptions = useMemo(() => {
+    const set = new Set<string>([...stageFlow, form.stage, "lost", "archived"]);
+    return Array.from(set).filter(Boolean);
+  }, [stageFlow, form.stage]);
 
   async function save() {
-    if (!form.title.trim() || !form.companyName.trim()) {
-      toast.error("Title and Company are required");
+    if (!form.title.trim()) {
+      toast.error("Title is required");
       return;
     }
     setSaving(true);
@@ -322,7 +339,7 @@ function LeadDetailSheet({
           expectedDeposit: form.expectedDeposit ? Number(form.expectedDeposit) : null,
           score: Number(form.score) || 0,
           notes: form.notes || null,
-          ownerId: canManage ? (form.ownerId || null) : currentUserId,
+          ownerId: form.ownerId || null,
           followUpAt: form.followUpAt || null,
           customData: Object.keys(form.customData).length > 0 ? form.customData : null,
         }),
@@ -431,7 +448,7 @@ function LeadDetailSheet({
             {lead.organizationId && <Badge variant="outline" className="text-xs text-emerald-700 border-emerald-200">Linked</Badge>}
           </div>
           <h2 className="mt-1 text-base font-semibold text-slate-900 truncate">{lead.title}</h2>
-          <p className="text-xs text-slate-500">{lead.companyName} · {fullName(lead.owner)}</p>
+          <p className="text-xs text-slate-500">{companyLabel(lead.companyName)} · {fullName(lead.owner)}</p>
         </div>
         <button onClick={onClose} className="mt-0.5 rounded p-1 hover:bg-slate-100">
           <X className="h-4 w-4 text-slate-500" />
@@ -491,7 +508,7 @@ function LeadDetailSheet({
                 <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="h-8 text-sm" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Company *</Label>
+                <Label className="text-xs">Company</Label>
                 <Input value={form.companyName} onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))} className="h-8 text-sm" />
               </div>
             </div>
@@ -521,7 +538,7 @@ function LeadDetailSheet({
                 <Select value={form.stage} onValueChange={(v) => v && setForm((f) => ({ ...f, stage: v }))}>
                   <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[...stageFlow, "lost", "archived"].map((s) => (
+                    {stageOptions.map((s) => (
                       <SelectItem key={s} value={s}>{stageLabel(s)}</SelectItem>
                     ))}
                   </SelectContent>
@@ -559,14 +576,14 @@ function LeadDetailSheet({
               <Select
                 value={form.ownerId || "unassigned"}
                 onValueChange={(v) => v && setForm((f) => ({ ...f, ownerId: v === "unassigned" ? "" : v }))}
-                disabled={!canManage}
+                disabled={!canWrite}
               >
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Unassigned" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="unassigned">Unassigned</SelectItem>
                   {owners.map((owner) => (
                     <SelectItem key={owner.id} value={owner.id}>
-                      {(owner.fullname || owner.name).trim() || owner.email || owner.id}
+                      {ownerOptionLabel(owner)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -808,7 +825,6 @@ export default function LeadsPage() {
   const [formFields, setFormFields] = useState<LeadsResponse["formFields"]>([]);
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([]);
   const [owners, setOwners] = useState<LeadOwnerOption[]>([]);
-  const [currentUserId, setCurrentUserId] = useState("");
   const [reports, setReports] = useState<ReportsData | null>(null);
 
   const [loadingLeads, setLoadingLeads] = useState(false);
@@ -860,9 +876,6 @@ export default function LeadsPage() {
       setCustomFields(data.customFields ?? []);
       const ownerOptions = Array.isArray(data.owners) ? data.owners : [];
       setOwners(ownerOptions);
-      if (data.currentUserId) {
-        setCurrentUserId(data.currentUserId);
-      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load leads");
     } finally {
@@ -888,13 +901,6 @@ export default function LeadsPage() {
   useEffect(() => {
     if (section === "reports" && canManage) void loadReports();
   }, [section, canManage, loadReports]);
-  useEffect(() => {
-    if (!currentUserId) return;
-    if (!canManage) {
-      setCreateForm((prev) => (prev.ownerId === currentUserId ? prev : { ...prev, ownerId: currentUserId }));
-    }
-  }, [canManage, currentUserId]);
-
   async function openDetail(lead: LeadRecord) {
     setLoadingDetail(true);
     try {
@@ -960,7 +966,6 @@ export default function LeadsPage() {
 
   async function createLead() {
     if (!createForm.title.trim()) { toast.error("Title is required"); return; }
-    if (!createForm.companyName.trim()) { toast.error("Company is required"); return; }
     setCreating(true);
     try {
       const res = await fetch("/api/leads", {
@@ -971,7 +976,7 @@ export default function LeadsPage() {
           contactName: createForm.contactName || null, email: createForm.email || null,
           phone: createForm.phone || null, country: createForm.country || null,
           source: createForm.source || null, priority: createForm.priority,
-          ownerId: canManage ? (createForm.ownerId || null) : (currentUserId || null),
+          ownerId: createForm.ownerId || null,
           notes: createForm.notes || null,
           expectedDeposit: createForm.expectedDeposit ? Number(createForm.expectedDeposit) : null,
           customData: Object.keys(createForm.customData).length > 0 ? createForm.customData : null,
@@ -998,6 +1003,39 @@ export default function LeadsPage() {
     return m;
   }, [stageFlow]);
 
+  const allStageOptions = useMemo(() => {
+    const ordered = [...stageFlow];
+    const seen = new Set(ordered);
+    for (const lead of leads) {
+      if (lead.stage === "lost" || lead.stage === "archived") continue;
+      if (!seen.has(lead.stage)) {
+        ordered.push(lead.stage);
+        seen.add(lead.stage);
+      }
+    }
+    return ordered;
+  }, [stageFlow, leads]);
+
+  const stageStats = useMemo(() => {
+    const ordered = [...allStageOptions, "lost", "archived"];
+    const uniqueOrdered = Array.from(new Set(ordered));
+    const counts = new Map<string, number>();
+    for (const l of leads) counts.set(l.stage, (counts.get(l.stage) ?? 0) + 1);
+    return uniqueOrdered
+      .map((stage) => ({ stage, label: stageLabel(stage), count: counts.get(stage) ?? 0 }))
+      .filter((item) => item.count > 0);
+  }, [allStageOptions, leads]);
+
+  const pipelineByStage = useMemo(() => {
+    const map = new Map<string, LeadRecord[]>();
+    for (const s of allStageOptions) map.set(s, []);
+    for (const l of leads.filter((l) => l.status === "open")) {
+      if (map.has(l.stage)) map.get(l.stage)!.push(l);
+      else map.set(l.stage, [l]);
+    }
+    return map;
+  }, [allStageOptions, leads]);
+
   const kpis = useMemo(() => {
     const total = leads.length;
     const open = leads.filter((l) => l.status === "open").length;
@@ -1011,12 +1049,6 @@ export default function LeadsPage() {
       : 0;
     return { total, open, won, lost, conversionRate, pipelineValue, avgDays };
   }, [leads]);
-
-  const stageStats = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const l of leads) map.set(l.stage, (map.get(l.stage) ?? 0) + 1);
-    return stageFlow.map((s) => ({ stage: s, label: stageLabel(s), count: map.get(s) ?? 0 })).filter((s) => s.count > 0);
-  }, [leads, stageFlow]);
 
   const sourceStats = useMemo(() => {
     const map = new Map<string, number>();
@@ -1067,16 +1099,6 @@ export default function LeadsPage() {
   }, [leads, filterStage, filterPriority, filterSource, filterStatus, filterOwner, search]);
 
   const convertibleLeads = useMemo(() => leads.filter(isConvertible), [leads]);
-
-  const pipelineByStage = useMemo(() => {
-    const map = new Map<string, LeadRecord[]>();
-    for (const s of stageFlow) map.set(s, []);
-    for (const l of leads.filter((l) => l.status === "open")) {
-      if (map.has(l.stage)) map.get(l.stage)!.push(l);
-      else map.set(l.stage, [l]);
-    }
-    return map;
-  }, [leads, stageFlow]);
 
   const allSources = useMemo(() => Array.from(new Set(leads.map((l) => l.source ?? "Unknown").filter(Boolean))), [leads]);
 
@@ -1187,7 +1209,7 @@ export default function LeadsPage() {
                       onClick={() => openDetail(l)}>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-slate-900">{l.title}</p>
-                        <p className="text-xs text-slate-500">{l.companyName}</p>
+                        <p className="text-xs text-slate-500">{companyLabel(l.companyName)}</p>
                       </div>
                       <span className="text-xs text-amber-600 shrink-0 ml-2">{fmtDate(l.followUpAt!)}</span>
                     </div>
@@ -1236,7 +1258,7 @@ export default function LeadsPage() {
                 <SelectTrigger className="h-9 w-32"><SelectValue placeholder="Stage" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Stages</SelectItem>
-                  {stageFlow.map((s) => <SelectItem key={s} value={s}>{stageLabel(s)}</SelectItem>)}
+                  {allStageOptions.map((s) => <SelectItem key={s} value={s}>{stageLabel(s)}</SelectItem>)}
                   <SelectItem value="lost">Lost</SelectItem>
                   <SelectItem value="archived">Archived</SelectItem>
                 </SelectContent>
@@ -1267,7 +1289,7 @@ export default function LeadsPage() {
                   <SelectItem value="unassigned">Unassigned</SelectItem>
                   {owners.map((owner) => (
                     <SelectItem key={owner.id} value={owner.id}>
-                      {(owner.fullname || owner.name).trim() || owner.email || owner.id}
+                      {ownerOptionLabel(owner)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1304,7 +1326,7 @@ export default function LeadsPage() {
                         onClick={() => openDetail(lead)}>
                         <td className="px-4 py-3">
                           <p className="font-medium text-slate-900 truncate max-w-[180px]">{lead.title}</p>
-                          <p className="text-xs text-slate-500 truncate max-w-[180px]">{lead.companyName}</p>
+                          <p className="text-xs text-slate-500 truncate max-w-[180px]">{companyLabel(lead.companyName)}</p>
                         </td>
                         <td className="px-3 py-3">
                           <Badge className={cn("text-xs border font-normal", STAGE_COLORS[lead.stage] ?? STAGE_COLORS.new)}>
@@ -1349,7 +1371,7 @@ export default function LeadsPage() {
       {section === "pipeline" && (
         <div className="overflow-x-auto">
           <div className="flex gap-3 min-w-max pb-2">
-            {stageFlow.map((stage) => {
+            {allStageOptions.map((stage) => {
               const stageleads = pipelineByStage.get(stage) ?? [];
               const nextStage = nextStageMap.get(stage);
               return (
@@ -1365,7 +1387,7 @@ export default function LeadsPage() {
                         className="rounded-lg border bg-white p-3 shadow-sm hover:shadow-md cursor-pointer transition-shadow"
                         onClick={() => openDetail(lead)}>
                         <p className="text-sm font-semibold text-slate-900 truncate">{lead.title}</p>
-                        <p className="text-xs text-slate-500 truncate">{lead.companyName}</p>
+                        <p className="text-xs text-slate-500 truncate">{companyLabel(lead.companyName)}</p>
                         <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                           <Badge variant="outline" className={cn("text-xs border capitalize", PRIORITY_COLORS[lead.priority])}>
                             {lead.priority}
@@ -1420,7 +1442,7 @@ export default function LeadsPage() {
                 <div key={lead.id} className="flex items-center justify-between rounded-lg border p-3">
                   <div className="min-w-0 flex-1 cursor-pointer" onClick={() => openDetail(lead)}>
                     <p className="truncate text-sm font-semibold text-slate-900">{lead.title}</p>
-                    <p className="text-xs text-slate-500">{lead.companyName} · {lead.contactName || lead.email || "No contact"}</p>
+                    <p className="text-xs text-slate-500">{companyLabel(lead.companyName)} · {lead.contactName || lead.email || "No contact"}</p>
                     <div className="mt-1 flex gap-2 text-xs text-slate-500">
                       <Badge className={cn("text-xs border font-normal", STAGE_COLORS[lead.stage] ?? STAGE_COLORS.new)}>{lead.stageLabel}</Badge>
                       <span>Owner: {fullName(lead.owner)}</span>
@@ -1514,7 +1536,7 @@ export default function LeadsPage() {
                       <div key={l.id} className="flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs">
                         <div className="min-w-0">
                           <p className="font-medium text-slate-800 truncate">{l.title}</p>
-                          <p className="text-slate-500 truncate">{l.companyName} · {l.owner}</p>
+                          <p className="text-slate-500 truncate">{companyLabel(l.companyName)} · {l.owner}</p>
                         </div>
                         <span className="ml-2 shrink-0 text-slate-400">{fmtDate(l.updatedAt)}</span>
                       </div>
@@ -1539,8 +1561,8 @@ export default function LeadsPage() {
                 <Input value={createForm.title} onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))} placeholder="Potential onboarding..." />
               </div>
               <div className="space-y-1.5">
-                <Label>Company *</Label>
-                <Input value={createForm.companyName} onChange={(e) => setCreateForm((f) => ({ ...f, companyName: e.target.value }))} placeholder="Acme Corp" />
+                <Label>Company</Label>
+                <Input value={createForm.companyName} onChange={(e) => setCreateForm((f) => ({ ...f, companyName: e.target.value }))} placeholder="Optional" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1587,16 +1609,16 @@ export default function LeadsPage() {
             <div className="space-y-1.5">
               <Label>Owner</Label>
               <Select
-                value={(createForm.ownerId || (canManage ? "unassigned" : currentUserId)) || "unassigned"}
+                value={createForm.ownerId || "unassigned"}
                 onValueChange={(v) => v && setCreateForm((f) => ({ ...f, ownerId: v === "unassigned" ? "" : v }))}
-                disabled={!canManage}
+                disabled={!canWrite}
               >
                 <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="unassigned">Unassigned</SelectItem>
                   {owners.map((owner) => (
                     <SelectItem key={owner.id} value={owner.id}>
-                      {(owner.fullname || owner.name).trim() || owner.email || owner.id}
+                      {ownerOptionLabel(owner)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1647,7 +1669,6 @@ export default function LeadsPage() {
           sourceOptions={sourceOptions}
           customFields={customFields}
           owners={owners}
-          currentUserId={currentUserId}
           canWrite={canWrite}
           canManage={canManage}
           onClose={() => setSelectedDetail(null)}

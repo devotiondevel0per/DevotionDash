@@ -36,7 +36,7 @@ function toLeadResponse(lead: {
   contactId: string | null;
   createdAt: Date;
   updatedAt: Date;
-  owner: { id: string; name: string; fullname: string } | null;
+  owner: { id: string; name: string; fullname: string; login: string } | null;
   organization: { id: string; name: string } | null;
   contact: { id: string; firstName: string; lastName: string } | null;
   _count: { activities: number };
@@ -192,6 +192,7 @@ export async function GET(req: NextRequest) {
         where: userWhere,
         select: {
           id: true,
+          login: true,
           name: true,
           fullname: true,
           email: true,
@@ -213,11 +214,11 @@ export async function GET(req: NextRequest) {
         ? prisma.user
             .findMany({
               where: { id: { in: ownerIds } },
-              select: { id: true, name: true, fullname: true },
+              select: { id: true, name: true, fullname: true, login: true },
             })
             .then((rows) => ({ ok: true as const, rows }))
-            .catch(() => ({ ok: false as const, rows: [] as Array<{ id: string; name: string; fullname: string }> }))
-        : Promise.resolve({ ok: true as const, rows: [] as Array<{ id: string; name: string; fullname: string }> }),
+            .catch(() => ({ ok: false as const, rows: [] as Array<{ id: string; name: string; fullname: string; login: string }> }))
+        : Promise.resolve({ ok: true as const, rows: [] as Array<{ id: string; name: string; fullname: string; login: string }> }),
       organizationIds.length > 0
         ? prisma.organization
             .findMany({
@@ -288,6 +289,7 @@ export async function GET(req: NextRequest) {
       customFields,
       owners: owners.map((owner) => ({
         id: owner.id,
+        login: owner.login,
         name: owner.name,
         fullname: owner.fullname,
         email: owner.email,
@@ -331,21 +333,6 @@ export async function POST(req: NextRequest) {
 
     if (!title) {
       return NextResponse.json({ error: "title is required" }, { status: 400 });
-    }
-
-    if (!companyName) {
-      return NextResponse.json({ error: "companyName is required" }, { status: 400 });
-    }
-
-    if (
-      !accessResult.ctx.access.isAdmin &&
-      body.ownerId &&
-      body.ownerId !== accessResult.ctx.userId
-    ) {
-      return NextResponse.json(
-        { error: "Forbidden: you can only assign leads to yourself" },
-        { status: 403 }
-      );
     }
 
     const [stageFlow, owner, organization, contact] = await Promise.all([
@@ -414,7 +401,7 @@ export async function POST(req: NextRequest) {
           contactId: body.contactId || null,
         },
         include: {
-          owner: { select: { id: true, name: true, fullname: true } },
+          owner: { select: { id: true, name: true, fullname: true, login: true } },
           organization: { select: { id: true, name: true } },
           contact: { select: { id: true, firstName: true, lastName: true } },
           _count: { select: { activities: true } },
@@ -439,4 +426,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

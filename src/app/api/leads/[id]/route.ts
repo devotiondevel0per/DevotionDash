@@ -13,6 +13,17 @@ function canAccess(ctx: { access: { isAdmin: boolean; permissions: { leads: { ma
   return ctx.access.isAdmin || ctx.access.permissions.leads.manage || ownerId === ctx.userId;
 }
 
+function userLabel(user: { id: string; fullname: string; name: string; login: string } | null) {
+  if (!user) return "Unassigned";
+  const full = user.fullname?.trim();
+  if (full) return full;
+  const name = user.name?.trim();
+  if (name) return name;
+  const login = user.login?.trim();
+  if (login) return login;
+  return `User ${user.id.slice(0, 8)}`;
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,7 +38,7 @@ export async function GET(
     const lead = await prisma.lead.findUnique({
       where: { id },
       include: {
-        owner: { select: { id: true, name: true, fullname: true } },
+        owner: { select: { id: true, name: true, fullname: true, login: true } },
         organization: { select: { id: true, name: true } },
         contact: { select: { id: true, firstName: true, lastName: true } },
         activities: {
@@ -101,7 +112,7 @@ export async function PATCH(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: Record<string, any> = {};
     if (body.title !== undefined) data.title = body.title.trim();
-    if (body.companyName !== undefined) data.companyName = body.companyName.trim();
+    if (body.companyName !== undefined) data.companyName = body.companyName?.trim?.() ?? "";
     if ("contactName" in body) data.contactName = body.contactName?.trim() || null;
     if ("email" in body) data.email = body.email?.trim() || null;
     if ("phone" in body) data.phone = body.phone?.trim() || null;
@@ -114,8 +125,21 @@ export async function PATCH(
     if ("notes" in body) data.notes = body.notes || null;
     if ("followUpAt" in body) data.followUpAt = body.followUpAt ? new Date(body.followUpAt) : null;
     if ("customData" in body) data.customData = body.customData ? JSON.stringify(body.customData) : null;
-    if (access.isAdmin || access.permissions.leads.manage) {
-      if ("ownerId" in body) data.ownerId = body.ownerId || null;
+    const canReassignLead = access.isAdmin || access.permissions.leads.manage || lead.ownerId === userId;
+    if ("ownerId" in body) {
+      if (!canReassignLead) {
+        return NextResponse.json({ error: "Forbidden to reassign lead owner" }, { status: 403 });
+      }
+      if (body.ownerId) {
+        const ownerExists = await prisma.user.findUnique({
+          where: { id: body.ownerId },
+          select: { id: true },
+        });
+        if (!ownerExists) {
+          return NextResponse.json({ error: "Invalid ownerId" }, { status: 400 });
+        }
+      }
+      data.ownerId = body.ownerId || null;
     }
 
     let stageChanged = false;
@@ -134,11 +158,19 @@ export async function PATCH(
       }
     }
 
+    const ownerChanged = Object.prototype.hasOwnProperty.call(data, "ownerId") && data.ownerId !== lead.ownerId;
+    const previousOwner = ownerChanged && lead.ownerId
+      ? await prisma.user.findUnique({
+          where: { id: lead.ownerId },
+          select: { id: true, name: true, fullname: true, login: true },
+        })
+      : null;
+
     const updated = await prisma.lead.update({
       where: { id },
       data,
       include: {
-        owner: { select: { id: true, name: true, fullname: true } },
+        owner: { select: { id: true, name: true, fullname: true, login: true } },
         organization: { select: { id: true, name: true } },
         contact: { select: { id: true, firstName: true, lastName: true } },
         activities: {
@@ -155,6 +187,17 @@ export async function PATCH(
           userId,
           type: "stage_change",
           content: `Stage changed from '${toLeadStageLabel(lead.stage)}' to '${toLeadStageLabel(data.stage as string)}'.`,
+        },
+      });
+    }
+
+    if (ownerChanged) {
+      await prisma.leadActivity.create({
+        data: {
+          leadId: id,
+          userId,
+          type: "system",
+          content: `Lead owner transferred from '${userLabel(previousOwner)}' to '${userLabel(updated.owner ?? null)}'.`,
         },
       });
     }
