@@ -197,6 +197,9 @@ export default function TaskDetailPage() {
   const [tab, setTab] = useState<"conversation" | "details">("conversation");
   const [commentText, setCommentText] = useState("");
   const [posting, setPosting] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentHtml, setEditingCommentHtml] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
@@ -231,6 +234,11 @@ export default function TaskDetailPage() {
   }, [id]);
 
   useEffect(() => { void loadTask(); }, [loadTask]);
+
+  useEffect(() => {
+    setEditingCommentId(null);
+    setEditingCommentHtml("");
+  }, [id]);
 
   useEffect(() => {
     if (task) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -318,6 +326,44 @@ export default function TaskDetailPage() {
     }
   }
 
+  async function saveCommentEdit() {
+    if (!task || !editingCommentId) return;
+    const content = normalizeRichText(editingCommentHtml);
+    if (!hasRichTextContent(content)) {
+      toast.error("Comment cannot be empty");
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const response = await fetch(`/api/tasks/${id}/comments/${editingCommentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      const data = (await response.json().catch(() => null)) as TaskComment | { error?: string } | null;
+      if (!response.ok || !data || "error" in data) {
+        throw new Error((data as { error?: string } | null)?.error ?? "Failed to update comment");
+      }
+      const updated = data as TaskComment;
+      setTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              comments: prev.comments.map((item) => (item.id === updated.id ? updated : item)),
+            }
+          : prev
+      );
+      setEditingCommentId(null);
+      setEditingCommentHtml("");
+      toast.success("Conversation updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update comment");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   async function updateTaskStatus(nextStatus: string) {
     if (!task || !nextStatus || nextStatus === task.status || changingStatus) return;
     setChangingStatus(true);
@@ -366,6 +412,7 @@ export default function TaskDetailPage() {
   const priorityMeta = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
   const timeline = buildTimeline(task);
+  const canEditConversation = task.type === "note" && task.creatorId === meId;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -488,6 +535,19 @@ export default function TaskDetailPage() {
         {/* Conversation tab */}
         {tab === "conversation" && (
           <div className="space-y-4">
+            <div className="rounded-xl border bg-white p-4 shadow-sm">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Task Description</p>
+              {task.description ? (
+                <div
+                  dir="ltr"
+                  className="prose prose-sm max-w-none text-slate-700 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(task.description)) }}
+                />
+              ) : (
+                <p className="text-sm italic text-slate-400">No description provided.</p>
+              )}
+            </div>
+
             {/* Timeline */}
             <div className="space-y-3">
               {timeline.map((entry, idx) => {
@@ -505,23 +565,85 @@ export default function TaskDetailPage() {
 
                 const comment = entry.comment;
                 const isMe = comment.user.id === meId;
+                const canEditComment = canEditConversation && isMe;
+                const isEditing = editingCommentId === comment.id;
                 return (
-                  <div key={comment.id} className={cn("flex gap-3", isMe && "flex-row-reverse")}>
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-400 text-xs font-semibold text-white">
-                      {initials(nameOf(comment.user))}
-                    </div>
-                    <div className={cn("max-w-[75%] space-y-1", isMe && "items-end")}>
-                      <div className={cn("flex items-center gap-2 text-[11px] text-slate-500", isMe && "flex-row-reverse")}>
-                        <span className="font-medium text-slate-700">{nameOf(comment.user)}</span>
-                        <span>{formatDateTime(comment.createdAt)}</span>
+                  <div
+                    key={comment.id}
+                    className={cn(
+                      "rounded-xl border px-3 py-3 shadow-sm",
+                      isMe
+                        ? "border-[#FE0000]/25 bg-[#FE0000]/[0.03]"
+                        : "border-slate-200 bg-white"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-400 text-xs font-semibold text-white">
+                        {initials(nameOf(comment.user))}
                       </div>
-                      <div
-                        className={cn(
-                          "prose prose-sm max-w-none rounded-xl px-3 py-2 text-sm leading-relaxed",
-                          isMe ? "bg-[#FE0000]/10 text-slate-800" : "bg-white border text-slate-800 shadow-sm"
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                          <span className="font-medium text-slate-700">{nameOf(comment.user)}</span>
+                          {isMe ? (
+                            <span className="rounded-full bg-[#FE0000]/10 px-2 py-0.5 text-[10px] font-semibold text-[#c70000]">
+                              You
+                            </span>
+                          ) : null}
+                          <span>{formatDateTime(comment.createdAt)}</span>
+                          {canEditComment && !isEditing ? (
+                            <button
+                              type="button"
+                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#c70000] hover:bg-[#FE0000]/10"
+                              onClick={() => {
+                                setEditingCommentId(comment.id);
+                                setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
+                              }}
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                        </div>
+                        {isEditing ? (
+                          <div className="space-y-2 rounded-lg border bg-white p-2">
+                            <RichTextEditor
+                              value={editingCommentHtml}
+                              onChange={setEditingCommentHtml}
+                              placeholder="Edit conversation..."
+                              minHeight={110}
+                              disabled={savingEdit}
+                            />
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingCommentId(null);
+                                  setEditingCommentHtml("");
+                                }}
+                                disabled={savingEdit}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="bg-[#FE0000] text-white hover:bg-[#d40000]"
+                                onClick={() => void saveCommentEdit()}
+                                disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
+                              >
+                                {savingEdit ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                                Save
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
+                            dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
+                          />
                         )}
-                        dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
-                      />
+                      </div>
                     </div>
                   </div>
                 );

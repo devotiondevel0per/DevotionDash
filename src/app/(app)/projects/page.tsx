@@ -10,6 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  RichTextEditor,
+  hasRichTextContent,
+  normalizeRichText,
+  richTextToPlainText,
+} from "@/components/editor/rich-text-editor";
+import {
   Progress,
   ProgressTrack,
   ProgressIndicator,
@@ -104,6 +110,7 @@ type ProjectTask = {
   status: string;
   priority: string;
   dueDate: string | null;
+  createdAt: string;
   assignee: { id: string; name: string; fullname: string; photoUrl: string | null } | null;
   phase: { id: string; name: string } | null;
 };
@@ -466,7 +473,7 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
     return stageOptions.some((stage) => stage.key === normalized) ? normalized : defaultStage.key;
   }, [defaultStage.key, stageOptions]);
   const [title, setTitle] = useState(existing?.title ?? "");
-  const [description, setDescription] = useState(existing?.description ?? "");
+  const [description, setDescription] = useState(normalizeRichText(existing?.description ?? ""));
   const [status, setStatus] = useState(resolveStatus(existing?.status));
   const [priority, setPriority] = useState(existing?.priority ?? "normal");
   const [assigneeId, setAssigneeId] = useState(existing?.assignee?.id ?? "");
@@ -479,7 +486,7 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
   useEffect(() => {
     if (open) {
       setTitle(existing?.title ?? "");
-      setDescription(existing?.description ?? "");
+      setDescription(normalizeRichText(existing?.description ?? ""));
       setStatus(resolveStatus(existing?.status));
       setPriority(existing?.priority ?? "normal");
       setAssigneeId(existing?.assignee?.id ?? "");
@@ -496,7 +503,7 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
     try {
       const payload = {
         title: title.trim(),
-        description: description.trim() || null,
+        description: hasRichTextContent(description) ? normalizeRichText(description) : null,
         status,
         priority,
         assigneeId: assigneeId || null,
@@ -567,7 +574,13 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="t-desc">Description</Label>
-            <Textarea id="t-desc" placeholder="Optional details..." rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+            <RichTextEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="Write task details..."
+              minHeight={140}
+              disabled={submitting}
+            />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -1222,6 +1235,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                         <TableHead className="pl-4">Title</TableHead>
                         <TableHead className="w-28">Status</TableHead>
                         <TableHead className="w-24">Priority</TableHead>
+                        <TableHead className="w-28">Created</TableHead>
                         <TableHead className="w-36">Assignee</TableHead>
                         <TableHead className="w-28">Phase</TableHead>
                         <TableHead className="w-28">Due Date</TableHead>
@@ -1240,7 +1254,9 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                             <TableCell className="pl-4">
                               <span className="text-sm font-medium text-gray-800">{task.title}</span>
                               {task.description && (
-                                <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</p>
+                                <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">
+                                  {richTextToPlainText(task.description)}
+                                </p>
                               )}
                             </TableCell>
                             <TableCell onClick={(e) => { if (!canProjectWrite) return; e.stopPropagation(); void toggleTaskStatus(task); }}>
@@ -1265,6 +1281,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                 {TASK_PRIORITY_CONFIG[task.priority]?.label ?? task.priority}
                               </Badge>
                             </TableCell>
+                            <TableCell className="text-xs text-gray-500">{formatDate(task.createdAt)}</TableCell>
                             <TableCell>
                               {task.assignee ? (
                                 <div className="flex items-center gap-1.5">
@@ -1352,7 +1369,9 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                       {task.title}
                                     </button>
                                     {task.description ? (
-                                      <p className="mt-1 line-clamp-2 text-xs text-slate-500">{task.description}</p>
+                                      <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                                        {richTextToPlainText(task.description)}
+                                      </p>
                                     ) : null}
                                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                       <Badge variant="outline" style={stageMetaStyle} className="h-5 px-1.5 text-[10px]">
@@ -1372,6 +1391,9 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                     </div>
                                     <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
                                       <span className="truncate">{assigneeName}</span>
+                                      <span className="shrink-0 text-[10px] text-slate-400">
+                                        {formatDate(task.createdAt)}
+                                      </span>
                                       <button
                                         type="button"
                                         className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
