@@ -1029,7 +1029,7 @@ export default function LeadsPage() {
   const pipelineByStage = useMemo(() => {
     const map = new Map<string, LeadRecord[]>();
     for (const s of allStageOptions) map.set(s, []);
-    for (const l of leads.filter((l) => l.status === "open")) {
+    for (const l of leads.filter((l) => l.status !== "archived")) {
       if (map.has(l.stage)) map.get(l.stage)!.push(l);
       else map.set(l.stage, [l]);
     }
