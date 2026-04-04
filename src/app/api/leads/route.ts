@@ -78,6 +78,12 @@ export async function GET(req: NextRequest) {
   if (!accessResult.ok) return accessResult.response;
 
   try {
+    const userId = accessResult.ctx.userId;
+    const roleGroupIds = accessResult.ctx.access.roles
+      .map((role) => role.groupId)
+      .filter((groupId): groupId is string => Boolean(groupId));
+    const canManageLeads = accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.leads.manage;
+
     const { searchParams } = new URL(req.url);
     const stage = searchParams.get("stage")?.trim().toLowerCase();
     const status = searchParams.get("status")?.trim().toLowerCase();
@@ -129,7 +135,25 @@ export async function GET(req: NextRequest) {
       where.AND = and;
     }
 
-    const [stageFlow, sourceOptions, formFields, customFields, leadsBase] = await Promise.all([
+    const userWhere = canManageLeads
+      ? { isActive: true }
+      : roleGroupIds.length > 0
+        ? {
+            OR: [
+              { id: userId },
+              {
+                groupMembers: {
+                  some: {
+                    groupId: { in: roleGroupIds },
+                  },
+                },
+              },
+            ],
+            isActive: true,
+          }
+        : { id: userId, isActive: true };
+
+    const [stageFlow, sourceOptions, formFields, customFields, leadsBase, owners] = await Promise.all([
       loadLeadStageFlow(),
       loadLeadSourceOptions(),
       loadLeadFormFields(),
@@ -163,6 +187,17 @@ export async function GET(req: NextRequest) {
           createdAt: true,
           updatedAt: true,
         },
+      }),
+      prisma.user.findMany({
+        where: userWhere,
+        select: {
+          id: true,
+          name: true,
+          fullname: true,
+          email: true,
+        },
+        orderBy: [{ fullname: "asc" }, { name: "asc" }],
+        take: 500,
       }),
     ]);
 
@@ -251,6 +286,13 @@ export async function GET(req: NextRequest) {
       sourceOptions,
       formFields,
       customFields,
+      owners: owners.map((owner) => ({
+        id: owner.id,
+        name: owner.name,
+        fullname: owner.fullname,
+        email: owner.email,
+      })),
+      currentUserId: userId,
       leads: leads.map(toLeadResponse),
     });
   } catch (error) {
@@ -397,5 +439,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
 

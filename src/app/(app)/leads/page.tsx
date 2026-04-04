@@ -52,10 +52,19 @@ type LeadCustomField = {
   required: boolean; order: number; placeholder: string; options: string[];
 };
 
+type LeadOwnerOption = {
+  id: string;
+  name: string;
+  fullname: string;
+  email: string | null;
+};
+
 type LeadsResponse = {
   stageFlow: string[]; sourceOptions: string[];
   formFields: Array<{ id: string; label: string; enabled: boolean; required: boolean; order: number; placeholder: string }>;
   customFields: LeadCustomField[];
+  owners?: Array<{ id: string; name: string; fullname: string; email: string | null }>;
+  currentUserId?: string;
   leads: LeadRecord[];
 };
 
@@ -73,6 +82,7 @@ type CreateForm = {
   title: string; companyName: string; contactName: string; email: string;
   phone: string; country: string; language: string; source: string;
   priority: "low" | "normal" | "high"; notes: string; expectedDeposit: string;
+  ownerId: string;
   customData: Record<string, unknown>;
 };
 
@@ -114,6 +124,7 @@ const SOURCE_COLORS = ["#FE0000", "#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#
 const EMPTY_CREATE: CreateForm = {
   title: "", companyName: "", contactName: "", email: "", phone: "",
   country: "", language: "", source: "", priority: "normal", notes: "", expectedDeposit: "",
+  ownerId: "",
   customData: {},
 };
 
@@ -258,13 +269,15 @@ function MonthlyBarChart({ stats }: { stats: Array<{ label: string; newLeads: nu
 // ─── Lead Detail Sheet ────────────────────────────────────────────────────────
 
 function LeadDetailSheet({
-  lead, stageFlow, sourceOptions, customFields, canWrite, canManage,
+  lead, stageFlow, sourceOptions, customFields, owners, currentUserId, canWrite, canManage,
   onClose, onSaved, onDeleted, onConverted,
 }: {
   lead: LeadDetail;
   stageFlow: string[];
   sourceOptions: string[];
   customFields: LeadCustomField[];
+  owners: LeadOwnerOption[];
+  currentUserId: string;
   canWrite: boolean;
   canManage: boolean;
   onClose: () => void;
@@ -279,6 +292,7 @@ function LeadDetailSheet({
     source: lead.source ?? "", priority: lead.priority, stage: lead.stage,
     expectedDeposit: lead.expectedDeposit?.toString() ?? "", score: lead.score.toString(),
     notes: lead.notes ?? "",
+    ownerId: lead.ownerId ?? "",
     followUpAt: lead.followUpAt ? new Date(lead.followUpAt).toISOString().slice(0, 10) : "",
     customData: (lead.customData as Record<string, unknown>) ?? {},
   });
@@ -308,6 +322,7 @@ function LeadDetailSheet({
           expectedDeposit: form.expectedDeposit ? Number(form.expectedDeposit) : null,
           score: Number(form.score) || 0,
           notes: form.notes || null,
+          ownerId: canManage ? (form.ownerId || null) : currentUserId,
           followUpAt: form.followUpAt || null,
           customData: Object.keys(form.customData).length > 0 ? form.customData : null,
         }),
@@ -538,6 +553,24 @@ function LeadDetailSheet({
                 <Input type="number" value={form.expectedDeposit}
                   onChange={(e) => setForm((f) => ({ ...f, expectedDeposit: e.target.value }))} className="h-8 text-sm" />
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Owner</Label>
+              <Select
+                value={form.ownerId || "unassigned"}
+                onValueChange={(v) => v && setForm((f) => ({ ...f, ownerId: v === "unassigned" ? "" : v }))}
+                disabled={!canManage}
+              >
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {(owner.fullname || owner.name).trim() || owner.email || owner.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -774,6 +807,8 @@ export default function LeadsPage() {
   const [sourceOptions, setSourceOptions] = useState<string[]>([]);
   const [formFields, setFormFields] = useState<LeadsResponse["formFields"]>([]);
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([]);
+  const [owners, setOwners] = useState<LeadOwnerOption[]>([]);
+  const [currentUserId, setCurrentUserId] = useState("");
   const [reports, setReports] = useState<ReportsData | null>(null);
 
   const [loadingLeads, setLoadingLeads] = useState(false);
@@ -793,6 +828,7 @@ export default function LeadsPage() {
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterOwner, setFilterOwner] = useState("all");
   const [search, setSearch] = useState("");
 
   // Busy state for pipeline complete
@@ -822,6 +858,11 @@ export default function LeadsPage() {
       setSourceOptions(data.sourceOptions ?? []);
       setFormFields(data.formFields ?? []);
       setCustomFields(data.customFields ?? []);
+      const ownerOptions = Array.isArray(data.owners) ? data.owners : [];
+      setOwners(ownerOptions);
+      if (data.currentUserId) {
+        setCurrentUserId(data.currentUserId);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load leads");
     } finally {
@@ -847,6 +888,12 @@ export default function LeadsPage() {
   useEffect(() => {
     if (section === "reports" && canManage) void loadReports();
   }, [section, canManage, loadReports]);
+  useEffect(() => {
+    if (!currentUserId) return;
+    if (!canManage) {
+      setCreateForm((prev) => (prev.ownerId === currentUserId ? prev : { ...prev, ownerId: currentUserId }));
+    }
+  }, [canManage, currentUserId]);
 
   async function openDetail(lead: LeadRecord) {
     setLoadingDetail(true);
@@ -924,6 +971,7 @@ export default function LeadsPage() {
           contactName: createForm.contactName || null, email: createForm.email || null,
           phone: createForm.phone || null, country: createForm.country || null,
           source: createForm.source || null, priority: createForm.priority,
+          ownerId: canManage ? (createForm.ownerId || null) : (currentUserId || null),
           notes: createForm.notes || null,
           expectedDeposit: createForm.expectedDeposit ? Number(createForm.expectedDeposit) : null,
           customData: Object.keys(createForm.customData).length > 0 ? createForm.customData : null,
@@ -1006,13 +1054,17 @@ export default function LeadsPage() {
       if (filterPriority !== "all" && l.priority !== filterPriority) return false;
       if (filterSource !== "all" && (l.source ?? "Unknown") !== filterSource) return false;
       if (filterStatus !== "all" && l.status !== filterStatus) return false;
+      if (filterOwner !== "all") {
+        if (filterOwner === "unassigned" && l.ownerId) return false;
+        if (filterOwner !== "unassigned" && l.ownerId !== filterOwner) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         return [l.title, l.companyName, l.contactName, l.email, l.source].some((f) => f?.toLowerCase().includes(q));
       }
       return true;
     });
-  }, [leads, filterStage, filterPriority, filterSource, filterStatus, search]);
+  }, [leads, filterStage, filterPriority, filterSource, filterStatus, filterOwner, search]);
 
   const convertibleLeads = useMemo(() => leads.filter(isConvertible), [leads]);
 
@@ -1206,6 +1258,18 @@ export default function LeadsPage() {
                   <SelectItem value="won">Won</SelectItem>
                   <SelectItem value="lost">Lost</SelectItem>
                   <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterOwner} onValueChange={(v) => v && setFilterOwner(v)}>
+                <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Owner" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All owners</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {(owner.fullname || owner.name).trim() || owner.email || owner.id}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <span className="text-xs text-slate-500 ml-1">{filteredLeads.length} leads</span>
@@ -1521,6 +1585,24 @@ export default function LeadsPage() {
               </div>
             </div>
             <div className="space-y-1.5">
+              <Label>Owner</Label>
+              <Select
+                value={(createForm.ownerId || (canManage ? "unassigned" : currentUserId)) || "unassigned"}
+                onValueChange={(v) => v && setCreateForm((f) => ({ ...f, ownerId: v === "unassigned" ? "" : v }))}
+                disabled={!canManage}
+              >
+                <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {(owner.fullname || owner.name).trim() || owner.email || owner.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label>Expected Value ($)</Label>
               <Input type="number" value={createForm.expectedDeposit}
                 onChange={(e) => setCreateForm((f) => ({ ...f, expectedDeposit: e.target.value }))} placeholder="0" />
@@ -1564,6 +1646,8 @@ export default function LeadsPage() {
           stageFlow={stageFlow}
           sourceOptions={sourceOptions}
           customFields={customFields}
+          owners={owners}
+          currentUserId={currentUserId}
           canWrite={canWrite}
           canManage={canManage}
           onClose={() => setSelectedDetail(null)}
