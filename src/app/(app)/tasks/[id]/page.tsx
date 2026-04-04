@@ -7,6 +7,11 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  RichTextEditor,
+  hasRichTextContent,
+  normalizeRichText,
+} from "@/components/editor/rich-text-editor";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -273,7 +278,8 @@ export default function TaskDetailPage() {
 
   async function postComment() {
     if (!task) return;
-    const hasText = commentText.trim().length > 0;
+    const content = normalizeRichText(commentText);
+    const hasText = hasRichTextContent(content);
     const hasFiles = pendingFiles.length > 0;
     if (!hasText && !hasFiles) return;
 
@@ -291,7 +297,7 @@ export default function TaskDetailPage() {
         const res = await fetch(`/api/tasks/${id}/comments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: commentText.trim() }),
+          body: JSON.stringify({ content }),
         });
         const data = (await res.json().catch(() => null)) as TaskComment | { error?: string } | null;
         if (!res.ok || !data || "error" in data) {
@@ -509,12 +515,13 @@ export default function TaskDetailPage() {
                         <span className="font-medium text-slate-700">{nameOf(comment.user)}</span>
                         <span>{formatDateTime(comment.createdAt)}</span>
                       </div>
-                      <div className={cn(
-                        "rounded-xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
-                        isMe ? "bg-[#FE0000]/10 text-slate-800" : "bg-white border text-slate-800 shadow-sm"
-                      )}>
-                        {comment.content}
-                      </div>
+                      <div
+                        className={cn(
+                          "prose prose-sm max-w-none rounded-xl px-3 py-2 text-sm leading-relaxed",
+                          isMe ? "bg-[#FE0000]/10 text-slate-800" : "bg-white border text-slate-800 shadow-sm"
+                        )}
+                        dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
+                      />
                     </div>
                   </div>
                 );
@@ -584,23 +591,15 @@ export default function TaskDetailPage() {
                 </div>
               )}
 
-              <div className="flex items-end gap-2">
-                <textarea
-                  dir="ltr"
+              <div className="space-y-2">
+                <RichTextEditor
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void postComment();
-                    }
-                  }}
-                  placeholder="Write a comment… (Enter to send, Shift+Enter for new line)"
-                  className="flex-1 resize-none rounded-lg border bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#FE0000]/40 focus:ring-1 focus:ring-[#FE0000]/20"
-                  rows={3}
+                  onChange={setCommentText}
+                  placeholder="Write a comment..."
+                  minHeight={130}
                   disabled={posting || uploading}
                 />
-                <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-end gap-2">
                   <Button
                     variant="outline"
                     size="icon"
@@ -615,7 +614,7 @@ export default function TaskDetailPage() {
                     className="h-9 w-9 bg-[#FE0000] text-white hover:bg-[#d40000]"
                     size="icon"
                     onClick={() => void postComment()}
-                    disabled={posting || uploading || (!commentText.trim() && pendingFiles.length === 0)}
+                    disabled={posting || uploading || (!hasRichTextContent(commentText) && pendingFiles.length === 0)}
                   >
                     {posting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
@@ -646,7 +645,7 @@ export default function TaskDetailPage() {
                 <div
                   dir="ltr"
                   className="prose prose-sm max-w-none text-slate-700 leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: toHtml(task.description) }}
+                  dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(task.description)) }}
                 />
               ) : (
                 <p className="text-sm italic text-slate-400">No description provided.</p>

@@ -17,6 +17,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
+  RichTextEditor,
+  hasRichTextContent,
+  normalizeRichText,
+} from "@/components/editor/rich-text-editor";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,9 +40,7 @@ import {
   Eye,
   FilePlus2,
   LayoutGrid,
-  Link2,
   List,
-  ListOrdered,
   Loader2,
   MessageSquare,
   Paperclip,
@@ -47,7 +50,6 @@ import {
   Send,
   Star,
   Trash2,
-  Underline,
   User,
 } from "lucide-react";
 
@@ -201,8 +203,6 @@ const EMPTY_FORM: TaskFormState = {
   descriptionHtml: "",
 };
 
-const BIDI_CONTROL_REGEX = /[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
-
 function nameOf(user: { name: string; fullname: string }) {
   return user.fullname?.trim() || user.name || "Unknown";
 }
@@ -308,21 +308,6 @@ function FilterPanel({
   );
 }
 
-function EditorToolbar({ onCommand, disabled }: { onCommand: (command: string, value?: string) => void; disabled?: boolean }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1 border-b bg-slate-50 p-1.5">
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => onCommand("bold")} disabled={disabled}><span className="font-bold">B</span></Button>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => onCommand("italic")} disabled={disabled}><span className="italic">I</span></Button>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => onCommand("underline")} disabled={disabled}><Underline className="h-3.5 w-3.5" /></Button>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => onCommand("insertUnorderedList")} disabled={disabled}><List className="h-3.5 w-3.5" /></Button>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => onCommand("insertOrderedList")} disabled={disabled}><ListOrdered className="h-3.5 w-3.5" /></Button>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
-        const url = window.prompt("Enter URL", "https://");
-        if (url) onCommand("createLink", url);
-      }} disabled={disabled}><Link2 className="h-3.5 w-3.5" /></Button>
-    </div>
-  );
-}
 function TaskModal({
   open,
   onClose,
@@ -343,55 +328,12 @@ function TaskModal({
   const [form, setForm] = useState<TaskFormState>(initial);
   const [saving, setSaving] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const editorTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setForm(initial);
     setFiles([]);
   }, [open, initial]);
-
-  const sanitizeText = useCallback((value: string) => value.replace(BIDI_CONTROL_REGEX, ""), []);
-
-  const exec = useCallback((command: string, value?: string) => {
-    const textarea = editorTextareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart ?? 0;
-    const end = textarea.selectionEnd ?? 0;
-
-    setForm((prev) => {
-      const source = prev.descriptionHtml || "";
-      const selected = source.slice(start, end);
-      const fallback = selected || "text";
-
-      let insertText = selected;
-      if (command === "bold") insertText = `<strong>${fallback}</strong>`;
-      else if (command === "italic") insertText = `<em>${fallback}</em>`;
-      else if (command === "underline") insertText = `<u>${fallback}</u>`;
-      else if (command === "insertUnorderedList") {
-        const lines = (selected || "Item").split(/\r?\n/).filter((line) => line.trim().length > 0);
-        insertText = `<ul>${lines.map((line) => `<li>${line}</li>`).join("")}</ul>`;
-      } else if (command === "insertOrderedList") {
-        const lines = (selected || "Item").split(/\r?\n/).filter((line) => line.trim().length > 0);
-        insertText = `<ol>${lines.map((line) => `<li>${line}</li>`).join("")}</ol>`;
-      } else if (command === "createLink") {
-        const href = (value ?? "").trim();
-        if (!href) return prev;
-        insertText = `<a href="${href}" target="_blank" rel="noopener noreferrer">${selected || href}</a>`;
-      }
-
-      const next = sanitizeText(source.slice(0, start) + insertText + source.slice(end));
-
-      queueMicrotask(() => {
-        const cursor = start + insertText.length;
-        textarea.focus();
-        textarea.setSelectionRange(cursor, cursor);
-      });
-
-      return { ...prev, descriptionHtml: next };
-    });
-  }, [sanitizeText]);
 
   async function uploadFiles(taskId: string) {
     if (files.length === 0) return;
@@ -555,26 +497,13 @@ function TaskModal({
               <Button type="button" size="sm" variant="ghost" className="h-8 text-xs text-slate-500 hover:text-slate-700" onClick={() => setForm((p) => ({ ...p, dueDate: "" }))}>Clear</Button>
             </div>
 
-            <div className="rounded-md border">
-              <EditorToolbar onCommand={exec} disabled={saving} />
-              <textarea
-                ref={editorTextareaRef}
-                dir="ltr"
-                spellCheck
-                value={form.descriptionHtml}
-                onChange={(event) => setForm((prev) => ({ ...prev, descriptionHtml: sanitizeText(event.target.value) }))}
-                className="h-52 w-full resize-none border-0 bg-white px-3 py-2 font-mono text-sm text-slate-800 outline-none"
-                placeholder="Write description (HTML supported)."
-              />
-              <div className="border-t bg-slate-50 px-3 py-2">
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Preview</p>
-                <div
-                  dir="ltr"
-                  className="max-h-32 overflow-auto rounded border bg-white px-2 py-1.5 text-sm text-slate-700"
-                  dangerouslySetInnerHTML={{ __html: form.descriptionHtml || "<span class='text-slate-400'>No content</span>" }}
-                />
-              </div>
-            </div>
+            <RichTextEditor
+              value={form.descriptionHtml}
+              onChange={(next) => setForm((prev) => ({ ...prev, descriptionHtml: next }))}
+              placeholder="Write task description..."
+              minHeight={220}
+              disabled={saving}
+            />
 
             <div className="space-y-2">
               <Label>Attach file</Label>
@@ -705,13 +634,15 @@ function TaskDetailDialog({
   }, [comments]);
 
   async function postComment() {
-    if (!task || !commentText.trim()) return;
+    if (!task || !hasRichTextContent(commentText)) return;
+    const content = normalizeRichText(commentText);
+    if (!content) return;
     setPosting(true);
     try {
       const response = await fetch(`/api/tasks/${task.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: commentText.trim() }),
+        body: JSON.stringify({ content }),
       });
       const data = (await response.json().catch(() => null)) as TaskComment | { error?: string } | null;
       if (!response.ok || !data || "error" in data) throw new Error((data as { error?: string } | null)?.error ?? "Failed to post comment");
@@ -760,7 +691,7 @@ function TaskDetailDialog({
               <div
                 dir="ltr"
                 className="max-h-28 overflow-auto rounded border bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700"
-                dangerouslySetInnerHTML={{ __html: toHtml(task.description) }}
+                dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(task.description)) }}
               />
             ) : (
               <p className="text-xs text-slate-400 italic">No description</p>
@@ -789,9 +720,13 @@ function TaskDetailDialog({
                         <span className="font-medium text-slate-700">{comment.user.fullname || comment.user.name}</span>
                         <span>{new Date(comment.createdAt).toLocaleString()}</span>
                       </div>
-                      <div className={cn("rounded-xl px-3 py-2 text-sm leading-relaxed", isMe ? "bg-[#FE0000]/10 text-slate-800" : "bg-slate-100 text-slate-800")}>
-                        {comment.content}
-                      </div>
+                      <div
+                        className={cn(
+                          "prose prose-sm max-w-none rounded-xl px-3 py-2 text-sm leading-relaxed",
+                          isMe ? "bg-[#FE0000]/10 text-slate-800" : "bg-slate-100 text-slate-800"
+                        )}
+                        dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
+                      />
                     </div>
                   </div>
                 );
@@ -802,30 +737,24 @@ function TaskDetailDialog({
 
           {/* Comment input */}
           <div className="shrink-0 border-t bg-white px-6 py-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                dir="ltr"
+            <div className="space-y-2">
+              <RichTextEditor
                 value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void postComment();
-                  }
-                }}
-                placeholder="Write a comment… (Enter to send, Shift+Enter for new line)"
-                className="flex-1 resize-none rounded-lg border bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#FE0000]/40 focus:ring-1 focus:ring-[#FE0000]/20"
-                rows={2}
+                onChange={setCommentText}
+                placeholder="Write a comment..."
+                minHeight={110}
                 disabled={posting}
               />
-              <Button
-                className="h-10 bg-[#FE0000] text-white hover:bg-[#d40000]"
-                size="icon"
-                onClick={() => void postComment()}
-                disabled={posting || !commentText.trim()}
-              >
-                {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
+              <div className="flex justify-end">
+                <Button
+                  className="h-10 bg-[#FE0000] text-white hover:bg-[#d40000]"
+                  size="icon"
+                  onClick={() => void postComment()}
+                  disabled={posting || !hasRichTextContent(commentText)}
+                >
+                  {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
