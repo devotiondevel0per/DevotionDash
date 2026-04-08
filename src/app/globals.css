@@ -62,7 +62,7 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.58 0.22 27);
+  --destructive: #AA8038;
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: #AA8038;
@@ -88,6 +88,17 @@
   --twx-topbar-mid: #8E610C;
   --twx-topbar-to: #BF8210;
   --twx-topbar-accent: #AA8038;
+  --color-red-50: #fdf8ef;
+  --color-red-100: #f7ecd9;
+  --color-red-200: #ecd8b0;
+  --color-red-300: #dfbf84;
+  --color-red-400: #cea35b;
+  --color-red-500: #AA8038;
+  --color-red-600: #926d30;
+  --color-red-700: #775727;
+  --color-red-800: #5d441f;
+  --color-red-900: #49361a;
+  --color-red-950: #2f220f;
 }
 
 @keyframes topbarFlow {
@@ -129,7 +140,7 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.371 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --destructive: #AA8038;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: #AA8038;
@@ -146,6 +157,17 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --color-red-50: #fdf8ef;
+  --color-red-100: #f7ecd9;
+  --color-red-200: #ecd8b0;
+  --color-red-300: #dfbf84;
+  --color-red-400: #cea35b;
+  --color-red-500: #AA8038;
+  --color-red-600: #926d30;
+  --color-red-700: #775727;
+  --color-red-800: #5d441f;
+  --color-red-900: #49361a;
+  --color-red-950: #2f220f;
 }
 
 @layer base {

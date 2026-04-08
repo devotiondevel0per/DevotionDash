@@ -324,6 +324,12 @@ const EMPTY_NEW_USER_FORM: NewUserForm = {
 };
 const DEPARTMENTS_SETTING_KEY = "org.departments.catalog";
 
+function createClientId(prefix: string) {
+  const secureUuid = globalThis.crypto?.randomUUID?.();
+  if (secureUuid) return secureUuid;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function parseDepartmentsFromSetting(raw: string | undefined): DepartmentItem[] {
   if (!raw) return [];
   try {
@@ -336,7 +342,7 @@ function parseDepartmentsFromSetting(raw: string | undefined): DepartmentItem[] 
         const source = item as Record<string, unknown>;
         const name = String(source.name ?? "").trim();
         if (!name) return null;
-        const id = String(source.id ?? "").trim() || crypto.randomUUID();
+        const id = String(source.id ?? "").trim() || createClientId("dept");
         const createdAt = String(source.createdAt ?? "").trim() || nowIso;
         const updatedAt = String(source.updatedAt ?? "").trim() || nowIso;
         return {
@@ -937,7 +943,7 @@ export default function AdministrationPage() {
         )
           .sort((a, b) => a.localeCompare(b))
           .map((name) => ({
-            id: crypto.randomUUID(),
+            id: createClientId("dept"),
             name,
             isActive: true,
             createdAt: nowIso,
@@ -1472,7 +1478,7 @@ export default function AdministrationPage() {
     setDepartmentDraft((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: createClientId("dept"),
         name,
         isActive: true,
         createdAt: nowIso,
@@ -2727,7 +2733,8 @@ export default function AdministrationPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
                             size="sm"
-                            variant={selectedUser.isActive ? "destructive" : "default"}
+                            variant="default"
+                            className={selectedUser.isActive ? "bg-[#AA8038]/15 text-[#7B5B1D] hover:bg-[#AA8038]/25" : ""}
                             onClick={() => void updateSelectedUser({ isActive: !selectedUser.isActive })}
                             disabled={!canManage || userActionSaving}
                           >

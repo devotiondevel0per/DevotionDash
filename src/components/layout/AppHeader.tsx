@@ -234,7 +234,7 @@ export function AppHeader() {
     void fetchNotifications();
     const intervalId = window.setInterval(() => {
       void fetchNotifications({ silent: true });
-    }, 5000);
+    }, 15000);
     return () => {
       window.clearInterval(intervalId);
     };
