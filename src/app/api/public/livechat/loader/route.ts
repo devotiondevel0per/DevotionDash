@@ -84,19 +84,19 @@ export async function GET(req: NextRequest) {
 function buildLoaderScript(widgetUrl: string, position: string, accent: string, brand: string) {
   const buttonOffset = "22px";
   return `(() => {
-  if (window.__zedDashLivechatLoaded) return;
-  window.__zedDashLivechatLoaded = "pending";
+  if (window.__devotionDashLivechatLoaded) return;
+  window.__devotionDashLivechatLoaded = "pending";
 
   const mount = () => {
     try {
       if (!document.body) return false;
-      if (document.getElementById("zeddash-livechat-root")) {
-        window.__zedDashLivechatLoaded = true;
+      if (document.getElementById("devotiondash-livechat-root")) {
+        window.__devotionDashLivechatLoaded = true;
         return true;
       }
 
       const root = document.createElement("div");
-      root.id = "zeddash-livechat-root";
+      root.id = "devotiondash-livechat-root";
       root.style.position = "fixed";
       root.style.zIndex = "2147483000";
       root.style.${position} = "${buttonOffset}";
@@ -179,12 +179,12 @@ function buildLoaderScript(widgetUrl: string, position: string, accent: string, 
 
       window.addEventListener("message", (event) => {
         if (!event || !event.data) return;
-        if (event.data.type === "zedchat:close") {
+        if (event.data.type === "devotionchat:close") {
           open = false;
           setOpen(open);
           return;
         }
-        if (event.data.type === "zedchat:move" && window.innerWidth > 640) {
+        if (event.data.type === "devotionchat:move" && window.innerWidth > 640) {
           const vw = window.innerWidth;
           const vh = window.innerHeight;
           const rootRect = root.getBoundingClientRect();
@@ -203,10 +203,10 @@ function buildLoaderScript(widgetUrl: string, position: string, accent: string, 
       root.appendChild(button);
       document.body.appendChild(root);
       applyViewportLayout();
-      window.__zedDashLivechatLoaded = true;
+      window.__devotionDashLivechatLoaded = true;
       return true;
     } catch (error) {
-      window.__zedDashLivechatLoaded = false;
+      window.__devotionDashLivechatLoaded = false;
       try { console.error("Failed to mount livechat widget", error); } catch {}
       return false;
     }

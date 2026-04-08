@@ -12,10 +12,10 @@ export const THEME_TOPBAR_TO_KEY = "theme.topbar.to";
 export const THEME_TOPBAR_ACCENT_KEY = "theme.topbar.accent";
 export const APP_LOGO_KEY = "app.logo";
 
-export const RUNTIME_SETTINGS_STORAGE_KEY = "zeddash_runtime_settings_v1";
-export const BRANDING_UPDATED_EVENT = "zeddash:branding-updated";
+export const RUNTIME_SETTINGS_STORAGE_KEY = "devotiondash_runtime_settings_v1";
+export const BRANDING_UPDATED_EVENT = "devotiondash:branding-updated";
 
-export const DEFAULT_APP_NAME = "ZedDash";
+export const DEFAULT_APP_NAME = "DevotionDash";
 export const DEFAULT_APP_TAGLINE = "Workspace";
 export const DEFAULT_APP_LOGO = "/logo.png";
 

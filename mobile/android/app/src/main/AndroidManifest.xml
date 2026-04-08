@@ -24,7 +24,7 @@
         android:maxSdkVersion="28"/>
 
     <application
-        android:label="ZedDash"
+        android:label="DevotionDash"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

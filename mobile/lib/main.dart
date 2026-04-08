@@ -12,11 +12,11 @@ void main() async {
   await RuntimeConfig.init();
   // NotificationService.init() calls Firebase.initializeApp() internally
   await NotificationService.init();
-  runApp(const ProviderScope(child: ZedDashApp()));
+  runApp(const ProviderScope(child: DevotionDashApp()));
 }
 
-class ZedDashApp extends ConsumerWidget {
-  const ZedDashApp({super.key});
+class DevotionDashApp extends ConsumerWidget {
+  const DevotionDashApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

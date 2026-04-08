@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.zeddash.mobile"
+    namespace = "com.devotiondash.mobile"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.zeddash.mobile"
+        applicationId = "com.devotiondash.mobile"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

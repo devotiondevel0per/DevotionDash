@@ -1,5 +1,5 @@
-name: zeddash_mobile
-description: ZedDash mobile app — business workspace for Android & iOS
+name: devotiondash_mobile
+description: DevotionDash mobile app — business workspace for Android & iOS
 version: 1.0.0+1
 publish_to: 'none'
 

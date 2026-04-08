@@ -58,7 +58,7 @@ const qaUsers: QaUserSpec[] = [
   {
     key: "manager",
     login: "qa_manager",
-    email: "qa_manager@zeddash.local",
+    email: "qa_manager@devotiondash.local",
     name: "QA",
     surname: "Manager",
     fullname: "QA Manager",
@@ -80,7 +80,7 @@ const qaUsers: QaUserSpec[] = [
   {
     key: "user",
     login: "qa_user",
-    email: "qa_user@zeddash.local",
+    email: "qa_user@devotiondash.local",
     name: "QA",
     surname: "User",
     fullname: "QA User",

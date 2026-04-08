@@ -16,9 +16,9 @@ class RuntimeConfig {
   static late final RuntimeConfig instance;
 
   static Future<void> init() async {
-    final envServerUrl = const String.fromEnvironment('ZEDDASH_SERVER_URL').trim();
-    final envAppName = const String.fromEnvironment('ZEDDASH_APP_NAME').trim();
-    final envTagline = const String.fromEnvironment('ZEDDASH_APP_TAGLINE').trim();
+    final envServerUrl = const String.fromEnvironment('DEVOTIONDASH_SERVER_URL').trim();
+    final envAppName = const String.fromEnvironment('DEVOTIONDASH_APP_NAME').trim();
+    final envTagline = const String.fromEnvironment('DEVOTIONDASH_APP_TAGLINE').trim();
 
     Map<String, dynamic> fileConfig = const {};
     try {
@@ -39,7 +39,7 @@ class RuntimeConfig {
 
     if (configuredServerUrl.isEmpty) {
       throw StateError(
-        'Missing ZedDash server URL. Configure assets/config/runtime.json or pass --dart-define=ZEDDASH_SERVER_URL=...',
+        'Missing DevotionDash server URL. Configure assets/config/runtime.json or pass --dart-define=DEVOTIONDASH_SERVER_URL=...',
       );
     }
 
@@ -49,7 +49,7 @@ class RuntimeConfig {
           ? envAppName
           : (fileConfig['fallbackAppName']?.toString().trim().isNotEmpty == true
               ? fileConfig['fallbackAppName'].toString().trim()
-              : 'ZedDash'),
+              : 'DevotionDash'),
       fallbackTagline: envTagline.isNotEmpty
           ? envTagline
           : (fileConfig['fallbackTagline']?.toString().trim().isNotEmpty == true

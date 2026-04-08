@@ -50,7 +50,7 @@ type WidgetMessage = {
 };
 
 function storageKey(token: string) {
-  return `zeddash_livechat_session_${token}`;
+  return `devotiondash_livechat_session_${token}`;
 }
 
 function WidgetPageContent() {
@@ -297,7 +297,7 @@ function WidgetPageContent() {
   const widgetLogoUrl = config?.logoUrl?.trim() || "/logo.png";
 
   function startDrag(e: React.PointerEvent<HTMLElement>) {
-    const root = window.parent.document.getElementById("zeddash-livechat-root");
+    const root = window.parent.document.getElementById("devotiondash-livechat-root");
     if (!root) return;
     const style = window.parent.getComputedStyle(root);
     const right = parseFloat(style.right || "22");
@@ -309,7 +309,7 @@ function WidgetPageContent() {
     if (!dragRef.current) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
-    window.parent.postMessage({ type: "zedchat:move", dx, dy, origRight: dragRef.current.origRight, origBottom: dragRef.current.origBottom }, "*");
+    window.parent.postMessage({ type: "devotionchat:move", dx, dy, origRight: dragRef.current.origRight, origBottom: dragRef.current.origBottom }, "*");
   }
   function endDrag() { dragRef.current = null; }
 
@@ -347,7 +347,7 @@ function WidgetPageContent() {
             onClick={(e) => {
               e.stopPropagation();
               if (session) resetSession();
-              window.parent.postMessage({ type: "zedchat:close" }, "*");
+              window.parent.postMessage({ type: "devotionchat:close" }, "*");
             }}
             className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/20 hover:bg-white/30"
           >

@@ -1,4 +1,4 @@
-package com.example.zeddash_mobile
+package com.example.devotiondash_mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -72,7 +72,7 @@ const UPDATED_AT = "2026-03-31";
 export const HELP_TOPICS: HelpTopic[] = [
   {
     id: "help-getting-started",
-    title: "Getting Started With ZedDash",
+    title: "Getting Started With DevotionDash",
     summary: "Role-aware onboarding with practical first-day checks.",
     type: "documentation",
     module: "help",

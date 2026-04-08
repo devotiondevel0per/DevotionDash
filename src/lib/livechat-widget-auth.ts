@@ -11,7 +11,7 @@ function getSecret() {
     process.env.LIVECHAT_WIDGET_SECRET ||
     process.env.AUTH_SECRET ||
     process.env.NEXTAUTH_SECRET ||
-    "zeddash-livechat-widget-secret"
+    "devotiondash-livechat-widget-secret"
   );
 }
 

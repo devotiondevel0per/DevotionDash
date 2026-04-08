@@ -14,7 +14,7 @@ async function main() {
   });
 
   for (const [key, value] of [
-    ["app.name", "ZedDash"],
+    ["app.name", "DevotionDash"],
     ["app.tagline", "Workspace"],
   ] as const) {
     await prisma.systemSetting.upsert({

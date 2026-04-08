@@ -1,13 +1,13 @@
 #!/usr/bin/env tsx
 /**
- * ZedDash Tenant Setup Script
+ * DevotionDash Tenant Setup Script
  *
  * Creates a new tenant's database schema and initial admin user.
  * Run AFTER manually creating the MySQL database.
  *
  * Usage:
  *   npx tsx scripts/setup-tenant.ts \
- *     --db-url="mysql://user:pass@localhost:3306/zeddash_acme" \
+ *     --db-url="mysql://user:pass@localhost:3306/devotiondash_acme" \
  *     --admin-login=admin \
  *     --admin-email=admin@acme.com \
  *     --admin-password=SecurePass123!
@@ -42,7 +42,7 @@ if (!dbUrl || !adminEmail || !adminPassword) {
 }
 
 async function main() {
-  console.log("\n ZedDash Tenant Setup\n");
+  console.log("\n DevotionDash Tenant Setup\n");
   console.log(`Database: ${dbUrl.replace(/:[^:@]+@/, ":****@")}`);
 
   // Step 1: Push Prisma schema to tenant DB
@@ -99,7 +99,7 @@ async function main() {
     console.log("\n3. Initializing default settings...");
     await client.systemSetting.upsert({
       where: { key: "app.name" },
-      create: { key: "app.name", value: "ZedDash" },
+      create: { key: "app.name", value: "DevotionDash" },
       update: {},
     });
     console.log("   Default settings initialized");

@@ -1,5 +1,5 @@
 
-> zeddash-app@0.1.0 dev
+> devotiondash-app@0.1.0 dev
 > next dev
 
 ▲ Next.js 16.1.6 (Turbopack)
@@ -5429,3 +5429,4 @@ Error: You cannot use different slug names for the same dynamic path ('dialogId'
 ⚠ Failed to reload dynamic routes: Error: You cannot use different slug names for the same dynamic path ('id' !== 'dialogId').
     at ignore-listed frames
 [?25h
+

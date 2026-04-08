@@ -1,5 +1,5 @@
 /**
- * Custom production server for ZedDash.
+ * Custom production server for DevotionDash.
  * Supports plain HTTP and direct HTTPS with SSL cert files.
  *
  * Environment variables:

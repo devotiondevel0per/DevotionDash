@@ -26,14 +26,14 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 // ─── Notification channels (Android) ────────────────────────────────────────
 
 const _taskChannel = AndroidNotificationChannel(
-  'zeddash_tasks',
+  'devotiondash_tasks',
   'Tasks',
   description: 'Task assignments and updates',
   importance: Importance.high,
 );
 
 const _chatChannel = AndroidNotificationChannel(
-  'zeddash_chat',
+  'devotiondash_chat',
   'Chat Messages',
   description: 'New chat messages',
   importance: Importance.max,
@@ -41,7 +41,7 @@ const _chatChannel = AndroidNotificationChannel(
 );
 
 const _liveChatChannel = AndroidNotificationChannel(
-  'zeddash_livechat',
+  'devotiondash_livechat',
   'Live Chat',
   description: 'New live chat messages and assignments',
   importance: Importance.max,
@@ -49,7 +49,7 @@ const _liveChatChannel = AndroidNotificationChannel(
 );
 
 const _generalChannel = AndroidNotificationChannel(
-  'zeddash_general',
+  'devotiondash_general',
   'General',
   description: 'General workspace notifications',
   importance: Importance.defaultImportance,

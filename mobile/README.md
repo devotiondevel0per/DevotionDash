@@ -1,12 +1,12 @@
-# ZedDash Mobile App
+# DevotionDash Mobile App
 
-Flutter mobile client for the ZedDash business groupware platform.
+Flutter mobile client for the DevotionDash business groupware platform.
 
 ## Prerequisites
 
 - [Flutter SDK](https://flutter.dev/docs/get-started/install) ≥ 3.3.0
 - Android Studio / Xcode
-- ZedDash Next.js server running
+- DevotionDash Next.js server running
 
 ## Setup
 

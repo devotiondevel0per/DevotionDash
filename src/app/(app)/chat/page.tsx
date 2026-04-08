@@ -226,7 +226,7 @@ const EMOJI_LIBRARY: Record<Exclude<EmojiCategoryId, "recent">, string[]> = {
   ),
 };
 
-const RECENT_EMOJIS_STORAGE_KEY = "zeddash_chat_recent_emojis_v1";
+const RECENT_EMOJIS_STORAGE_KEY = "devotiondash_chat_recent_emojis_v1";
 
 function mergeMessages(existing: DialogMessage[], incoming: DialogMessage[]) {
   const byId = new Map(existing.map((message) => [message.id, message] as const));
