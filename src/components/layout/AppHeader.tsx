@@ -529,7 +529,7 @@ export function AppHeader() {
         <img
           src={appLogoUrl?.trim() || "/logo.png"}
           alt="logo"
-          className="h-9 w-9 rounded-xl object-cover border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
+          className="h-9 w-9 rounded-xl border border-white/30 bg-white p-1 object-contain shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
         />
         <div className="min-w-0 leading-tight">
           <span className="app-topbar-title block truncate text-base font-semibold tracking-wide text-white">

@@ -137,7 +137,7 @@ export default function LoginPage() {
           <img
             src={logoUrl}
             alt={`${appName} logo`}
-            className="mx-auto mb-4 h-14 w-14 rounded-xl object-contain"
+            className="mx-auto mb-4 h-14 w-14 rounded-xl border bg-white p-1 object-contain"
           />
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{appName}</h1>
           <p className="text-slate-500 text-sm mt-1">{appTagline}</p>

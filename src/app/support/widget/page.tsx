@@ -198,7 +198,7 @@ function WidgetContent() {
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", height: "100vh", display: "flex", flexDirection: "column", background: "#fff" }}>
       {/* Header */}
       <div style={{ background: accent, padding: "14px 16px", color: "#fff", display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-        <img src={widgetLogoUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
+        <img src={widgetLogoUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "contain", background: "#fff", padding: "2px", border: "1px solid rgba(255,255,255,0.35)" }} />
         <div>
           <div style={{ fontWeight: 700, fontSize: "15px" }}>{brandLabel}</div>
           {!ticketToken && <div style={{ fontSize: "11px", opacity: 0.85 }}>{welcomeText}</div>}

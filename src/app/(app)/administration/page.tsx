@@ -1787,9 +1787,9 @@ export default function AdministrationPage() {
                     <Label>App Logo</Label>
                     <div className="flex items-center gap-3">
                       {appLogoUrl ? (
-                        <img src={appLogoUrl} alt="logo" className="h-10 w-10 rounded-lg object-cover border" />
+                        <img src={appLogoUrl} alt="logo" className="h-10 w-10 rounded-lg border bg-white p-1 object-contain" />
                       ) : (
-                        <img src="/logo.png" alt="logo" className="h-10 w-10 rounded-lg object-cover border" />
+                        <img src="/logo.png" alt="logo" className="h-10 w-10 rounded-lg border bg-white p-1 object-contain" />
                       )}
                       <div>
                         <input
@@ -1800,12 +1800,22 @@ export default function AdministrationPage() {
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (!file) return;
-                            const fd = new FormData();
-                            fd.append("file", file);
-                            const res = await fetch("/api/upload", { method: "POST", body: fd });
-                            if (!res.ok) return;
-                            const { url } = await res.json() as { url: string };
-                            setAppLogoUrl(url);
+                            try {
+                              const fd = new FormData();
+                              fd.append("file", file);
+                              const res = await fetch("/api/upload", { method: "POST", body: fd });
+                              const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
+                              if (!res.ok || !data?.url) {
+                                toast.error(data?.error || "Logo upload failed.");
+                                return;
+                              }
+                              setAppLogoUrl(data.url);
+                              toast.success("Logo uploaded. Click Save Theme to persist.");
+                            } catch {
+                              toast.error("Logo upload failed.");
+                            } finally {
+                              e.currentTarget.value = "";
+                            }
                           }}
                         />
                         <label htmlFor="logo-upload" className="cursor-pointer rounded border border-slate-300 bg-white px-3 py-1.5 text-xs hover:bg-slate-50">
@@ -1818,7 +1828,7 @@ export default function AdministrationPage() {
                         ) : null}
                       </div>
                     </div>
-                    <p className="text-[11px] text-slate-400">Recommended: square image, at least 72×72px.</p>
+                    <p className="text-[11px] text-slate-400">Recommended: square image, at least 72x72px. Supported: JPG, PNG, WEBP, GIF, SVG.</p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-4">
                     <div className="space-y-1">
@@ -4725,3 +4735,4 @@ export default function AdministrationPage() {
     </div>
   );
 }
+

@@ -324,7 +324,7 @@ function WidgetPageContent() {
         onPointerCancel={endDrag}
       >
         <div className="flex items-center gap-2">
-          <img src={widgetLogoUrl} alt="logo" className="h-6 w-6 rounded-full object-cover bg-white/20" />
+          <img src={widgetLogoUrl} alt="logo" className="h-6 w-6 rounded-full border border-white/30 bg-white p-0.5 object-contain" />
           <div>
             <p className="text-xs font-semibold leading-tight">{config?.brandLabel || "Live Support"}</p>
             <p className="text-[10px] text-white/80 leading-tight">{session ? "Connected" : "Start a conversation"}</p>
