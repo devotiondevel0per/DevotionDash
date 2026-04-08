@@ -146,9 +146,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   List<dynamic> _comments = [];
   bool _commentsLoading = false;
   bool _sending = false;
+  bool _canComment = false;
   List<PlatformFile> _pendingFiles = [];
+  Map<String, dynamic>? _replyTarget;
 
   final _commentCtrl = TextEditingController();
+  final _commentFocus = FocusNode();
   final _scrollCtrl = ScrollController();
 
   @override
@@ -160,6 +163,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   @override
   void dispose() {
     _commentCtrl.dispose();
+    _commentFocus.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
@@ -179,13 +183,26 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   }
 
   Future<void> _sendComment() async {
-    final text = _commentCtrl.text.trim();
+    if (!_canComment) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comments are disabled for this task')),
+        );
+      }
+      return;
+    }
+
+    final draftText = _commentCtrl.text.trim();
     final filePaths = _pendingFiles
         .map((file) => file.path)
         .whereType<String>()
         .where((path) => path.isNotEmpty)
         .toList();
-    if (text.isEmpty && filePaths.isEmpty) return;
+    if (draftText.isEmpty && filePaths.isEmpty) return;
+
+    final text = _replyTarget != null
+        ? '${_replyPrefix(_replyTarget!)}$draftText'.trim()
+        : draftText;
 
     setState(() => _sending = true);
     try {
@@ -208,9 +225,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
       _commentCtrl.clear();
       if (mounted) {
-        setState(() => _pendingFiles = []);
+        setState(() {
+          _pendingFiles = [];
+          _replyTarget = null;
+        });
       } else {
         _pendingFiles = [];
+        _replyTarget = null;
       }
       await _loadComments();
       ref.invalidate(_taskDetailProvider(widget.taskId));
@@ -287,6 +308,44 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           .where((candidate) => _pendingFileKey(candidate) != target)
           .toList();
     });
+  }
+
+  String _stripHtml(String value) {
+    return value
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String _commentPreview(Map<String, dynamic> comment) {
+    final raw = (comment['content'] ?? comment['text'] ?? '').toString();
+    final plain = _stripHtml(raw);
+    if (plain.isEmpty) return 'Attachment';
+    if (plain.length <= 120) return plain;
+    return '${plain.substring(0, 120)}...';
+  }
+
+  String _replyAuthor(Map<String, dynamic> comment) {
+    final author = comment['user'] ?? comment['author'];
+    if (author is Map) {
+      final fullname = (author['fullname'] ?? '').toString().trim();
+      final name = (author['name'] ?? '').toString().trim();
+      if (fullname.isNotEmpty) return fullname;
+      if (name.isNotEmpty) return name;
+    }
+    return 'Unknown';
+  }
+
+  String _replyPrefix(Map<String, dynamic> comment) {
+    final author = _replyAuthor(comment);
+    final preview = _commentPreview(comment);
+    return 'Replying to $author:\n"$preview"\n\n';
+  }
+
+  void _setReplyTarget(Map<String, dynamic> comment) {
+    setState(() => _replyTarget = Map<String, dynamic>.from(comment));
+    _commentFocus.requestFocus();
   }
 
   Future<void> _openAttachmentUrl(String? rawUrl) async {
@@ -420,24 +479,33 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             onSelected: (action) {
               if (action == 'delete') _deleteTask();
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'edit',
-                child: ListTile(
-                  leading: Icon(Icons.edit_outlined),
-                  title: Text('Edit'),
-                  contentPadding: EdgeInsets.zero,
+            itemBuilder: (_) {
+              final task = taskAsync.asData?.value;
+              final canDelete = (task?['canDelete'] as bool?) ?? false;
+              final items = <PopupMenuEntry<String>>[
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('Edit'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
                 ),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: ListTile(
-                  leading: Icon(Icons.delete_outline, color: Colors.red),
-                  title: Text('Delete', style: TextStyle(color: Colors.red)),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
+              ];
+              if (canDelete) {
+                items.add(
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline, color: Colors.red),
+                      title: Text('Delete', style: TextStyle(color: Colors.red)),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                );
+              }
+              return items;
+            },
           ),
         ],
       ),
@@ -447,11 +515,14 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           message: e.toString(),
           onRetry: () => ref.invalidate(_taskDetailProvider(widget.taskId)),
         ),
-        data: (task) => _buildContent(
-          context,
-          task,
-          stagesAsync.asData?.value ?? const <Map<String, dynamic>>[],
-        ),
+        data: (task) {
+          _canComment = (task['canComment'] as bool?) ?? true;
+          return _buildContent(
+            context,
+            task,
+            stagesAsync.asData?.value ?? const <Map<String, dynamic>>[],
+          );
+        },
       ),
       bottomNavigationBar: _buildCommentBar(),
     );
@@ -728,6 +799,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                         final item = attachment as Map<String, dynamic>;
                         return _buildAttachmentTile(context, item);
                       }),
+                    if (_canComment) ...[
+                      const SizedBox(height: 4),
+                      TextButton.icon(
+                        onPressed: _sending ? null : () => _setReplyTarget(comment),
+                        icon: const Icon(Icons.reply_rounded, size: 16),
+                        label: const Text('Reply'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _kPrimary,
+                          visualDensity: VisualDensity.compact,
+                          minimumSize: const Size(0, 28),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -763,6 +849,68 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (!_canComment) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'Comments are disabled for assignees on this task.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF8A651E)),
+                ),
+              ),
+            ],
+            if (_replyTarget != null) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _kPrimary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Replying to ${_replyAuthor(_replyTarget!)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: const Color(0xFF8A651E),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _commentPreview(_replyTarget!),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: const Color(0xFF8A651E),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Cancel reply',
+                      onPressed: _sending || !_canComment ? null : () => setState(() => _replyTarget = null),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      color: const Color(0xFF8A651E),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (_pendingFiles.isNotEmpty) ...[
               SizedBox(
                 height: 40,
@@ -783,6 +931,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                         ),
                       ),
                       onDeleted: _sending
+                          || !_canComment
                           ? null
                           : () => _removePendingAttachment(file),
                     );
@@ -795,12 +944,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               children: [
                 IconButton(
                   tooltip: 'Attach files',
-                  onPressed: _sending ? null : _pickCommentAttachments,
+                  onPressed: _sending || !_canComment ? null : _pickCommentAttachments,
                   icon: const Icon(Icons.attach_file_rounded, color: _kPrimary),
                 ),
                 Expanded(
                   child: TextField(
                     controller: _commentCtrl,
+                    focusNode: _commentFocus,
                     minLines: 1,
                     maxLines: 4,
                     textInputAction: TextInputAction.newline,
@@ -815,6 +965,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                         borderSide: BorderSide.none,
                       ),
                     ),
+                    enabled: !_sending && _canComment,
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -828,7 +979,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                                 strokeWidth: 2.5, color: _kPrimary)),
                       )
                     : IconButton(
-                        onPressed: _sendComment,
+                        onPressed: _canComment ? _sendComment : null,
                         icon: const Icon(Icons.send_rounded, color: _kPrimary),
                         tooltip: 'Send comment',
                       ),

@@ -188,6 +188,7 @@ export async function POST(req: NextRequest) {
       status,
       priority,
       isPrivate,
+      allowAssigneeComments,
       dueDate,
       assigneeIds,
     } = body as {
@@ -197,6 +198,7 @@ export async function POST(req: NextRequest) {
       status?: string;
       priority?: string;
       isPrivate?: boolean;
+      allowAssigneeComments?: boolean;
       dueDate?: string;
       assigneeIds?: string[];
     };
@@ -220,6 +222,7 @@ export async function POST(req: NextRequest) {
         status: statusToUse,
         priority: priority ?? "normal",
         isPrivate: isPrivate ?? false,
+        allowAssigneeComments: allowAssigneeComments ?? true,
         dueDate: dueDate ? new Date(dueDate) : undefined,
         completedAt: isClosedStage(stages, statusToUse) ? new Date() : null,
         creatorId: accessResult.ctx.userId,

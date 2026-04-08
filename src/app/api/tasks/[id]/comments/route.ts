@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
+import { canCurrentUserCommentOnTask, loadTaskCommentAccessInfo } from "@/lib/task-access";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -70,15 +71,29 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const accessResult = await requireModuleAccess("tasks", "write");
+  const accessResult = await requireModuleAccess("tasks", "read");
   if (!accessResult.ok) return accessResult.response;
 
   try {
     const { id } = await params;
-
-    const task = await prisma.task.findUnique({ where: { id }, select: { id: true } });
-    if (!task) {
+    const taskAccess = await loadTaskCommentAccessInfo(
+      prisma,
+      id,
+      accessResult.ctx.userId
+    );
+    if (!taskAccess) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    const canComment = canCurrentUserCommentOnTask(
+      taskAccess,
+      accessResult.ctx.userId,
+      accessResult.ctx.access
+    );
+    if (!canComment) {
+      return NextResponse.json(
+        { error: "Comments are disabled for assignees on this task" },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
+import { canCurrentUserCommentOnTask, loadTaskCommentAccessInfo } from "@/lib/task-access";
 
 export const runtime = "nodejs";
 
@@ -46,17 +47,20 @@ function normalizeMime(file: File, safeName: string): string {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const accessResult = await requireModuleAccess("tasks", "write");
+  const accessResult = await requireModuleAccess("tasks", "read");
   if (!accessResult.ok) return accessResult.response;
 
   const { id } = await params;
 
   try {
-    const task = await prisma.task.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    const taskAccess = await loadTaskCommentAccessInfo(
+      prisma,
+      id,
+      accessResult.ctx.userId
+    );
+    if (!taskAccess) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
 
     const formData = await req.formData();
     const commentIdRaw = formData.get("commentId");
@@ -65,14 +69,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ? commentIdRaw.trim()
         : null;
 
+    const canManageTasks = accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage;
+    const canWriteTasks = canManageTasks || accessResult.ctx.access.permissions.tasks.write;
+    const canComment = canCurrentUserCommentOnTask(
+      taskAccess,
+      accessResult.ctx.userId,
+      accessResult.ctx.access
+    );
+
     if (commentId) {
+      if (!canComment) {
+        return NextResponse.json(
+          { error: "Comments are disabled for assignees on this task" },
+          { status: 403 }
+        );
+      }
+
       const comment = await prisma.taskComment.findUnique({
         where: { id: commentId },
-        select: { id: true, taskId: true },
+        select: { id: true, taskId: true, userId: true },
       });
       if (!comment || comment.taskId !== id) {
         return NextResponse.json({ error: "Comment not found for this task" }, { status: 404 });
       }
+      if (!canManageTasks && comment.userId !== accessResult.ctx.userId) {
+        return NextResponse.json(
+          { error: "You can attach files only to your own comments" },
+          { status: 403 }
+        );
+      }
+    } else if (!canWriteTasks) {
+      return NextResponse.json(
+        { error: "Forbidden: missing tasks.write permission" },
+        { status: 403 }
+      );
     }
 
     const files = formData

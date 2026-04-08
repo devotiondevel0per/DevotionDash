@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { notifyTaskChange } from "@/lib/task-notifications";
+import { canCurrentUserCommentOnTask } from "@/lib/task-access";
 import { isClosedStage, loadTaskStages } from "@/lib/workflow-config";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -111,8 +112,22 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    const canComment = canCurrentUserCommentOnTask(
+      {
+        id: task.id,
+        creatorId: task.creatorId,
+        allowAssigneeComments: task.allowAssigneeComments,
+        assignees: task.assignees.map((entry) => ({ userId: entry.user.id })),
+      },
+      userId,
+      accessResult.ctx.access
+    );
+    const canDelete = accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage;
+
     return NextResponse.json({
       ...task,
+      canComment,
+      canDelete,
       isFavorite: task.favorites.length > 0,
       favoriteCount: task._count.favorites,
       favorites: undefined,
@@ -146,6 +161,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       priority,
       dueDate,
       isPrivate,
+      allowAssigneeComments,
       assigneeIds,
     } = body as {
       title?: string;
@@ -155,6 +171,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       priority?: string;
       dueDate?: string | null;
       isPrivate?: boolean;
+      allowAssigneeComments?: boolean;
       assigneeIds?: string[];
     };
 
@@ -188,6 +205,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
           ...(completedAt !== undefined && { completedAt }),
           ...(priority !== undefined && { priority }),
           ...(isPrivate !== undefined && { isPrivate }),
+          ...(allowAssigneeComments !== undefined && { allowAssigneeComments }),
           ...(dueDate !== undefined && {
             dueDate: dueDate ? new Date(dueDate) : null,
           }),
@@ -216,6 +234,21 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
     if (assigneeUserIds.length > 0) {
       summaryParts.push(`assignees ${assigneeUserIds.length}`);
     }
+    if (allowAssigneeComments !== undefined && allowAssigneeComments !== existing.allowAssigneeComments) {
+      summaryParts.push(`comments for assignees ${allowAssigneeComments ? "enabled" : "disabled"}`);
+    }
+
+    const canComment = canCurrentUserCommentOnTask(
+      {
+        id: task.id,
+        creatorId: task.creatorId,
+        allowAssigneeComments: task.allowAssigneeComments,
+        assignees: task.assignees.map((entry) => ({ userId: entry.user.id })),
+      },
+      userId,
+      accessResult.ctx.access
+    );
+    const canDelete = accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage;
 
     await notifyTaskChange({
       action: "updated",
@@ -232,6 +265,8 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
 
     return NextResponse.json({
       ...task,
+      canComment,
+      canDelete,
       isFavorite: task.favorites.length > 0,
       favoriteCount: task._count.favorites,
       favorites: undefined,
@@ -251,7 +286,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {
-  const accessResult = await requireModuleAccess("tasks", "write");
+  const accessResult = await requireModuleAccess("tasks", "manage");
   if (!accessResult.ok) return accessResult.response;
 
   try {
@@ -260,11 +295,6 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     const task = await prisma.task.findUnique({ where: { id } });
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
-    const isAdmin = accessResult.ctx.access.isAdmin;
-    if (task.creatorId !== accessResult.ctx.userId && !isAdmin) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     await prisma.task.delete({ where: { id } });

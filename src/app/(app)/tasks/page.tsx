@@ -47,6 +47,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Reply,
   Search,
   Send,
   Star,
@@ -83,6 +84,7 @@ type TaskItem = {
   status: TaskStatus;
   priority: TaskPriority;
   isPrivate: boolean;
+  allowAssigneeComments?: boolean;
   dueDate: string | null;
   createdAt: string;
   creatorId: string;
@@ -133,6 +135,7 @@ type TaskFormState = {
   priority: TaskPriority;
   dueDate: string;
   isPrivate: boolean;
+  allowAssigneeComments: boolean;
   descriptionHtml: string;
 };
 
@@ -214,6 +217,7 @@ const EMPTY_FORM: TaskFormState = {
   priority: "normal",
   dueDate: "",
   isPrivate: false,
+  allowAssigneeComments: true,
   descriptionHtml: "",
 };
 
@@ -258,6 +262,21 @@ function toText(value: string | null) {
     .replace(/&nbsp;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildReplyQuote(comment: TaskComment) {
+  const author = nameOf(comment.user);
+  const preview = toText(comment.content).slice(0, 220) || "Attachment";
+  return `<p><strong>Replying to ${escapeHtml(author)}:</strong></p><blockquote><p>${escapeHtml(preview)}</p></blockquote>`;
 }
 
 function buildParams(view: TaskView, category: TaskCategory, statusScope: string, search: string, filters: FilterState) {
@@ -386,6 +405,7 @@ function TaskModal({
         priority: form.priority,
         dueDate: form.dueDate || null,
         isPrivate: form.isPrivate,
+        allowAssigneeComments: form.allowAssigneeComments,
         assigneeIds: form.assigneeIds,
       };
 
@@ -603,6 +623,14 @@ function TaskModal({
               <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm((p) => ({ ...p, isPrivate: e.target.checked }))} />
               Private task
             </label>
+            <label className="flex items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.allowAssigneeComments}
+                onChange={(e) => setForm((p) => ({ ...p, allowAssigneeComments: e.target.checked }))}
+              />
+              Allow assignees to comment
+            </label>
           </div>
           </div>
 
@@ -638,11 +666,13 @@ function TaskDetailDialog({
   const [posting, setPosting] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentHtml, setEditingCommentHtml] = useState("");
+  const [replyToComment, setReplyToComment] = useState<TaskComment | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { can } = usePermissions();
 
   useEffect(() => {
     if (!open || !task) return;
@@ -651,6 +681,7 @@ function TaskDetailDialog({
     setPendingFiles([]);
     setEditingCommentId(null);
     setEditingCommentHtml("");
+    setReplyToComment(null);
     setLoadingComments(true);
     fetch(`/api/tasks/${task.id}/comments`, { cache: "no-store" })
       .then((r) => r.json())
@@ -709,10 +740,17 @@ function TaskDetailDialog({
   }
 
   async function postComment() {
-    const content = normalizeRichText(commentText);
-    const hasText = hasRichTextContent(content);
+    const normalizedContent = normalizeRichText(commentText);
+    const hasText = hasRichTextContent(normalizedContent);
     const hasFiles = pendingFiles.length > 0;
     if (!task || (!hasText && !hasFiles)) return;
+    if (!canComment) {
+      toast.error("Comments are disabled for your role on this task");
+      return;
+    }
+    const content = replyToComment
+      ? `${buildReplyQuote(replyToComment)}${normalizedContent}`
+      : normalizedContent;
     setPosting(true);
     try {
       const response = await fetch(`/api/tasks/${task.id}/comments`, {
@@ -744,6 +782,7 @@ function TaskDetailDialog({
 
       setCommentText("");
       setPendingFiles([]);
+      setReplyToComment(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to post comment");
     } finally {
@@ -785,7 +824,11 @@ function TaskDetailDialog({
   if (!task) return null;
   const stageMeta = getStageMeta(stages, task.status);
   const isClosed = stages.find((s) => s.key === task.status)?.isClosed ?? false;
-  const canEditConversation = task.type === "note";
+  const canWriteTask = can("tasks", "write");
+  const canEditConversation = task.type === "note" && canWriteTask;
+  const canManage = can("tasks", "manage");
+  const isAssignee = task.assignees.some((entry) => entry.user.id === meId);
+  const canComment = canManage || task.creatorId === meId || ((task.allowAssigneeComments ?? true) && isAssignee);
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
@@ -863,6 +906,20 @@ function TaskDetailDialog({
                             </span>
                           ) : null}
                           <span>{new Date(comment.createdAt).toLocaleString()}</span>
+                          {canComment && !isEditing ? (
+                            <button
+                              type="button"
+                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
+                              onClick={() => {
+                                setReplyToComment(comment);
+                                setEditingCommentId(null);
+                                setEditingCommentHtml("");
+                              }}
+                            >
+                              <Reply className="mr-1 inline h-3 w-3" />
+                              Reply
+                            </button>
+                          ) : null}
                           {canEditComment && !isEditing ? (
                             <button
                               type="button"
@@ -955,6 +1012,27 @@ function TaskDetailDialog({
           {/* Comment input */}
           <div className="shrink-0 border-t bg-white px-6 py-3">
             <div className="space-y-2">
+              {replyToComment ? (
+                <div className="flex items-start justify-between gap-2 rounded-lg border border-[#AA8038]/30 bg-[#AA8038]/10 px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#8A651E]">Replying to {nameOf(replyToComment.user)}</p>
+                    <p className="truncate text-[#8A651E]/90">{toText(replyToComment.content) || "Attachment"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-[#8A651E] hover:bg-[#AA8038]/20"
+                    onClick={() => setReplyToComment(null)}
+                    aria-label="Cancel reply"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : null}
+              {!canComment ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Comments are disabled for assignees on this task.
+                </div>
+              ) : null}
               {pendingFiles.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {pendingFiles.map((item) => (
@@ -986,7 +1064,7 @@ function TaskDetailDialog({
                 onChange={setCommentText}
                 placeholder="Write a comment..."
                 minHeight={110}
-                disabled={posting || uploading}
+                disabled={posting || uploading || !canComment}
               />
               <div className="flex justify-end gap-2">
                 <Button
@@ -995,7 +1073,7 @@ function TaskDetailDialog({
                   size="icon"
                   className="h-10 w-10"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={posting || uploading}
+                  disabled={posting || uploading || !canComment}
                 >
                   <Paperclip className="h-4 w-4" />
                 </Button>
@@ -1003,7 +1081,7 @@ function TaskDetailDialog({
                   className="h-10 bg-[#AA8038] text-white hover:bg-[#D48A00]"
                   size="icon"
                   onClick={() => void postComment()}
-                  disabled={posting || uploading || (!hasRichTextContent(commentText) && pendingFiles.length === 0)}
+                  disabled={posting || uploading || !canComment || (!hasRichTextContent(commentText) && pendingFiles.length === 0)}
                 >
                   {posting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
@@ -1027,6 +1105,7 @@ function TaskDetailDialog({
 export default function TasksPage() {
   const { can } = usePermissions();
   const canWrite = can("tasks", "write");
+  const canManage = can("tasks", "manage");
   const router = useRouter();
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -1177,6 +1256,7 @@ export default function TasksPage() {
       priority: task.priority,
       dueDate: toDateInput(task.dueDate),
       isPrivate: task.isPrivate,
+      allowAssigneeComments: task.allowAssigneeComments ?? true,
       descriptionHtml: toHtml(task.description),
     });
     setFormOpen(true);
@@ -1278,7 +1358,7 @@ export default function TasksPage() {
   }
 
   async function removeTask(task: TaskItem) {
-    if (!canWrite) {
+    if (!canManage) {
       toast.error("You don't have permission to delete tasks");
       return;
     }
@@ -1545,7 +1625,7 @@ export default function TasksPage() {
                         className="rounded border border-transparent p-1 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                         onClick={() => setDeleteTarget(task)}
                         title="Delete"
-                        disabled={!canWrite || deletingTaskId === task.id}
+                        disabled={!canManage || deletingTaskId === task.id}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -1616,7 +1696,7 @@ export default function TasksPage() {
                       className="rounded border border-transparent p-1 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                       onClick={() => setDeleteTarget(task)}
                       title="Delete"
-                      disabled={!canWrite || deletingTaskId === task.id}
+                      disabled={!canManage || deletingTaskId === task.id}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -1720,7 +1800,7 @@ export default function TasksPage() {
                                     className="rounded border border-transparent p-1 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                                     onClick={() => setDeleteTarget(task)}
                                     title="Delete"
-                                    disabled={!canWrite || deletingTaskId === task.id}
+                                    disabled={!canManage || deletingTaskId === task.id}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>

@@ -151,6 +151,7 @@ model Task {
   status      String         @default("opened") // opened, completed, closed
   priority    String         @default("normal") // low, normal, high
   isPrivate   Boolean        @default(false)
+  allowAssigneeComments Boolean @default(true)
   dueDate     DateTime?
   completedAt DateTime?
   createdAt   DateTime       @default(now())

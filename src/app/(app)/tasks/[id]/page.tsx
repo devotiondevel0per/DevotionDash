@@ -31,6 +31,7 @@ import {
   Loader2,
   MessageSquare,
   Paperclip,
+  Reply,
   Send,
   Star,
   User,
@@ -73,6 +74,7 @@ type TaskDetail = {
   status: string;
   priority: string;
   isPrivate: boolean;
+  allowAssigneeComments?: boolean;
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -82,6 +84,7 @@ type TaskDetail = {
   assignees: Array<{ id: string; user: TaskUser }>;
   comments: TaskComment[];
   attachments: TaskAttachment[];
+  canComment?: boolean;
   isFavorite: boolean;
   favoriteCount: number;
 };
@@ -165,6 +168,30 @@ function toHtml(value: string | null) {
   return value.replace(/\n/g, "<br/>");
 }
 
+function toText(value: string | null) {
+  if (!value) return "";
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildReplyQuote(comment: TaskComment) {
+  const author = nameOf(comment.user);
+  const preview = toText(comment.content).slice(0, 220) || "Attachment";
+  return `<p><strong>Replying to ${escapeHtml(author)}:</strong></p><blockquote><p>${escapeHtml(preview)}</p></blockquote>`;
+}
+
 type TimelineEntry =
   | { kind: "created"; at: string }
   | { kind: "comment"; comment: TaskComment };
@@ -188,6 +215,7 @@ export default function TaskDetailPage() {
   const { data: session } = useSession();
   const { can } = usePermissions();
   const canWrite = can("tasks", "write");
+  const canManage = can("tasks", "manage");
   const meId = session?.user?.id ?? "";
 
   const [task, setTask] = useState<TaskDetail | null>(null);
@@ -200,6 +228,7 @@ export default function TaskDetailPage() {
   const [posting, setPosting] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentHtml, setEditingCommentHtml] = useState("");
+  const [replyToComment, setReplyToComment] = useState<TaskComment | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -239,6 +268,7 @@ export default function TaskDetailPage() {
   useEffect(() => {
     setEditingCommentId(null);
     setEditingCommentHtml("");
+    setReplyToComment(null);
   }, [id]);
 
   useEffect(() => {
@@ -288,10 +318,17 @@ export default function TaskDetailPage() {
 
   async function postComment() {
     if (!task) return;
-    const content = normalizeRichText(commentText);
-    const hasText = hasRichTextContent(content);
+    const normalizedContent = normalizeRichText(commentText);
+    const hasText = hasRichTextContent(normalizedContent);
     const hasFiles = pendingFiles.length > 0;
     if (!hasText && !hasFiles) return;
+    if (!canComment) {
+      toast.error("Comments are disabled for your role on this task");
+      return;
+    }
+    const content = replyToComment
+      ? `${buildReplyQuote(replyToComment)}${normalizedContent}`
+      : normalizedContent;
 
     setPosting(true);
     try {
@@ -317,6 +354,7 @@ export default function TaskDetailPage() {
       await loadTask();
       setCommentText("");
       setPendingFiles([]);
+      setReplyToComment(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to post");
     } finally {
@@ -410,7 +448,9 @@ export default function TaskDetailPage() {
   const priorityMeta = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
   const timeline = buildTimeline(task);
-  const canEditConversation = task.type === "note";
+  const canEditConversation = task.type === "note" && canWrite;
+  const isAssignee = task.assignees.some((entry) => entry.user.id === meId);
+  const canComment = task.canComment ?? (canManage || task.creatorId === meId || ((task.allowAssigneeComments ?? true) && isAssignee));
   const commentAttachmentCount = task.comments.reduce(
     (count, comment) => count + comment.attachments.length,
     0
@@ -593,6 +633,20 @@ export default function TaskDetailPage() {
                             </span>
                           ) : null}
                           <span>{formatDateTime(comment.createdAt)}</span>
+                          {canComment && !isEditing ? (
+                            <button
+                              type="button"
+                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
+                              onClick={() => {
+                                setReplyToComment(comment);
+                                setEditingCommentId(null);
+                                setEditingCommentHtml("");
+                              }}
+                            >
+                              <Reply className="mr-1 inline h-3 w-3" />
+                              Reply
+                            </button>
+                          ) : null}
                           {canEditComment && !isEditing ? (
                             <button
                               type="button"
@@ -716,6 +770,27 @@ export default function TaskDetailPage() {
             {/* Comment input */}
             <div className="rounded-xl border bg-white p-4 shadow-sm">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Add Comment</p>
+              {replyToComment ? (
+                <div className="mb-3 flex items-start justify-between gap-2 rounded-lg border border-[#AA8038]/30 bg-[#AA8038]/10 px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#8A651E]">Replying to {nameOf(replyToComment.user)}</p>
+                    <p className="truncate text-[#8A651E]/90">{toText(replyToComment.content) || "Attachment"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-[#8A651E] hover:bg-[#AA8038]/20"
+                    onClick={() => setReplyToComment(null)}
+                    aria-label="Cancel reply"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : null}
+              {!canComment ? (
+                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Comments are disabled for assignees on this task.
+                </div>
+              ) : null}
 
               {/* Pending files preview */}
               {pendingFiles.length > 0 && (
@@ -749,7 +824,7 @@ export default function TaskDetailPage() {
                   onChange={setCommentText}
                   placeholder="Write a comment..."
                   minHeight={130}
-                  disabled={posting || uploading}
+                  disabled={posting || uploading || !canComment}
                 />
                 <div className="flex items-center justify-end gap-2">
                   <Button
@@ -758,7 +833,7 @@ export default function TaskDetailPage() {
                     className="h-9 w-9"
                     title="Attach files"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={posting || uploading}
+                    disabled={posting || uploading || !canComment}
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
@@ -766,7 +841,7 @@ export default function TaskDetailPage() {
                     className="h-9 w-9 bg-[#AA8038] text-white hover:bg-[#D48A00]"
                     size="icon"
                     onClick={() => void postComment()}
-                    disabled={posting || uploading || (!hasRichTextContent(commentText) && pendingFiles.length === 0)}
+                    disabled={posting || uploading || !canComment || (!hasRichTextContent(commentText) && pendingFiles.length === 0)}
                   >
                     {posting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
@@ -883,6 +958,10 @@ export default function TaskDetailPage() {
                 <div>
                   <dt className="text-xs text-slate-400">Private</dt>
                   <dd className="mt-0.5 font-medium text-slate-800">{task.isPrivate ? "Yes" : "No"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Assignee Comments</dt>
+                  <dd className="mt-0.5 font-medium text-slate-800">{(task.allowAssigneeComments ?? true) ? "Enabled" : "Disabled"}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-slate-400">Comments</dt>

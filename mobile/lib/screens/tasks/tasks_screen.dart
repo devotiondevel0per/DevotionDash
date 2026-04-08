@@ -603,6 +603,7 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
   String _status = 'opened';   // opened | completed | closed
   String _priority = 'normal'; // high | normal | low
   bool _isPrivate = false;
+  bool _allowAssigneeComments = true;
   DateTime? _dueDate;
   List<String> _assigneeIds = [];
 
@@ -683,6 +684,7 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
         'status': _status,
         'priority': _priority,
         'isPrivate': _isPrivate,
+        'allowAssigneeComments': _allowAssigneeComments,
         if (_dueDate != null) 'dueDate': _dueDate!.toIso8601String(),
         if (_assigneeIds.isNotEmpty) 'assigneeIds': _assigneeIds,
       });
@@ -937,6 +939,25 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
                 }),
               ),
               const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                  border:
+                      Border.all(color: cs.outline.withValues(alpha: 0.4)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: CheckboxListTile(
+                  title: const Text('Allow assignees to comment',
+                      style: TextStyle(fontWeight: FontWeight.w500)),
+                  subtitle: const Text('Assigned users can add task comments',
+                      style: TextStyle(fontSize: 12)),
+                  value: _allowAssigneeComments,
+                  activeColor: _kRed,
+                  checkColor: Colors.white,
+                  onChanged: (v) =>
+                      setState(() => _allowAssigneeComments = v ?? true),
+                ),
+              ),
+              const SizedBox(height: 10),
 
               // ── Private task (matches web "Private task" checkbox)
               Container(
