@@ -45,6 +45,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
     const formData = await req.formData();
+    const commentIdRaw = formData.get("commentId");
+    const commentId =
+      typeof commentIdRaw === "string" && commentIdRaw.trim().length > 0
+        ? commentIdRaw.trim()
+        : null;
+
+    if (commentId) {
+      const comment = await prisma.taskComment.findUnique({
+        where: { id: commentId },
+        select: { id: true, taskId: true },
+      });
+      if (!comment || comment.taskId !== id) {
+        return NextResponse.json({ error: "Comment not found for this task" }, { status: 404 });
+      }
+    }
+
     const files = formData
       .getAll("files")
       .filter((entry): entry is File => typeof entry === "object" && entry instanceof File);
@@ -87,6 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           fileSize: file.size,
           mimeType,
           taskId: id,
+          ...(commentId ? { taskCommentId: commentId } : {}),
         },
         select: {
           id: true,
@@ -94,6 +111,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           fileUrl: true,
           fileSize: true,
           mimeType: true,
+          createdAt: true,
         },
       });
 
@@ -109,4 +127,3 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

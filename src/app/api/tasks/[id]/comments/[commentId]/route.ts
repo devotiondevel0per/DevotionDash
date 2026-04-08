@@ -61,6 +61,17 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       data: { content: content.trim() },
       include: {
         user: { select: { id: true, name: true, fullname: true } },
+        attachments: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+            createdAt: true,
+          },
+        },
       },
     });
 

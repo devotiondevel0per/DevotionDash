@@ -62,6 +62,7 @@ type TaskComment = {
   content: string;
   createdAt: string;
   user: TaskUser;
+  attachments: TaskAttachment[];
 };
 
 type TaskDetail = {
@@ -264,11 +265,12 @@ export default function TaskDetailPage() {
     });
   }
 
-  async function uploadFiles(): Promise<boolean> {
+  async function uploadFiles(commentId: string): Promise<boolean> {
     if (pendingFiles.length === 0) return true;
     setUploading(true);
     try {
       const formData = new FormData();
+      formData.append("commentId", commentId);
       for (const p of pendingFiles) formData.append("files", p.file);
       const res = await fetch(`/api/tasks/${id}/uploads`, { method: "POST", body: formData });
       if (!res.ok) {
@@ -293,32 +295,28 @@ export default function TaskDetailPage() {
 
     setPosting(true);
     try {
-      // Upload files first
+      const res = await fetch(`/api/tasks/${id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, allowEmpty: hasFiles }),
+      });
+      const data = (await res.json().catch(() => null)) as TaskComment | { error?: string } | null;
+      if (!res.ok || !data || "error" in data) {
+        throw new Error((data as { error?: string } | null)?.error ?? "Failed to post comment");
+      }
+
+      const created = data as TaskComment;
       if (hasFiles) {
-        const ok = await uploadFiles();
-        if (!ok) { setPosting(false); return; }
-        setPendingFiles([]);
-      }
-
-      // Post text comment if any
-      if (hasText) {
-        const res = await fetch(`/api/tasks/${id}/comments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
-        });
-        const data = (await res.json().catch(() => null)) as TaskComment | { error?: string } | null;
-        if (!res.ok || !data || "error" in data) {
-          throw new Error((data as { error?: string } | null)?.error ?? "Failed to post comment");
+        const ok = await uploadFiles(created.id);
+        if (!ok) {
+          setPosting(false);
+          return;
         }
-        setTask((prev) =>
-          prev ? { ...prev, comments: [...prev.comments, data as TaskComment] } : prev
-        );
-        setCommentText("");
       }
 
-      // Reload task to get fresh attachments
       await loadTask();
+      setCommentText("");
+      setPendingFiles([]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to post");
     } finally {
@@ -413,6 +411,11 @@ export default function TaskDetailPage() {
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
   const timeline = buildTimeline(task);
   const canEditConversation = task.type === "note";
+  const commentAttachmentCount = task.comments.reduce(
+    (count, comment) => count + comment.attachments.length,
+    0
+  );
+  const totalAttachmentCount = task.attachments.length + commentAttachmentCount;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -638,10 +641,37 @@ export default function TaskDetailPage() {
                             </div>
                           </div>
                         ) : (
-                          <div
-                            className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
-                            dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
-                          />
+                          <>
+                            {hasRichTextContent(comment.content) ? (
+                              <div
+                                className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
+                                dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
+                              />
+                            ) : null}
+                            {comment.attachments.length > 0 ? (
+                              <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+                                {comment.attachments.map((att) => (
+                                  <a
+                                    key={att.id}
+                                    href={att.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 rounded-lg border bg-white px-2.5 py-2 text-xs hover:bg-slate-50"
+                                  >
+                                    {isImage(att.mimeType) ? (
+                                      <Image className="h-4 w-4 shrink-0 text-blue-500" />
+                                    ) : (
+                                      <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                                    )}
+                                    <div className="min-w-0">
+                                      <p className="truncate font-medium text-slate-700">{att.fileName}</p>
+                                      <p className="text-slate-400">{formatFileSize(att.fileSize)}</p>
+                                    </div>
+                                  </a>
+                                ))}
+                              </div>
+                            ) : null}
+                          </>
                         )}
                       </div>
                     </div>
@@ -655,7 +685,7 @@ export default function TaskDetailPage() {
               <div className="rounded-xl border bg-white p-4 shadow-sm">
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                   <Paperclip className="h-3.5 w-3.5" />
-                  Attachments ({task.attachments.length})
+                  Task Files ({task.attachments.length})
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                   {task.attachments.map((att) => (
@@ -860,7 +890,7 @@ export default function TaskDetailPage() {
                 </div>
                 <div>
                   <dt className="text-xs text-slate-400">Attachments</dt>
-                  <dd className="mt-0.5 font-medium text-slate-800">{task.attachments.length}</dd>
+                  <dd className="mt-0.5 font-medium text-slate-800">{totalAttachmentCount}</dd>
                 </div>
               </dl>
             </div>
@@ -870,7 +900,7 @@ export default function TaskDetailPage() {
               <div className="rounded-xl border bg-white p-5 shadow-sm">
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                   <Paperclip className="h-3.5 w-3.5" />
-                  Files & Attachments ({task.attachments.length})
+                  Task Files ({task.attachments.length})
                 </p>
                 <div className="space-y-2">
                   {task.attachments.map((att) => (

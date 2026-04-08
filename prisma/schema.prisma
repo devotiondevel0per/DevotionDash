@@ -184,6 +184,7 @@ model TaskComment {
   createdAt DateTime @default(now())
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id])
+  attachments Attachment[]
 
   @@map("task_comments")
 }
@@ -1103,6 +1104,8 @@ model Attachment {
   createdAt            DateTime            @default(now())
   taskId               String?
   task                 Task?               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskCommentId        String?
+  taskComment          TaskComment?        @relation(fields: [taskCommentId], references: [id], onDelete: Cascade)
   documentId           String?
   document             Document?           @relation(fields: [documentId], references: [id], onDelete: Cascade)
   emailId              String?

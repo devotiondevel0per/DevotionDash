@@ -23,14 +23,30 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
         },
         comments: {
           orderBy: { createdAt: "asc" },
-          include: { user: { select: { id: true, name: true, fullname: true } } },
+          include: {
+            user: { select: { id: true, name: true, fullname: true } },
+            attachments: {
+              orderBy: { createdAt: "asc" },
+              select: {
+                id: true,
+                fileName: true,
+                fileUrl: true,
+                fileSize: true,
+                mimeType: true,
+                createdAt: true,
+              },
+            },
+          },
         },
         favorites: {
           where: { userId },
           select: { id: true },
         },
         _count: { select: { comments: true, favorites: true } },
-        attachments: true,
+        attachments: {
+          where: { taskCommentId: null },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -131,14 +147,30 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
           },
           comments: {
             orderBy: { createdAt: "asc" },
-            include: { user: { select: { id: true, name: true, fullname: true } } },
+            include: {
+              user: { select: { id: true, name: true, fullname: true } },
+              attachments: {
+                orderBy: { createdAt: "asc" },
+                select: {
+                  id: true,
+                  fileName: true,
+                  fileUrl: true,
+                  fileSize: true,
+                  mimeType: true,
+                  createdAt: true,
+                },
+              },
+            },
           },
           favorites: {
             where: { userId },
             select: { id: true },
           },
           _count: { select: { comments: true, favorites: true } },
-          attachments: true,
+          attachments: {
+            where: { taskCommentId: null },
+            orderBy: { createdAt: "asc" },
+          },
         },
       });
     });

@@ -10,6 +10,7 @@ import {
   type RolePermissionConfig,
 } from "@/lib/permissions";
 import { writeAuditLog, getClientIpAddress } from "@/lib/audit-log";
+import { syncUsersRolePermissionOverrides } from "@/lib/user-role-overrides";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -130,6 +131,15 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       },
     });
 
+    const memberRows = await prisma.groupMember.findMany({
+      where: { groupId: id },
+      select: { userId: true },
+    });
+    await syncUsersRolePermissionOverrides(
+      prisma,
+      memberRows.map((entry) => entry.userId)
+    );
+
     await writeAuditLog({
       userId: accessResult.ctx.userId,
       action: "ROLE_UPDATED",
@@ -164,12 +174,22 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
   try {
     const { id } = await params;
-    const existing = await prisma.group.findUnique({ where: { id } });
+    const [existing, memberRows] = await Promise.all([
+      prisma.group.findUnique({ where: { id } }),
+      prisma.groupMember.findMany({
+        where: { groupId: id },
+        select: { userId: true },
+      }),
+    ]);
     if (!existing) {
       return NextResponse.json({ error: "Role not found" }, { status: 404 });
     }
 
     await prisma.group.delete({ where: { id } });
+    await syncUsersRolePermissionOverrides(
+      prisma,
+      memberRows.map((entry) => entry.userId)
+    );
 
     await writeAuditLog({
       userId: accessResult.ctx.userId,

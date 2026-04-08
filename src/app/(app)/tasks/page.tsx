@@ -39,6 +39,7 @@ import {
   Columns3,
   Eye,
   FilePlus2,
+  Image,
   LayoutGrid,
   List,
   Loader2,
@@ -51,6 +52,7 @@ import {
   Star,
   Trash2,
   User,
+  X,
 } from "lucide-react";
 
 type TaskStatus = string;
@@ -94,7 +96,19 @@ type TaskComment = {
   content: string;
   createdAt: string;
   user: { id: string; name: string; fullname: string };
+  attachments: TaskAttachment[];
 };
+
+type TaskAttachment = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+};
+
+type PendingFile = { id: string; file: File; previewUrl: string | null };
 
 type TaskMetaResponse = {
   users: TaskUser[];
@@ -212,6 +226,16 @@ function formatDate(value: string | null) {
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return "-";
   return dt.toLocaleDateString();
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageMime(mimeType: string) {
+  return mimeType.startsWith("image/");
 }
 
 function toDateInput(value: string | null) {
@@ -615,12 +639,16 @@ function TaskDetailDialog({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentHtml, setEditingCommentHtml] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open || !task) return;
     setComments([]);
     setCommentText("");
+    setPendingFiles([]);
     setEditingCommentId(null);
     setEditingCommentHtml("");
     setLoadingComments(true);
@@ -638,21 +666,84 @@ function TaskDetailDialog({
     if (comments.length > 0) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [comments]);
 
+  function pickFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+    const nextPending: PendingFile[] = files.map((file) => ({
+      id: `${Date.now()}-${Math.random()}`,
+      file,
+      previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : null,
+    }));
+    setPendingFiles((prev) => [...prev, ...nextPending]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removePending(id: string) {
+    setPendingFiles((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((item) => item.id !== id);
+    });
+  }
+
+  async function uploadFiles(commentId: string): Promise<boolean> {
+    if (!task || pendingFiles.length === 0) return true;
+    setUploading(true);
+    try {
+      const data = new FormData();
+      data.append("commentId", commentId);
+      for (const item of pendingFiles) data.append("files", item.file);
+      const response = await fetch(`/api/tasks/${task.id}/uploads`, {
+        method: "POST",
+        body: data,
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? "Attachment upload failed");
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Attachment upload failed");
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function postComment() {
-    if (!task || !hasRichTextContent(commentText)) return;
     const content = normalizeRichText(commentText);
-    if (!content) return;
+    const hasText = hasRichTextContent(content);
+    const hasFiles = pendingFiles.length > 0;
+    if (!task || (!hasText && !hasFiles)) return;
     setPosting(true);
     try {
       const response = await fetch(`/api/tasks/${task.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, allowEmpty: hasFiles }),
       });
       const data = (await response.json().catch(() => null)) as TaskComment | { error?: string } | null;
       if (!response.ok || !data || "error" in data) throw new Error((data as { error?: string } | null)?.error ?? "Failed to post comment");
-      setComments((prev) => [...prev, data as TaskComment]);
+
+      const created = data as TaskComment;
+      if (hasFiles) {
+        const ok = await uploadFiles(created.id);
+        if (!ok) {
+          setPosting(false);
+          return;
+        }
+      }
+
+      const refreshed = await fetch(`/api/tasks/${task.id}/comments`, { cache: "no-store" });
+      const refreshedData = (await refreshed.json().catch(() => null)) as TaskComment[] | { comments?: TaskComment[] } | null;
+      if (Array.isArray(refreshedData)) {
+        setComments(refreshedData);
+      } else if (refreshedData?.comments && Array.isArray(refreshedData.comments)) {
+        setComments(refreshedData.comments);
+      } else {
+        setComments((prev) => [...prev, created]);
+      }
+
       setCommentText("");
+      setPendingFiles([]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to post comment");
     } finally {
@@ -820,10 +911,37 @@ function TaskDetailDialog({
                             </div>
                           </div>
                         ) : (
-                          <div
-                            className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
-                            dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
-                          />
+                          <>
+                            {hasRichTextContent(comment.content) ? (
+                              <div
+                                className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
+                                dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
+                              />
+                            ) : null}
+                            {comment.attachments.length > 0 ? (
+                              <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+                                {comment.attachments.map((attachment) => (
+                                  <a
+                                    key={attachment.id}
+                                    href={attachment.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 rounded-lg border bg-white px-2.5 py-2 text-xs hover:bg-slate-50"
+                                  >
+                                    {isImageMime(attachment.mimeType) ? (
+                                      <Image className="h-4 w-4 shrink-0 text-blue-500" />
+                                    ) : (
+                                      <FilePlus2 className="h-4 w-4 shrink-0 text-slate-400" />
+                                    )}
+                                    <div className="min-w-0">
+                                      <p className="truncate font-medium text-slate-700">{attachment.fileName}</p>
+                                      <p className="text-slate-400">{formatFileSize(attachment.fileSize)}</p>
+                                    </div>
+                                  </a>
+                                ))}
+                              </div>
+                            ) : null}
+                          </>
                         )}
                       </div>
                     </div>
@@ -837,23 +955,67 @@ function TaskDetailDialog({
           {/* Comment input */}
           <div className="shrink-0 border-t bg-white px-6 py-3">
             <div className="space-y-2">
+              {pendingFiles.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {pendingFiles.map((item) => (
+                    <div key={item.id} className="relative flex items-center gap-2 rounded-lg border bg-slate-50 px-2.5 py-2 text-xs">
+                      {item.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.previewUrl} alt={item.file.name} className="h-10 w-10 rounded object-cover" />
+                      ) : (
+                        <FilePlus2 className="h-4 w-4 text-slate-400" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="max-w-[140px] truncate font-medium text-slate-700">{item.file.name}</p>
+                        <p className="text-slate-400">{formatFileSize(item.file.size)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removePending(item.id)}
+                        className="ml-1 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                        disabled={posting || uploading}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <RichTextEditor
                 value={commentText}
                 onChange={setCommentText}
                 placeholder="Write a comment..."
                 minHeight={110}
-                disabled={posting}
+                disabled={posting || uploading}
               />
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={posting || uploading}
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
                 <Button
                   className="h-10 bg-[#AA8038] text-white hover:bg-[#D48A00]"
                   size="icon"
                   onClick={() => void postComment()}
-                  disabled={posting || !hasRichTextContent(commentText)}
+                  disabled={posting || uploading || (!hasRichTextContent(commentText) && pendingFiles.length === 0)}
                 >
-                  {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {posting || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={pickFile}
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
+              />
             </div>
           </div>
         </div>
@@ -999,11 +1161,13 @@ export default function TasksPage() {
   }, [tasks, stages]);
 
   function openCreate() {
+    if (!canWrite) return;
     setFormInitial(EMPTY_FORM);
     setFormOpen(true);
   }
 
   function openEdit(task: TaskItem) {
+    if (!canWrite) return;
     setFormInitial({
       id: task.id,
       title: task.title,
@@ -1023,6 +1187,9 @@ export default function TasksPage() {
   }
 
   async function patchTask(id: string, payload: Record<string, unknown>) {
+    if (!canWrite) {
+      throw new Error("Forbidden: missing tasks.write permission");
+    }
     const response = await fetch(`/api/tasks/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1111,6 +1278,10 @@ export default function TasksPage() {
   }
 
   async function removeTask(task: TaskItem) {
+    if (!canWrite) {
+      toast.error("You don't have permission to delete tasks");
+      return;
+    }
     setDeletingTaskId(task.id);
     try {
       const response = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
@@ -1465,6 +1636,7 @@ export default function TasksPage() {
                       style={meta.columnStyle}
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={() => {
+                        if (!canWrite) return;
                         if (!dragTaskId) return;
                         const draggedTask = tasks.find((entry) => entry.id === dragTaskId);
                         setDragTaskId(null);
@@ -1510,8 +1682,10 @@ export default function TasksPage() {
                                 <Select
                                   value={task.status}
                                   onValueChange={(value) => {
+                                    if (!canWrite) return;
                                     if (value) void moveTaskToStatus(task, value);
                                   }}
+                                  disabled={!canWrite}
                                 >
                                   <SelectTrigger className="h-7 w-[112px] text-xs">
                                     <SelectValue />

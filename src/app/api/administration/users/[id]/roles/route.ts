@@ -3,21 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { buildUserAccess } from "@/lib/rbac";
 import { writeAuditLog, getClientIpAddress } from "@/lib/audit-log";
-import {
-  USER_PERMISSION_OVERRIDE_PREFIX,
-  toUserPermissionOverrideSetting,
-} from "@/lib/admin-config";
-import {
-  applyRolePermissions,
-  createEmptyPermissionSet,
-  moduleIds,
-  normalizeRoleKey,
-  parseRolePermissionsFromDescription,
-  roleTemplateMap,
-  type ModuleId,
-  type PermissionAction,
-  type RolePermissionConfig,
-} from "@/lib/permissions";
+import { syncUserRolePermissionOverride } from "@/lib/user-role-overrides";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -73,41 +59,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       }
     });
 
-    // Recompute and save merged role permissions as user override
-    const targetUser = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-    if (!targetUser?.isAdmin && uniqueGroupIds.length > 0) {
-      const roleGroups = await prisma.group.findMany({
-        where: { id: { in: uniqueGroupIds } },
-        select: { name: true, description: true },
-      });
-      const merged = createEmptyPermissionSet();
-      for (const group of roleGroups) {
-        const templateKey = normalizeRoleKey(group.name);
-        const template = roleTemplateMap.get(templateKey);
-        if (template) applyRolePermissions(merged, template.permissions);
-        const custom = parseRolePermissionsFromDescription(group.description);
-        if (custom) applyRolePermissions(merged, custom);
-      }
-      const grants: RolePermissionConfig = {};
-      for (const moduleId of moduleIds) {
-        const m = merged[moduleId as ModuleId];
-        const actions: PermissionAction[] = [];
-        if (m.read) actions.push("read");
-        if (m.write) actions.push("write");
-        if (m.manage) actions.push("manage");
-        if (actions.length > 0) grants[moduleId as ModuleId] = actions;
-      }
-      const key = `${USER_PERMISSION_OVERRIDE_PREFIX}${userId}`;
-      if (Object.keys(grants).length > 0) {
-        await prisma.systemSetting.upsert({
-          where: { key },
-          create: { key, value: toUserPermissionOverrideSetting({ mode: "replace", grants, denies: null }) },
-          update: { value: toUserPermissionOverrideSetting({ mode: "replace", grants, denies: null }) },
-        });
-      } else {
-        await prisma.systemSetting.deleteMany({ where: { key } });
-      }
-    }
+    await syncUserRolePermissionOverride(prisma, userId, uniqueGroupIds);
 
     const updatedAccess = await buildUserAccess(userId);
 

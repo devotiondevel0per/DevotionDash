@@ -21,6 +21,17 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       orderBy: { createdAt: "asc" },
       include: {
         user: { select: { id: true, name: true, fullname: true } },
+        attachments: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -44,9 +55,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     }
 
     const body = await req.json();
-    const { content } = body as { content: string };
-
-    if (!content || typeof content !== "string" || content.trim() === "") {
+    const { content, allowEmpty } = body as { content?: string; allowEmpty?: boolean };
+    const normalizedContent = typeof content === "string" ? content.trim() : "";
+    if (!normalizedContent && !allowEmpty) {
       return NextResponse.json({ error: "content is required" }, { status: 400 });
     }
 
@@ -54,10 +65,21 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       data: {
         taskId: id,
         userId: accessResult.ctx.userId,
-        content: content.trim(),
+        content: normalizedContent,
       },
       include: {
         user: { select: { id: true, name: true, fullname: true } },
+        attachments: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
