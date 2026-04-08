@@ -20,7 +20,7 @@ final _profileProvider = FutureProvider<Map<String, dynamic>>((ref) async {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const _kPrimary = Color(0xFFE81313);
+const _kPrimary = Color(0xFFAA8038);
 
 String _fieldValue(Map<String, dynamic> profile, List<String> keys) {
   for (final k in keys) {
@@ -571,3 +571,4 @@ class _ErrorView extends StatelessWidget {
 extension _Let<T> on T {
   R let<R>(R Function(T) block) => block(this);
 }
+

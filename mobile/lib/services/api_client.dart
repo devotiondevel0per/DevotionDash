@@ -226,13 +226,17 @@ class ApiClient {
   // ─── Tasks ──────────────────────────────────────────────
   Future<dynamic> getTasks({
     String? status,
-    String? view,   // 'overview' | 'personal' | 'assigned' | 'groups'
+    String? view,   // 'overview' | 'personal' | 'assigned' | 'groups' | 'all'
+    String? category, // 'all' | 'open' | 'closed' | 'events' | 'notes' | 'favorites'
+    String? search,
     int page = 1,
     int limit = 20,
   }) async {
     final res = await _dio.get('/tasks', queryParameters: {
       if (status != null) 'status': status,
       if (view != null) 'view': view,
+      if (category != null) 'category': category,
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
       'page': page,
       'limit': limit,
     });
@@ -264,8 +268,15 @@ class ApiClient {
     return res.data as List<dynamic>;
   }
 
-  Future<Map<String, dynamic>> addTaskComment(String id, String text) async {
-    final res = await _dio.post('/tasks/$id/comments', data: {'content': text});
+  Future<Map<String, dynamic>> addTaskComment(
+    String id,
+    String text, {
+    bool allowEmpty = false,
+  }) async {
+    final res = await _dio.post('/tasks/$id/comments', data: {
+      'content': text,
+      if (allowEmpty) 'allowEmpty': true,
+    });
     return res.data as Map<String, dynamic>;
   }
 
@@ -1127,14 +1138,20 @@ class ApiClient {
   Future<List<dynamic>> uploadTaskFiles(
     String taskId, {
     required List<String> filePaths,
+    String? commentId,
     void Function(int sent, int total)? onProgress,
   }) async {
     final files = await Future.wait(
       filePaths.map((path) => MultipartFile.fromFile(path)),
     );
+    final form = <String, dynamic>{
+      'files': files,
+      if (commentId != null && commentId.trim().isNotEmpty)
+        'commentId': commentId.trim(),
+    };
     final res = await _dio.post(
       '/tasks/$taskId/uploads',
-      data: FormData.fromMap({'files': files}),
+      data: FormData.fromMap(form),
       onSendProgress: onProgress,
     );
     final data = res.data as Map<String, dynamic>;

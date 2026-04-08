@@ -673,7 +673,7 @@ class _UnreadBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryColor = Color(0xFFE81313);
+    const primaryColor = Color(0xFFAA8038);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
@@ -1337,3 +1337,4 @@ class _NewChatSheetState extends ConsumerState<_NewChatSheet> {
     );
   }
 }
+

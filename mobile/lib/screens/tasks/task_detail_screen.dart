@@ -33,7 +33,7 @@ final _taskStagesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asy
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const _kPrimary = Color(0xFFE81313);
+const _kPrimary = Color(0xFFAA8038);
 
 Color _parseHexColor(String? hex, {Color fallback = Colors.blueGrey}) {
   if (hex == null) return fallback;
@@ -146,7 +146,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   List<dynamic> _comments = [];
   bool _commentsLoading = false;
   bool _sending = false;
-  bool _uploadingAttachments = false;
+  List<PlatformFile> _pendingFiles = [];
 
   final _commentCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
@@ -180,13 +180,38 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
   Future<void> _sendComment() async {
     final text = _commentCtrl.text.trim();
-    if (text.isEmpty) return;
+    final filePaths = _pendingFiles
+        .map((file) => file.path)
+        .whereType<String>()
+        .where((path) => path.isNotEmpty)
+        .toList();
+    if (text.isEmpty && filePaths.isEmpty) return;
+
     setState(() => _sending = true);
     try {
-      await ref
-          .read(apiClientProvider)
-          .addTaskComment(widget.taskId, text);
+      final created = await ref.read(apiClientProvider).addTaskComment(
+            widget.taskId,
+            text,
+            allowEmpty: filePaths.isNotEmpty,
+          );
+      final commentId = (created['id'] ?? '').toString();
+      if (filePaths.isNotEmpty) {
+        if (commentId.isEmpty) {
+          throw Exception('Comment was created without an id');
+        }
+        await ref.read(apiClientProvider).uploadTaskFiles(
+              widget.taskId,
+              filePaths: filePaths,
+              commentId: commentId,
+            );
+      }
+
       _commentCtrl.clear();
+      if (mounted) {
+        setState(() => _pendingFiles = []);
+      } else {
+        _pendingFiles = [];
+      }
       await _loadComments();
       ref.invalidate(_taskDetailProvider(widget.taskId));
       // Scroll to bottom after comments reload
@@ -226,47 +251,104 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
   }
 
-  Future<void> _uploadAttachments() async {
+  String _pendingFileKey(PlatformFile file) =>
+      '${file.path ?? file.name}:${file.size}';
+
+  Future<void> _pickCommentAttachments() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       withData: false,
     );
     if (result == null || result.files.isEmpty) return;
 
-    final paths = result.files
-        .map((file) => file.path)
-        .whereType<String>()
-        .where((path) => path.isNotEmpty)
+    final picked = result.files
+        .where((file) =>
+            (file.path != null && file.path!.trim().isNotEmpty) ||
+            file.name.trim().isNotEmpty)
         .toList();
-    if (paths.isEmpty) return;
+    if (picked.isEmpty) return;
 
-    setState(() => _uploadingAttachments = true);
-    try {
-      await ref.read(apiClientProvider).uploadTaskFiles(
-        widget.taskId,
-        filePaths: paths,
-      );
-      ref.invalidate(_taskDetailProvider(widget.taskId));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              paths.length == 1
-                  ? 'Attachment uploaded'
-                  : '${paths.length} attachments uploaded',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _uploadingAttachments = false);
+    if (mounted) {
+      setState(() {
+        final seen = _pendingFiles.map(_pendingFileKey).toSet();
+        for (final file in picked) {
+          if (seen.add(_pendingFileKey(file))) {
+            _pendingFiles.add(file);
+          }
+        }
+      });
     }
+  }
+
+  void _removePendingAttachment(PlatformFile file) {
+    final target = _pendingFileKey(file);
+    setState(() {
+      _pendingFiles = _pendingFiles
+          .where((candidate) => _pendingFileKey(candidate) != target)
+          .toList();
+    });
+  }
+
+  Future<void> _openAttachmentUrl(String? rawUrl) async {
+    final fileUrl = resolveServerUrl(rawUrl);
+    if (fileUrl == null) return;
+    final uri = Uri.tryParse(fileUrl);
+    if (uri == null) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Widget _buildAttachmentTile(
+    BuildContext context,
+    Map<String, dynamic> item,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final fileName = (item['fileName'] ?? 'Attachment').toString();
+    final mimeType = (item['mimeType'] ?? '').toString();
+    final fileSize = _formatFileSize(item['fileSize']);
+    final rawUrl = item['fileUrl']?.toString();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: rawUrl == null ? null : () => _openAttachmentUrl(rawUrl),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.attach_file_rounded),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      [if (fileSize != '0 B') fileSize, if (mimeType.isNotEmpty) mimeType]
+                          .join(' • '),
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.open_in_new_rounded, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteTask() async {
@@ -307,17 +389,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       appBar: AppBar(
         title: const Text('Task Detail'),
         actions: [
-          IconButton(
-            tooltip: 'Upload attachment',
-            onPressed: _uploadingAttachments ? null : _uploadAttachments,
-            icon: _uploadingAttachments
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.attach_file_rounded),
-          ),
           // Status change menu
           taskAsync.maybeWhen(
             data: (task) => PopupMenuButton<String>(
@@ -561,61 +632,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           _buildComments(context),
           if (attachments.isNotEmpty) ...[
             const SizedBox(height: 24),
-            _SectionHeader(title: 'Attachments (${attachments.length})'),
+            _SectionHeader(title: 'General Attachments (${attachments.length})'),
             const SizedBox(height: 10),
             ...attachments.map((attachment) {
               final item = attachment as Map<String, dynamic>;
-              final fileName = (item['fileName'] ?? 'Attachment').toString();
-              final mimeType = (item['mimeType'] ?? '').toString();
-              final fileSize = _formatFileSize(item['fileSize']);
-              final fileUrl = resolveServerUrl(item['fileUrl']?.toString());
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: fileUrl == null
-                      ? null
-                      : () async {
-                          final uri = Uri.tryParse(fileUrl);
-                          if (uri != null && await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          }
-                        },
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.attach_file_rounded),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                fileName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                [if (fileSize != '0 B') fileSize, if (mimeType.isNotEmpty) mimeType]
-                                    .join(' • '),
-                                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.open_in_new_rounded, size: 18),
-                      ],
-                    ),
-                  ),
-                ),
-              );
+              return _buildAttachmentTile(context, item);
             }),
           ],
 
@@ -650,6 +671,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         final author = (comment['user'] ?? comment['author'])
             as Map<String, dynamic>?;
         final createdAt = comment['createdAt'] as String?;
+        final attachments =
+            (comment['attachments'] as List<dynamic>?) ?? const [];
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 14),
@@ -685,19 +708,26 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(10),
+                    if (text.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(text,
+                            style: Theme.of(context).textTheme.bodyMedium),
                       ),
-                      child: Text(text,
-                          style: Theme.of(context).textTheme.bodyMedium),
-                    ),
+                    ],
+                    if (attachments.isNotEmpty)
+                      ...attachments.map((attachment) {
+                        final item = attachment as Map<String, dynamic>;
+                        return _buildAttachmentTile(context, item);
+                      }),
                   ],
                 ),
               ),
@@ -730,42 +760,80 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             )
           ],
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _commentCtrl,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                  hintText: 'Add a comment…',
-                  filled: true,
-                  fillColor: cs.surfaceContainerLow,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
+            if (_pendingFiles.isNotEmpty) ...[
+              SizedBox(
+                height: 40,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _pendingFiles.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (_, index) {
+                    final file = _pendingFiles[index];
+                    return InputChip(
+                      visualDensity: VisualDensity.compact,
+                      label: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: Text(
+                          file.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      onDeleted: _sending
+                          ? null
+                          : () => _removePendingAttachment(file),
+                    );
+                  },
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-            _sending
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: _kPrimary)),
-                  )
-                : IconButton(
-                    onPressed: _sendComment,
-                    icon: const Icon(Icons.send_rounded, color: _kPrimary),
-                    tooltip: 'Send comment',
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                IconButton(
+                  tooltip: 'Attach files',
+                  onPressed: _sending ? null : _pickCommentAttachments,
+                  icon: const Icon(Icons.attach_file_rounded, color: _kPrimary),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _commentCtrl,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: 'Add a comment or attach files...',
+                      filled: true,
+                      fillColor: cs.surfaceContainerLow,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
+                ),
+                const SizedBox(width: 6),
+                _sending
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.5, color: _kPrimary)),
+                      )
+                    : IconButton(
+                        onPressed: _sendComment,
+                        icon: const Icon(Icons.send_rounded, color: _kPrimary),
+                        tooltip: 'Send comment',
+                      ),
+              ],
+            ),
           ],
         ),
       ),

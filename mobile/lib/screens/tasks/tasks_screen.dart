@@ -20,16 +20,30 @@ final tasksProvider =
   //  'personal'  → view=personal (tasks I created)
   //  'assigned'  → view=assigned (tasks assigned to me)
   //  'completed' → view=overview + status=completed
-  String? view;
-  if (key == 'personal') {
-    view = 'personal';
-  } else if (key == 'assigned') {
-    view = 'assigned';
-  } else if (key == 'completed') {
-    view = 'overview';
+  String view = 'overview';
+  String? category;
+  switch (key) {
+    case 'personal':
+      view = 'personal';
+      break;
+    case 'assigned':
+      view = 'assigned';
+      break;
+    case 'groups':
+      view = 'groups';
+      break;
+    case 'all':
+      view = 'all';
+      break;
+    case 'completed':
+      view = 'overview';
+      category = 'closed';
+      break;
+    default:
+      view = 'overview';
   }
 
-  final res = await api.getTasks(view: view, limit: 50);
+  final res = await api.getTasks(view: view, category: category, limit: 50);
   if (res is List) return res;
   if (res is Map) {
     final raw = res['items'] ?? res['data'] ?? res['tasks'] ?? [];
@@ -162,11 +176,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
   bool _showSearch = false;
   String _searchQuery = '';
 
-  // Tab definitions: label + status filter value
+  // Tab definitions: label + task view key
   static const _tabDefs = [
-    ('All', ''),
-    ('My Tasks', 'personal'),
+    ('Overview', 'overview'),
+    ('Personal', 'personal'),
     ('Assigned', 'assigned'),
+    ('Groups', 'groups'),
+    ('All', 'all'),
     ('Completed', 'completed'),
   ];
 
@@ -239,7 +255,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       body: TabBarView(
         controller: _tabs,
         children: _tabDefs
-            .map((t) => _TaskList(status: t.$2, searchQuery: _searchQuery))
+            .map((t) => _TaskList(tabKey: t.$2, searchQuery: _searchQuery))
             .toList(),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -274,21 +290,21 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 // ─── Task list tab ────────────────────────────────────────────────────────────
 
 class _TaskList extends ConsumerWidget {
-  final String status;
+  final String tabKey;
   final String searchQuery;
 
-  const _TaskList({required this.status, required this.searchQuery});
+  const _TaskList({required this.tabKey, required this.searchQuery});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(tasksProvider(status));
+    final async = ref.watch(tasksProvider(tabKey));
     final stages = ref.watch(taskStagesProvider).asData?.value ?? const <Map<String, dynamic>>[];
 
     return async.when(
       loading: () => const ShimmerList(count: 8),
       error: (e, st) => _ErrorView(
         message: e.toString(),
-        onRetry: () => ref.invalidate(tasksProvider(status)),
+        onRetry: () => ref.invalidate(tasksProvider(tabKey)),
       ),
       data: (list) {
         final filtered = _filter(list, searchQuery, stages);
@@ -303,7 +319,7 @@ class _TaskList extends ConsumerWidget {
         }
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(tasksProvider(status));
+            ref.invalidate(tasksProvider(tabKey));
             ref.invalidate(taskStagesProvider);
           },
           child: ListView.separated(
@@ -329,7 +345,7 @@ class _TaskList extends ConsumerWidget {
 
   List<dynamic> _filter(List<dynamic> list, String q, List<Map<String, dynamic>> stages) {
     var filtered = list;
-    if (status == 'completed') {
+    if (tabKey == 'completed') {
       final closedKeys = stages
           .where((stage) => stage['isClosed'] == true)
           .map((stage) => (stage['key'] ?? '').toString())
@@ -567,7 +583,7 @@ class _ErrorView extends StatelessWidget {
 
 // ─── Create task bottom sheet ─────────────────────────────────────────────────
 
-const _kRed = Color(0xFFFE0000);
+const _kRed = Color(0xFFAA8038);
 
 class _CreateTaskSheet extends ConsumerStatefulWidget {
   final VoidCallback? onCreated;

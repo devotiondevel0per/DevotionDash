@@ -106,6 +106,7 @@ class AdaptiveShell extends ConsumerWidget {
             selectedIndex: selectedIndex,
             unreadChat: unreadChat,
             appName: branding.appName,
+            logoUrl: branding.logoUrl,
           );
   }
 }
@@ -172,6 +173,7 @@ class _WideShell extends StatelessWidget {
     required this.selectedIndex,
     required this.unreadChat,
     required this.appName,
+    required this.logoUrl,
   });
 
   final Widget child;
@@ -179,6 +181,7 @@ class _WideShell extends StatelessWidget {
   final int selectedIndex;
   final int unreadChat;
   final String appName;
+  final String? logoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -197,12 +200,7 @@ class _WideShell extends StatelessWidget {
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Image.asset(
-                          _logoAsset,
-                          width: 28,
-                          height: 28,
-                          fit: BoxFit.contain,
-                        ),
+                        _BrandLogo(logoUrl: logoUrl),
                         const SizedBox(width: 12),
                         Flexible(
                           child: Text(
@@ -219,12 +217,7 @@ class _WideShell extends StatelessWidget {
                         ),
                       ],
                     )
-                  : Image.asset(
-                      _logoAsset,
-                      width: 28,
-                      height: 28,
-                      fit: BoxFit.contain,
-                    ),
+                  : _BrandLogo(logoUrl: logoUrl),
             ),
             destinations: navItems.map((item) {
               final isChatItem = item.route == '/chat';
@@ -240,6 +233,49 @@ class _WideShell extends StatelessWidget {
           Expanded(child: child),
         ],
       ),
+    );
+  }
+}
+
+class _BrandLogo extends StatelessWidget {
+  const _BrandLogo({required this.logoUrl});
+
+  final String? logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmedUrl = logoUrl?.trim();
+    final hasNetworkLogo = trimmedUrl != null && trimmedUrl.isNotEmpty;
+    final logo = hasNetworkLogo
+        ? Image.network(
+            trimmedUrl!,
+            width: 24,
+            height: 24,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Image.asset(
+              _logoAsset,
+              width: 24,
+              height: 24,
+              fit: BoxFit.contain,
+            ),
+          )
+        : Image.asset(
+            _logoAsset,
+            width: 24,
+            height: 24,
+            fit: BoxFit.contain,
+          );
+
+    return Container(
+      width: 36,
+      height: 36,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: logo,
     );
   }
 }

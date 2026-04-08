@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static const Color primary = Color(0xFFE11313);
-  static const Color _appBarBg = Color(0xFF8E0C14);
-  static const Color _appBarBgDark = Color(0xFF5D0B12);
+  static const Color primary = Color(0xFFAA8038);
+  static const Color _appBarBg = Color(0xFFAA8038);
+  static const Color _appBarBgDark = Color(0xFF7A5B27);
 
   static ThemeData get light => _buildTheme(Brightness.light);
   static ThemeData get dark => _buildTheme(Brightness.dark);
@@ -33,11 +33,11 @@ class AppTheme {
               ? const Color(0xFF352628)
               : const Color(0xFFEEDFD8),
           secondaryContainer: isDark
-              ? const Color(0xFF5A2425)
-              : const Color(0xFFF9D9D5),
+              ? const Color(0xFF4F3A18)
+              : const Color(0xFFF4E5CC),
           onSecondaryContainer: isDark
-              ? const Color(0xFFFFECE8)
-              : const Color(0xFF5B1C1D),
+              ? const Color(0xFFFFF2DE)
+              : const Color(0xFF4A3818),
           outline: isDark ? const Color(0xFF8E7672) : const Color(0xFFC4ABA5),
           error: const Color(0xFFB42318),
         );
@@ -175,8 +175,8 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark
-            ? const Color(0xFF1D1516)
-            : const Color(0xFFFFF4F2),
+            ? const Color(0xFF1F1912)
+            : const Color(0xFFFFF8EE),
         surfaceTintColor: Colors.transparent,
         indicatorColor: scheme.secondaryContainer,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -197,8 +197,8 @@ class AppTheme {
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: isDark
-            ? const Color(0xFF1D1516)
-            : const Color(0xFFFFF7F5),
+            ? const Color(0xFF1F1912)
+            : const Color(0xFFFFFAF2),
         indicatorColor: scheme.secondaryContainer,
         selectedIconTheme: IconThemeData(color: scheme.primary),
         unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),

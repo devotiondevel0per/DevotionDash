@@ -60,7 +60,7 @@ final _serviceDeskUsersProvider = FutureProvider<List<dynamic>>((ref) async {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const _kPrimary = Color(0xFFE81313);
+const _kPrimary = Color(0xFFAA8038);
 
 Color _statusColor(String? status) {
   switch ((status ?? '').toLowerCase()) {
@@ -814,3 +814,4 @@ class _ErrorView extends StatelessWidget {
     );
   }
 }
+

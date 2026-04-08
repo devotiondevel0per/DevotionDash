@@ -33,13 +33,33 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Widget build(BuildContext context) {
     final branding = ref.watch(appBrandingProvider).asData?.value ??
         AppBranding.fallback();
+    final logoUrl = branding.logoUrl?.trim();
+    final hasNetworkLogo = logoUrl != null && logoUrl.isNotEmpty;
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.primary,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(_logoAsset, width: 80, height: 80, fit: BoxFit.contain),
+            Container(
+              width: 88,
+              height: 88,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: hasNetworkLogo
+                  ? Image.network(
+                      logoUrl!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Image.asset(
+                        _logoAsset,
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : Image.asset(_logoAsset, fit: BoxFit.contain),
+            ),
             const SizedBox(height: 24),
             Text(
               branding.appName,

@@ -18,7 +18,7 @@ final _notificationsProvider =
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const _kPrimary = Color(0xFFE81313);
+const _kPrimary = Color(0xFFAA8038);
 
 String _relativeTime(String? raw) {
   if (raw == null || raw.isEmpty) return '';
@@ -450,3 +450,4 @@ class _ErrorView extends StatelessWidget {
     );
   }
 }
+

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 
@@ -9,6 +10,19 @@ export const runtime = "nodejs";
 
 const MAX_FILES_PER_UPLOAD = 8;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
+function isMissingTaskCommentColumn(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    const meta = (error.meta ?? {}) as Record<string, unknown>;
+    const column = String(meta.column ?? meta.field_name ?? "");
+    if (column.toLowerCase().includes("taskcommentid")) {
+      return true;
+    }
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /taskcommentid/i.test(message) && /(unknown column|doesn't exist|p2022|not found)/i.test(message);
+}
 
 function sanitizeFileName(name: string): string {
   const normalized = name.trim().replace(/[^\w.\- ]+/g, "").replace(/\s+/g, "-");
@@ -96,24 +110,43 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       const fileUrl = `/uploads/tasks/${id}/${storedName}`;
       const mimeType = normalizeMime(file, safeOriginalName);
-      const attachment = await prisma.attachment.create({
-        data: {
-          fileName: safeOriginalName,
-          fileUrl,
-          fileSize: file.size,
-          mimeType,
-          taskId: id,
-          ...(commentId ? { taskCommentId: commentId } : {}),
-        },
-        select: {
-          id: true,
-          fileName: true,
-          fileUrl: true,
-          fileSize: true,
-          mimeType: true,
-          createdAt: true,
-        },
-      });
+      const baseData = {
+        fileName: safeOriginalName,
+        fileUrl,
+        fileSize: file.size,
+        mimeType,
+        taskId: id,
+      };
+      let attachment;
+      try {
+        attachment = await prisma.attachment.create({
+          data: {
+            ...baseData,
+            ...(commentId ? { taskCommentId: commentId } : {}),
+          },
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+            createdAt: true,
+          },
+        });
+      } catch (error) {
+        if (!(commentId && isMissingTaskCommentColumn(error))) throw error;
+        attachment = await prisma.attachment.create({
+          data: baseData,
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+            createdAt: true,
+          },
+        });
+      }
 
       uploaded.push({
         ...attachment,

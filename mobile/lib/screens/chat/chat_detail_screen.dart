@@ -30,7 +30,7 @@ import '../../widgets/user_avatar.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const Color _kPrimary = Color(0xFFE81313);
+const Color _kPrimary = Color(0xFFAA8038);
 final RegExp _urlRegex = RegExp(
   r'((?:https?:\/\/|www\.)[^\s<]+)',
   caseSensitive: false,
@@ -3204,3 +3204,4 @@ class _InputBar extends StatelessWidget {
     );
   }
 }
+

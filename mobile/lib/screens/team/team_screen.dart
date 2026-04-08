@@ -18,7 +18,7 @@ final _teamProvider =
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const _kPrimary = Color(0xFFE81313);
+const _kPrimary = Color(0xFFAA8038);
 
 String _userName(Map<String, dynamic> user) =>
     (user['fullname'] ?? user['name'] ?? user['displayName'] ?? 'Unknown')
@@ -498,3 +498,4 @@ class _ErrorView extends StatelessWidget {
     );
   }
 }
+

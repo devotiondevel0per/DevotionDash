@@ -1,10 +1,101 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { notifyTaskChange } from "@/lib/task-notifications";
 import { isClosedStage, loadTaskStages } from "@/lib/workflow-config";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const attachmentSelect = {
+  id: true,
+  fileName: true,
+  fileUrl: true,
+  fileSize: true,
+  mimeType: true,
+  createdAt: true,
+} as const;
+
+function isMissingTaskCommentColumn(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    const meta = (error.meta ?? {}) as Record<string, unknown>;
+    const column = String(meta.column ?? meta.field_name ?? "");
+    if (column.toLowerCase().includes("taskcommentid")) {
+      return true;
+    }
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /taskcommentid/i.test(message) && /(unknown column|doesn't exist|p2022|not found)/i.test(message);
+}
+
+function modernTaskInclude(userId: string) {
+  return {
+    creator: { select: { id: true, name: true, fullname: true } },
+    assignees: {
+      include: { user: { select: { id: true, name: true, fullname: true } } },
+    },
+    comments: {
+      orderBy: { createdAt: "asc" as const },
+      include: {
+        user: { select: { id: true, name: true, fullname: true } },
+        attachments: {
+          orderBy: { createdAt: "asc" as const },
+          select: attachmentSelect,
+        },
+      },
+    },
+    favorites: {
+      where: { userId },
+      select: { id: true },
+    },
+    _count: { select: { comments: true, favorites: true } },
+    attachments: {
+      where: { taskCommentId: null },
+      orderBy: { createdAt: "asc" as const },
+      select: attachmentSelect,
+    },
+  };
+}
+
+function legacyTaskInclude(userId: string) {
+  return {
+    creator: { select: { id: true, name: true, fullname: true } },
+    assignees: {
+      include: { user: { select: { id: true, name: true, fullname: true } } },
+    },
+    comments: {
+      orderBy: { createdAt: "asc" as const },
+      include: {
+        user: { select: { id: true, name: true, fullname: true } },
+      },
+    },
+    favorites: {
+      where: { userId },
+      select: { id: true },
+    },
+    _count: { select: { comments: true, favorites: true } },
+    attachments: {
+      orderBy: { createdAt: "asc" as const },
+      select: attachmentSelect,
+    },
+  };
+}
+
+async function findTaskWithCompat(id: string, userId: string) {
+  try {
+    return await prisma.task.findUnique({
+      where: { id },
+      include: modernTaskInclude(userId),
+    });
+  } catch (error) {
+    if (!isMissingTaskCommentColumn(error)) throw error;
+    return prisma.task.findUnique({
+      where: { id },
+      include: legacyTaskInclude(userId),
+    });
+  }
+}
 
 export async function GET(_req: NextRequest, { params }: RouteContext) {
   const accessResult = await requireModuleAccess("tasks", "read");
@@ -14,41 +105,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     const userId = accessResult.ctx.userId;
     const { id } = await params;
 
-    const task = await prisma.task.findUnique({
-      where: { id },
-      include: {
-        creator: { select: { id: true, name: true, fullname: true } },
-        assignees: {
-          include: { user: { select: { id: true, name: true, fullname: true } } },
-        },
-        comments: {
-          orderBy: { createdAt: "asc" },
-          include: {
-            user: { select: { id: true, name: true, fullname: true } },
-            attachments: {
-              orderBy: { createdAt: "asc" },
-              select: {
-                id: true,
-                fileName: true,
-                fileUrl: true,
-                fileSize: true,
-                mimeType: true,
-                createdAt: true,
-              },
-            },
-          },
-        },
-        favorites: {
-          where: { userId },
-          select: { id: true },
-        },
-        _count: { select: { comments: true, favorites: true } },
-        attachments: {
-          where: { taskCommentId: null },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
+    const task = await findTaskWithCompat(id, userId);
 
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -116,12 +173,12 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       }
     }
 
-    const task = await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       if (assigneeIds !== undefined) {
         await tx.taskAssignee.deleteMany({ where: { taskId: id } });
       }
 
-      return tx.task.update({
+      await tx.task.update({
         where: { id },
         data: {
           ...(title !== undefined && { title: title.trim() }),
@@ -140,40 +197,14 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
             },
           }),
         },
-        include: {
-          creator: { select: { id: true, name: true, fullname: true } },
-          assignees: {
-            include: { user: { select: { id: true, name: true, fullname: true } } },
-          },
-          comments: {
-            orderBy: { createdAt: "asc" },
-            include: {
-              user: { select: { id: true, name: true, fullname: true } },
-              attachments: {
-                orderBy: { createdAt: "asc" },
-                select: {
-                  id: true,
-                  fileName: true,
-                  fileUrl: true,
-                  fileSize: true,
-                  mimeType: true,
-                  createdAt: true,
-                },
-              },
-            },
-          },
-          favorites: {
-            where: { userId },
-            select: { id: true },
-          },
-          _count: { select: { comments: true, favorites: true } },
-          attachments: {
-            where: { taskCommentId: null },
-            orderBy: { createdAt: "asc" },
-          },
-        },
       });
     });
+
+    const task = await findTaskWithCompat(id, userId);
+    if (!task) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
     const assigneeUserIds = task.assignees.map((entry) => entry.user.id);
     const summaryParts: string[] = [];
     if (statusToUse !== undefined && statusToUse !== existing.status) summaryParts.push(`status ${existing.status} -> ${task.status}`);
