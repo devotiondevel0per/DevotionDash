@@ -50,12 +50,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Category already exists" }, { status: 409 });
     }
 
-    let safeColor = "#FE0000";
+    let safeColor = "#AA8038";
     if (typeof color === "string" && color.trim()) {
       const candidate = color.trim();
       if (!/^#([0-9a-fA-F]{6})$/.test(candidate)) {
         return NextResponse.json(
-          { error: "color must be a hex value like #FE0000" },
+          { error: "color must be a hex value like #AA8038" },
           { status: 400 }
         );
       }

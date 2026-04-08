@@ -42,133 +42,141 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) return null;
 
         const { login, password, otp } = parsed.data;
+        let tenantAuthDb: import("@prisma/client").PrismaClient | null = null;
 
-        // Resolve which DB to use based on request host
-        const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
-        const { isPlatformDomain, getTenantByDomain } = await import("@/lib/tenant-registry");
-        const { getTenantClientByUrl } = await import("@/lib/tenant-client");
+        try {
+          // Resolve which DB to use based on request host
+          const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
+          const { isPlatformDomain, getTenantByDomain } = await import("@/lib/tenant-registry");
+          const { getTenantClientByUrl } = await import("@/lib/tenant-client");
 
-        let authDb: import("@prisma/client").PrismaClient = prisma;
-        let tenantId: string | undefined;
+          let authDb: import("@prisma/client").PrismaClient = prisma;
+          let tenantId: string | undefined;
 
-        if (!isPlatformDomain(host)) {
-          const tenant = await getTenantByDomain(host);
-          if (!tenant) return null;
-          if (tenant.status === "suspended" || tenant.status === "cancelled") return null;
-          authDb = getTenantClientByUrl(tenant.databaseUrl);
-          tenantId = tenant.id;
-        }
+          if (!isPlatformDomain(host)) {
+            const tenant = await getTenantByDomain(host);
+            if (!tenant) return null;
+            if (tenant.status === "suspended" || tenant.status === "cancelled") return null;
+            tenantAuthDb = getTenantClientByUrl(tenant.databaseUrl);
+            authDb = tenantAuthDb;
+            tenantId = tenant.id;
+          }
 
-        const policy = await getSecurityPolicy();
-        const ip = getRequestIp(request.headers);
-        const country = getRequestCountry(request.headers);
-        const networkCheck = evaluateNetworkAccess(policy, { ip, country });
-        if (!networkCheck.allowed) {
-          await writeAuditLog({
-            action: "LOGIN_BLOCKED_NETWORK",
-            module: "administration",
-            details: JSON.stringify({ login, ip, country, reason: networkCheck.reason ?? "blocked" }),
-            ipAddress: ip,
+          const policy = await getSecurityPolicy();
+          const ip = getRequestIp(request.headers);
+          const country = getRequestCountry(request.headers);
+          const networkCheck = evaluateNetworkAccess(policy, { ip, country });
+          if (!networkCheck.allowed) {
+            await writeAuditLog({
+              action: "LOGIN_BLOCKED_NETWORK",
+              module: "administration",
+              details: JSON.stringify({ login, ip, country, reason: networkCheck.reason ?? "blocked" }),
+              ipAddress: ip,
+            });
+            return null;
+          }
+
+          const rateLimitState = await isLoginBlocked(login, ip);
+          if (rateLimitState.blocked) {
+            await writeAuditLog({
+              action: "LOGIN_BLOCKED_RATE",
+              module: "administration",
+              details: JSON.stringify({ login, ip, blockedUntil: rateLimitState.blockedUntil }),
+              ipAddress: ip,
+            });
+            return null;
+          }
+
+          const user = await authDb.user.findFirst({
+            where: {
+              OR: [{ login }, { email: login }],
+              isActive: true,
+            },
           });
-          return null;
-        }
 
-        const rateLimitState = await isLoginBlocked(login, ip);
-        if (rateLimitState.blocked) {
-          await writeAuditLog({
-            action: "LOGIN_BLOCKED_RATE",
-            module: "administration",
-            details: JSON.stringify({ login, ip, blockedUntil: rateLimitState.blockedUntil }),
-            ipAddress: ip,
+          if (!user) {
+            await recordLoginFailure(login, ip, policy);
+            await writeAuditLog({
+              action: "LOGIN_FAILED",
+              module: "administration",
+              details: JSON.stringify({ login, ip, reason: "user_not_found" }),
+              ipAddress: ip,
+            });
+            return null;
+          }
+
+          const passwordMatch = await bcrypt.compare(password, user.password);
+          if (!passwordMatch) {
+            await recordLoginFailure(login, ip, policy);
+            await writeAuditLog({
+              userId: user.id,
+              action: "LOGIN_FAILED",
+              module: "administration",
+              details: JSON.stringify({ login, ip, reason: "password_mismatch" }),
+              ipAddress: ip,
+            });
+            return null;
+          }
+
+          const twoFactorState = await getUserTwoFactorState(user.id);
+          const requiresTwoFactor = Boolean(twoFactorState?.enabled) || (policy.enforce2FAForAdmins && user.isAdmin);
+          if (requiresTwoFactor) {
+            if (!twoFactorState?.enabled) {
+              await recordLoginFailure(login, ip, policy);
+              await writeAuditLog({
+                userId: user.id,
+                action: "LOGIN_2FA_REQUIRED",
+                module: "administration",
+                details: JSON.stringify({ login, ip, reason: "2fa_not_enabled_for_required_user" }),
+                ipAddress: ip,
+              });
+              return null;
+            }
+            if (!otp || !(await verifyAndConsumeTwoFactorCode(user.id, otp))) {
+              await recordLoginFailure(login, ip, policy);
+              await writeAuditLog({
+                userId: user.id,
+                action: "LOGIN_2FA_FAILED",
+                module: "administration",
+                details: JSON.stringify({ login, ip }),
+                ipAddress: ip,
+              });
+              return null;
+            }
+          }
+
+          await clearLoginFailures(login, ip);
+
+          await authDb.user.update({
+            where: { id: user.id },
+            data: { lastActivity: new Date() },
           });
-          return null;
-        }
 
-        const user = await authDb.user.findFirst({
-          where: {
-            OR: [{ login }, { email: login }],
-            isActive: true,
-          },
-        });
-
-        if (!user) {
-          await recordLoginFailure(login, ip, policy);
-          await writeAuditLog({
-            action: "LOGIN_FAILED",
-            module: "administration",
-            details: JSON.stringify({ login, ip, reason: "user_not_found" }),
-            ipAddress: ip,
-          });
-          return null;
-        }
-
-        const passwordMatch = await bcrypt.compare(password, user.password);
-        if (!passwordMatch) {
-          await recordLoginFailure(login, ip, policy);
           await writeAuditLog({
             userId: user.id,
-            action: "LOGIN_FAILED",
+            action: "LOGIN_SUCCESS",
             module: "administration",
-            details: JSON.stringify({ login, ip, reason: "password_mismatch" }),
+            details: JSON.stringify({ login, ip, country }),
             ipAddress: ip,
           });
-          return null;
-        }
 
-        const twoFactorState = await getUserTwoFactorState(user.id);
-        const requiresTwoFactor = Boolean(twoFactorState?.enabled) || (policy.enforce2FAForAdmins && user.isAdmin);
-        if (requiresTwoFactor) {
-          if (!twoFactorState?.enabled) {
-            await recordLoginFailure(login, ip, policy);
-            await writeAuditLog({
-              userId: user.id,
-              action: "LOGIN_2FA_REQUIRED",
-              module: "administration",
-              details: JSON.stringify({ login, ip, reason: "2fa_not_enabled_for_required_user" }),
-              ipAddress: ip,
-            });
-            return null;
-          }
-          if (!otp || !(await verifyAndConsumeTwoFactorCode(user.id, otp))) {
-            await recordLoginFailure(login, ip, policy);
-            await writeAuditLog({
-              userId: user.id,
-              action: "LOGIN_2FA_FAILED",
-              module: "administration",
-              details: JSON.stringify({ login, ip }),
-              ipAddress: ip,
-            });
-            return null;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.fullname || `${user.name} ${user.surname}`.trim(),
+            login: user.login,
+            isAdmin: user.isAdmin,
+            photoUrl: user.photoUrl,
+            department: user.department,
+            position: user.position,
+            twoFactorEnabled: Boolean(twoFactorState?.enabled),
+            tenantId,
+          };
+        } finally {
+          if (tenantAuthDb) {
+            await tenantAuthDb.$disconnect().catch(() => {});
           }
         }
-
-        await clearLoginFailures(login, ip);
-
-        await authDb.user.update({
-          where: { id: user.id },
-          data: { lastActivity: new Date() },
-        });
-
-        await writeAuditLog({
-          userId: user.id,
-          action: "LOGIN_SUCCESS",
-          module: "administration",
-          details: JSON.stringify({ login, ip, country }),
-          ipAddress: ip,
-        });
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.fullname || `${user.name} ${user.surname}`.trim(),
-          login: user.login,
-          isAdmin: user.isAdmin,
-          photoUrl: user.photoUrl,
-          department: user.department,
-          position: user.position,
-          twoFactorEnabled: Boolean(twoFactorState?.enabled),
-          tenantId,
-        };
       },
     }),
     // Impersonation provider — admin-only, uses one-time token

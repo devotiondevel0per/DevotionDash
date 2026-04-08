@@ -170,9 +170,9 @@ class _BoardScreenState extends ConsumerState<BoardScreen>
     final query = _query();
     final async = ref.watch(boardTopicsProvider(query));
     final categories =
-        ref.watch(_boardCategoriesProvider).valueOrNull ?? const <dynamic>[];
+        ref.watch(_boardCategoriesProvider).asData?.value ?? const <dynamic>[];
     final visibilityOptions = _visibilityOptionsFromMeta(
-      ref.watch(_boardMetaProvider).valueOrNull ?? const {},
+      ref.watch(_boardMetaProvider).asData?.value ?? const {},
     );
 
     return Scaffold(
@@ -665,7 +665,7 @@ class _CreateTopicSheetState extends ConsumerState<_CreateTopicSheet> {
 
     setState(() => _submitting = true);
     try {
-      final me = ref.read(userProfileProvider).valueOrNull;
+      final me = ref.read(userProfileProvider).asData?.value;
       final created = await ref.read(apiClientProvider).createBoardTopic({
         'title': title,
         'categoryId': _selectedCategoryId,
@@ -706,8 +706,8 @@ class _CreateTopicSheetState extends ConsumerState<_CreateTopicSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final categoriesAsync = ref.watch(_boardCategoriesProvider);
-    final me = ref.watch(userProfileProvider).valueOrNull;
-    final meta = ref.watch(_boardMetaProvider).valueOrNull ?? const {};
+    final me = ref.watch(userProfileProvider).asData?.value;
+    final meta = ref.watch(_boardMetaProvider).asData?.value ?? const {};
     final visibilityOptions = _visibilityOptionsFromMeta(meta);
     final teams = (meta['teams'] as List<dynamic>?) ?? const [];
     final organizations = (meta['organizations'] as List<dynamic>?) ?? const [];

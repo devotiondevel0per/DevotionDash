@@ -50,7 +50,7 @@ type BoardSummary = {
   generatedAt: string;
 };
 
-const AVATAR_COLORS = ["bg-[#FE0000]/10 text-[#FE0000]", "bg-blue-100 text-blue-700", "bg-green-100 text-green-700", "bg-orange-100 text-orange-700"];
+const AVATAR_COLORS = ["bg-[#AA8038]/10 text-[#AA8038]", "bg-blue-100 text-blue-700", "bg-green-100 text-green-700", "bg-orange-100 text-orange-700"];
 
 function nameOf(user: { name: string; fullname: string } | null) { return user ? (user.fullname || user.name) : "Unknown"; }
 function initials(name: string) { return name.split(" ").filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(); }
@@ -131,7 +131,7 @@ function TopicDetailView({ topicId, userId, canWrite, canManage, onBack, onDelet
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-semibold text-gray-900">{topic.title}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-              <Badge variant="outline" className="border-transparent" style={{ backgroundColor: `${topic.category?.color ?? "#FE0000"}1A`, color: topic.category?.color ?? "#FE0000" }}>{topic.category?.name ?? "General"}</Badge>
+              <Badge variant="outline" className="border-transparent" style={{ backgroundColor: `${topic.category?.color ?? "#AA8038"}1A`, color: topic.category?.color ?? "#AA8038" }}>{topic.category?.name ?? "General"}</Badge>
               <Badge variant="outline">{visLabel(topic.visibility)}</Badge>
               <Badge variant="outline" className={topic.isResolved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}>{topic.isResolved ? "Resolved" : "Open"}</Badge>
               {topic.isLocked ? <Badge variant="outline" className="bg-slate-100 text-slate-700">Locked</Badge> : null}
@@ -154,7 +154,7 @@ function TopicDetailView({ topicId, userId, canWrite, canManage, onBack, onDelet
         {sumLoading ? <Skeleton className="h-24 w-full rounded-xl" /> : null}
         {summary ? (
           <div className="rounded-xl border border-red-100 bg-red-50/40 p-4 text-sm text-gray-700">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#b00000]"><Sparkles className="h-4 w-4" />AI Summary</div>
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#B07200]"><Sparkles className="h-4 w-4" />AI Summary</div>
             <p>{summary.summary}</p>
             {summary.keyPoints.length > 0 ? <ul className="mt-2 list-disc space-y-1 pl-5">{summary.keyPoints.map((k, i) => <li key={`${k}-${i}`}>{k}</li>)}</ul> : null}
           </div>
@@ -184,7 +184,7 @@ function TopicDetailView({ topicId, userId, canWrite, canManage, onBack, onDelet
           <Textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} disabled={blocked || posting} placeholder={blocked ? "Topic is locked" : "Write a reply..."} onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void postReply(); }} />
           <div className="mt-2 flex items-center justify-between">
             <span className="text-xs text-gray-500">{blocked ? "Only managers can reply" : "Ctrl+Enter to send"}</span>
-            <Button onClick={() => void postReply()} disabled={blocked || posting || !reply.trim()} className="bg-[#FE0000] text-white hover:bg-[#d70000]">{posting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Post Reply</Button>
+            <Button onClick={() => void postReply()} disabled={blocked || posting || !reply.trim()} className="bg-[#AA8038] text-white hover:bg-[#D78C00]">{posting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Post Reply</Button>
           </div>
         </div>
       ) : null}
@@ -225,7 +225,7 @@ export default function BoardPage() {
   const [newPinned, setNewPinned] = useState(false);
 
   const [catName, setCatName] = useState("");
-  const [catColor, setCatColor] = useState("#FE0000");
+  const [catColor, setCatColor] = useState("#AA8038");
   const [catDescription, setCatDescription] = useState("");
 
   const stats = useMemo(() => ({
@@ -324,13 +324,13 @@ export default function BoardPage() {
         <div className="border-b px-4 py-4">
           <div className="flex items-center justify-between">
             <div><h2 className="text-sm font-semibold uppercase tracking-wider text-gray-700">Board</h2><p className="text-xs text-gray-500">Conversations</p></div>
-            {canManage ? <button onClick={() => setCategoryOpen(true)} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-[#FE0000]"><FolderPlus className="h-4 w-4" /></button> : null}
+            {canManage ? <button onClick={() => setCategoryOpen(true)} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-[#AA8038]"><FolderPlus className="h-4 w-4" /></button> : null}
           </div>
         </div>
         <div className="flex-1 space-y-1 overflow-y-auto p-2">
-          {[{ id: "all", name: "All Topics", color: "#FE0000", _count: { topics: topics.length } }, ...categories].map((c) => (
-            <button key={c.id} onClick={() => setActiveCategory(c.id)} className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm", activeCategory === c.id ? "bg-red-50 text-[#FE0000]" : "text-gray-600 hover:bg-gray-100")}>
-              <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color || "#FE0000" }} />{c.name}</span>
+          {[{ id: "all", name: "All Topics", color: "#AA8038", _count: { topics: topics.length } }, ...categories].map((c) => (
+            <button key={c.id} onClick={() => setActiveCategory(c.id)} className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm", activeCategory === c.id ? "bg-red-50 text-[#AA8038]" : "text-gray-600 hover:bg-gray-100")}>
+              <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color || "#AA8038" }} />{c.name}</span>
               <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{c._count.topics}</span>
             </button>
           ))}
@@ -340,12 +340,12 @@ export default function BoardPage() {
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b bg-white px-6 py-5">
-          <div className="rounded-2xl bg-gradient-to-r from-[#FE0000] via-[#d50000] to-[#8c0000] p-5 text-white shadow-md">
+          <div className="rounded-2xl bg-gradient-to-r from-[#AA8038] via-[#D58A00] to-[#8C5B00] p-5 text-white shadow-md">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div><h1 className="text-2xl font-semibold">Board Command Center</h1><p className="mt-1 text-sm text-red-100">Structured discussions with on-demand AI summary.</p></div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => void refresh()}><RefreshCw className="mr-1.5 h-4 w-4" />Refresh</Button>
-                {canWrite ? <Button className="bg-white text-[#b40000] hover:bg-red-50" onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New Topic</Button> : null}
+                {canWrite ? <Button className="bg-white text-[#B47500] hover:bg-red-50" onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New Topic</Button> : null}
               </div>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -361,7 +361,7 @@ export default function BoardPage() {
             <Select value={status} onValueChange={(value) => setStatus(value ?? "all")}><SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All status</SelectItem><SelectItem value="open">Open</SelectItem><SelectItem value="resolved">Resolved</SelectItem></SelectContent></Select>
             <Select value={visibility} onValueChange={(value) => setVisibility(value ?? "all")}><SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All visibility</SelectItem><SelectItem value="organization">Organization</SelectItem><SelectItem value="team">Team</SelectItem><SelectItem value="private">Private</SelectItem><SelectItem value="public">Public</SelectItem></SelectContent></Select>
             <Select value={sort} onValueChange={(value) => setSort(value ?? "recent")}><SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="recent">Latest activity</SelectItem><SelectItem value="most_replies">Most replies</SelectItem><SelectItem value="oldest">Oldest first</SelectItem></SelectContent></Select>
-            <Button variant={mineOnly ? "default" : "outline"} onClick={() => setMineOnly((m) => !m)} className={mineOnly ? "h-9 bg-[#FE0000] text-white hover:bg-[#d70000]" : "h-9"}><Users className="mr-1.5 h-4 w-4" />My Topics</Button>
+            <Button variant={mineOnly ? "default" : "outline"} onClick={() => setMineOnly((m) => !m)} className={mineOnly ? "h-9 bg-[#AA8038] text-white hover:bg-[#D78C00]" : "h-9"}><Users className="mr-1.5 h-4 w-4" />My Topics</Button>
           </div>
         </div>
 
@@ -371,15 +371,15 @@ export default function BoardPage() {
             <div className="space-y-2">
               {pinned.length > 0 ? <div className="mb-1 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-gray-500"><Pin className="h-3.5 w-3.5 text-orange-500" />Pinned</div> : null}
               {pinned.map((t) => (
-                <button key={t.id} onClick={() => setSelectedTopicId(t.id)} className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-[#FE0000]/30 hover:shadow-md">
+                <button key={t.id} onClick={() => setSelectedTopicId(t.id)} className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-[#AA8038]/30 hover:shadow-md">
                   <div className="flex items-start justify-between gap-2"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-gray-900">{t.title}</h3><p className="mt-1 line-clamp-2 text-xs text-gray-500">{t.description || "No summary"}</p></div><div className="text-xs text-gray-400">{rel(t.lastActivityAt)} ago</div></div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs"><Badge variant="outline" className="border-transparent" style={{ backgroundColor: `${t.category?.color ?? "#FE0000"}1A`, color: t.category?.color ?? "#FE0000" }}>{t.category?.name ?? "General"}</Badge><Badge variant="outline">{visLabel(t.visibility)}</Badge><Badge variant="outline" className={t.isResolved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}>{t.isResolved ? "Resolved" : "Open"}</Badge><Badge variant="outline"><MessageSquare className="mr-1 h-3 w-3" />{t._count.posts}</Badge></div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs"><Badge variant="outline" className="border-transparent" style={{ backgroundColor: `${t.category?.color ?? "#AA8038"}1A`, color: t.category?.color ?? "#AA8038" }}>{t.category?.name ?? "General"}</Badge><Badge variant="outline">{visLabel(t.visibility)}</Badge><Badge variant="outline" className={t.isResolved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}>{t.isResolved ? "Resolved" : "Open"}</Badge><Badge variant="outline"><MessageSquare className="mr-1 h-3 w-3" />{t._count.posts}</Badge></div>
                 </button>
               ))}
               {regular.map((t) => (
-                <button key={t.id} onClick={() => setSelectedTopicId(t.id)} className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-[#FE0000]/30 hover:shadow-md">
+                <button key={t.id} onClick={() => setSelectedTopicId(t.id)} className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-[#AA8038]/30 hover:shadow-md">
                   <div className="flex items-start justify-between gap-2"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-gray-900">{t.title}</h3><p className="mt-1 line-clamp-2 text-xs text-gray-500">{t.description || "No summary"}</p></div><div className="text-xs text-gray-400">{rel(t.lastActivityAt)} ago</div></div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs"><Badge variant="outline" className="border-transparent" style={{ backgroundColor: `${t.category?.color ?? "#FE0000"}1A`, color: t.category?.color ?? "#FE0000" }}>{t.category?.name ?? "General"}</Badge><Badge variant="outline">{visLabel(t.visibility)}</Badge><Badge variant="outline" className={t.isResolved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}>{t.isResolved ? "Resolved" : "Open"}</Badge><Badge variant="outline"><MessageSquare className="mr-1 h-3 w-3" />{t._count.posts}</Badge></div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs"><Badge variant="outline" className="border-transparent" style={{ backgroundColor: `${t.category?.color ?? "#AA8038"}1A`, color: t.category?.color ?? "#AA8038" }}>{t.category?.name ?? "General"}</Badge><Badge variant="outline">{visLabel(t.visibility)}</Badge><Badge variant="outline" className={t.isResolved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}>{t.isResolved ? "Resolved" : "Open"}</Badge><Badge variant="outline"><MessageSquare className="mr-1 h-3 w-3" />{t._count.posts}</Badge></div>
                 </button>
               ))}
             </div>
@@ -402,7 +402,7 @@ export default function BoardPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Cancel</Button>
-            <Button className="bg-[#FE0000] text-white hover:bg-[#d70000]" disabled={creating || !newTitle.trim() || !newCategoryId} onClick={() => void createTopic()}>{creating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Create</Button>
+            <Button className="bg-[#AA8038] text-white hover:bg-[#D78C00]" disabled={creating || !newTitle.trim() || !newCategoryId} onClick={() => void createTopic()}>{creating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -417,7 +417,7 @@ export default function BoardPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCategoryOpen(false)}>Cancel</Button>
-            <Button className="bg-[#FE0000] text-white hover:bg-[#d70000]" onClick={() => void createCategory()} disabled={!catName.trim()}>Create</Button>
+            <Button className="bg-[#AA8038] text-white hover:bg-[#D78C00]" onClick={() => void createCategory()} disabled={!catName.trim()}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

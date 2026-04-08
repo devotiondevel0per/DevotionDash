@@ -162,7 +162,7 @@ const DEFAULT_PROJECT_TASK_STAGES: WorkflowStage[] = [
 ];
 
 const TASK_PRIORITY_CONFIG: Record<string, { label: string; className: string }> = {
-  high: { label: "High", className: "bg-red-100 text-[#FE0000]" },
+  high: { label: "High", className: "bg-red-100 text-[#AA8038]" },
   normal: { label: "Normal", className: "bg-orange-100 text-orange-700" },
   low: { label: "Low", className: "bg-gray-100 text-gray-500" },
 };
@@ -383,7 +383,7 @@ function ProjectFormDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto p-0 sm:max-w-4xl">
         <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-2xl">
-            <FolderKanban className="h-5 w-5 text-[#FE0000]" />
+            <FolderKanban className="h-5 w-5 text-[#AA8038]" />
             {isEdit ? "Edit Project" : "Create New Project"}
           </DialogTitle>
           <DialogDescription>Define timeline, category, and scope clearly before execution.</DialogDescription>
@@ -456,7 +456,7 @@ function ProjectFormDialog({
 
           <DialogFooter className="border-t pt-3">
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
-            <Button type="submit" disabled={submitting} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button type="submit" disabled={submitting} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {submitting ? "Saving..." : isEdit ? "Save Changes" : "Create Project"}
             </Button>
           </DialogFooter>
@@ -578,7 +578,7 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
       <DialogContent className="max-h-[90vh] overflow-y-auto p-0 sm:max-w-3xl">
         <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-2xl">
-            <CheckSquare className="h-5 w-5 text-[#FE0000]" />
+            <CheckSquare className="h-5 w-5 text-[#AA8038]" />
             {isEdit ? "Edit Project Task" : "Add Project Task"}
           </DialogTitle>
           <DialogDescription>Track ownership, timeline, and delivery state clearly.</DialogDescription>
@@ -681,7 +681,7 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
 
           <DialogFooter className="border-t pt-3">
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
-            <Button type="submit" disabled={submitting} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button type="submit" disabled={submitting} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {submitting ? "Saving..." : isEdit ? "Save Changes" : "Add Task"}
             </Button>
           </DialogFooter>
@@ -806,7 +806,7 @@ function ProjectTaskDetailDialog({
       <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-[760px]">
         <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-lg leading-tight">
-            <MessageSquare className="h-5 w-5 shrink-0 text-[#FE0000]" />
+            <MessageSquare className="h-5 w-5 shrink-0 text-[#AA8038]" />
             <span className="line-clamp-2">{task.title}</span>
           </DialogTitle>
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -825,7 +825,7 @@ function ProjectTaskDetailDialog({
             {canWrite ? (
               <button
                 type="button"
-                className="rounded px-2 py-1 text-[11px] font-medium text-[#c70000] hover:bg-[#FE0000]/10"
+                className="rounded px-2 py-1 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
                 onClick={() => onEditTask(task)}
               >
                 Edit task
@@ -870,14 +870,14 @@ function ProjectTaskDetailDialog({
                     key={comment.id}
                     className={cn(
                       "rounded-xl border px-3 py-3 shadow-sm",
-                      isMe ? "border-[#FE0000]/25 bg-[#FE0000]/[0.03]" : "border-slate-200 bg-white"
+                      isMe ? "border-[#AA8038]/25 bg-[#AA8038]/[0.03]" : "border-slate-200 bg-white"
                     )}
                   >
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                         <span className="font-medium text-slate-700">{comment.user.fullname || comment.user.name}</span>
                         {isMe ? (
-                          <span className="rounded-full bg-[#FE0000]/10 px-2 py-0.5 text-[10px] font-semibold text-[#c70000]">
+                          <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
                             You
                           </span>
                         ) : null}
@@ -885,7 +885,7 @@ function ProjectTaskDetailDialog({
                         {canEditComment && !isEditing ? (
                           <button
                             type="button"
-                            className="rounded px-1 py-0.5 text-[11px] font-medium text-[#c70000] hover:bg-[#FE0000]/10"
+                            className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
                             onClick={() => {
                               setEditingCommentId(comment.id);
                               setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
@@ -920,7 +920,7 @@ function ProjectTaskDetailDialog({
                             <Button
                               type="button"
                               size="sm"
-                              className="bg-[#FE0000] text-white hover:bg-[#d40000]"
+                              className="bg-[#AA8038] text-white hover:bg-[#D48A00]"
                               onClick={() => void saveCommentEdit()}
                               disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
                             >
@@ -954,7 +954,7 @@ function ProjectTaskDetailDialog({
               />
               <div className="flex justify-end">
                 <Button
-                  className="h-10 bg-[#FE0000] text-white hover:bg-[#d40000]"
+                  className="h-10 bg-[#AA8038] text-white hover:bg-[#D48A00]"
                   size="icon"
                   onClick={() => void postComment()}
                   disabled={posting || !canWrite || !hasRichTextContent(commentText)}
@@ -1035,7 +1035,7 @@ function AddPhaseDialog({ open, onClose, onAdded, projectId }: AddPhaseDialogPro
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
-            <Button type="submit" disabled={submitting} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button type="submit" disabled={submitting} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {submitting ? "Adding..." : "Add Phase"}
             </Button>
           </DialogFooter>
@@ -1153,7 +1153,7 @@ function AddMemberDialog({ open, onClose, onAdded, projectId, existingMemberIds 
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
-            <Button onClick={() => void handleAdd()} disabled={submitting || !selectedUserId} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button onClick={() => void handleAdd()} disabled={submitting || !selectedUserId} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {submitting ? "Adding..." : "Add Member"}
             </Button>
           </DialogFooter>
@@ -1448,7 +1448,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
         <div className="mt-3 flex items-center gap-3">
           <Progress value={progress} className="flex-1 gap-0">
             <ProgressTrack className="h-2 bg-gray-100">
-              <ProgressIndicator style={{ width: `${progress}%`, backgroundColor: "#FE0000" }} />
+              <ProgressIndicator style={{ width: `${progress}%`, backgroundColor: "#AA8038" }} />
             </ProgressTrack>
           </Progress>
           <span className="text-xs text-gray-500 shrink-0">
@@ -1470,7 +1470,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                 <TabsTrigger
                   key={value}
                   value={value}
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#FE0000] data-[state=active]:text-[#FE0000] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 h-10 text-sm text-gray-500"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#AA8038] data-[state=active]:text-[#AA8038] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 h-10 text-sm text-gray-500"
                 >
                   <Icon className="h-4 w-4 mr-1.5" />
                   {label}
@@ -1494,7 +1494,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                         onClick={() => setTaskLayout("list")}
                         className={cn(
                           "inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
-                          taskLayout === "list" ? "bg-[#FE0000] text-white" : "text-gray-500 hover:bg-gray-100"
+                          taskLayout === "list" ? "bg-[#AA8038] text-white" : "text-gray-500 hover:bg-gray-100"
                         )}
                       >
                         <List className="h-3.5 w-3.5" />
@@ -1505,7 +1505,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                         onClick={() => setTaskLayout("kanban")}
                         className={cn(
                           "inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
-                          taskLayout === "kanban" ? "bg-[#FE0000] text-white" : "text-gray-500 hover:bg-gray-100"
+                          taskLayout === "kanban" ? "bg-[#AA8038] text-white" : "text-gray-500 hover:bg-gray-100"
                         )}
                       >
                         <Columns3 className="h-3.5 w-3.5" />
@@ -1516,7 +1516,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                   {canProjectWrite && (
                     <Button
                       size="sm"
-                      style={{ backgroundColor: "#FE0000", color: "#fff" }}
+                      style={{ backgroundColor: "#AA8038", color: "#fff" }}
                       onClick={() => openTaskEditor(undefined)}
                     >
                       <Plus className="h-3.5 w-3.5 mr-1" />
@@ -1676,7 +1676,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                   >
                                     <button
                                       type="button"
-                                      className="line-clamp-2 text-left text-sm font-semibold text-slate-800 hover:text-[#FE0000] hover:underline"
+                                      className="line-clamp-2 text-left text-sm font-semibold text-slate-800 hover:text-[#AA8038] hover:underline"
                                       onClick={() => openTaskDetails(task)}
                                     >
                                       {task.title}
@@ -1736,7 +1736,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                 <div className="flex justify-end">
                   <Button
                     size="sm"
-                    style={{ backgroundColor: "#FE0000", color: "#fff" }}
+                    style={{ backgroundColor: "#AA8038", color: "#fff" }}
                     onClick={() => setAddPhaseOpen(true)}
                   >
                     <Plus className="h-3.5 w-3.5 mr-1" />
@@ -1757,7 +1757,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                     <div key={phase.id} className="flex items-center gap-4 p-4 bg-white rounded-xl border group">
                       <div
                         className="h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                        style={{ backgroundColor: "#FE0000" }}
+                        style={{ backgroundColor: "#AA8038" }}
                       >
                         {idx + 1}
                       </div>
@@ -1775,7 +1775,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                         {phaseTasks.length > 0 && (
                           <div className="mt-2 flex items-center gap-2">
                             <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${phaseProgress}%`, backgroundColor: "#FE0000" }} />
+                              <div className="h-full rounded-full" style={{ width: `${phaseProgress}%`, backgroundColor: "#AA8038" }} />
                             </div>
                             <span className="text-xs text-gray-400 shrink-0">{phaseProgress}%</span>
                           </div>
@@ -1805,7 +1805,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                 <div className="flex justify-end">
                   <Button
                     size="sm"
-                    style={{ backgroundColor: "#FE0000", color: "#fff" }}
+                    style={{ backgroundColor: "#AA8038", color: "#fff" }}
                     onClick={() => setAddMemberOpen(true)}
                   >
                     <UserPlus className="h-3.5 w-3.5 mr-1" />
@@ -1832,7 +1832,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                         <p className="text-xs text-gray-400 capitalize">{member.role}</p>
                       </div>
                       {member.role === "manager" && (
-                        <Badge variant="secondary" className="text-xs shrink-0" style={{ backgroundColor: "#FFF0F0", color: "#FE0000" }}>
+                        <Badge variant="secondary" className="text-xs shrink-0" style={{ backgroundColor: "#FFFAF0", color: "#AA8038" }}>
                           Manager
                         </Badge>
                       )}
@@ -1955,7 +1955,7 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
             <span className="text-gray-400">{tasksCount > 0 ? `${doneTasks}/${tasksCount} done` : "No tasks"}</span>
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: "#FE0000" }} />
+            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: "#AA8038" }} />
           </div>
         </div>
 
@@ -2009,7 +2009,7 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
             className="absolute inset-0 flex items-center justify-center gap-2 bg-white/80 backdrop-blur-[1px]"
             onClick={(e) => e.stopPropagation()}
           >
-            <Button size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={onOpen}>
+            <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={onOpen}>
               Open
             </Button>
             {canEditProject && (
@@ -2184,7 +2184,7 @@ export default function ProjectsPage() {
                   "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors",
                   isActive ? "font-medium" : "text-gray-600 hover:bg-gray-100"
                 )}
-                style={isActive ? { backgroundColor: "#FFF0F0", color: "#FE0000" } : undefined}
+                style={isActive ? { backgroundColor: "#FFFAF0", color: "#AA8038" } : undefined}
               >
                 <div className="flex items-center gap-2.5">
                   <Icon className="h-4 w-4" />
@@ -2192,7 +2192,7 @@ export default function ProjectsPage() {
                 </div>
                 <span
                   className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0", isActive ? "text-white" : "bg-gray-100 text-gray-500")}
-                  style={isActive ? { backgroundColor: "#FE0000" } : undefined}
+                  style={isActive ? { backgroundColor: "#AA8038" } : undefined}
                 >
                   {count}
                 </span>
@@ -2214,12 +2214,12 @@ export default function ProjectsPage() {
                       "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors",
                       isActive ? "font-medium" : "text-gray-600 hover:bg-gray-100"
                     )}
-                    style={isActive ? { backgroundColor: "#FFF0F0", color: "#FE0000" } : undefined}
+                    style={isActive ? { backgroundColor: "#FFFAF0", color: "#AA8038" } : undefined}
                   >
                     <span className="truncate">{label}</span>
                     <span
                       className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0", isActive ? "text-white" : "bg-gray-100 text-gray-500")}
-                      style={isActive ? { backgroundColor: "#FE0000" } : undefined}
+                      style={isActive ? { backgroundColor: "#AA8038" } : undefined}
                     >
                       {count}
                     </span>
@@ -2236,7 +2236,7 @@ export default function ProjectsPage() {
         <div className="border-b bg-white px-6 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             {canWrite && (
-              <Button size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={() => setCreateOpen(true)}>
+              <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4 mr-1" />
                 New Project
               </Button>

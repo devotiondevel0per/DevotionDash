@@ -119,7 +119,7 @@ const ACTIVITY_META: Record<string, { icon: React.ReactNode; color: string; labe
   system: { icon: <Activity className="h-3.5 w-3.5" />, color: "text-slate-500 bg-slate-100", label: "System" },
 };
 
-const SOURCE_COLORS = ["#FE0000", "#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ec4899", "#06b6d4", "#f97316"];
+const SOURCE_COLORS = ["#AA8038", "#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ECB348", "#06b6d4", "#F9AA16"];
 
 const EMPTY_CREATE: CreateForm = {
   title: "", companyName: "", contactName: "", email: "", phone: "",
@@ -477,7 +477,7 @@ function LeadDetailSheet({
           </>
         )}
         {isConvertible(lead) && canManage && (
-          <Button size="sm" className="h-7 text-xs bg-[#FE0000] text-white hover:bg-[#d90000] ml-auto"
+          <Button size="sm" className="h-7 text-xs bg-[#AA8038] text-white hover:bg-[#D98D00] ml-auto"
             disabled={converting} onClick={convertLead}>
             {converting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="mr-1 h-3.5 w-3.5" />}
             Convert
@@ -642,7 +642,7 @@ function LeadDetailSheet({
             </div>
           </div>
           {canWrite && (
-            <Button className="mt-4 w-full bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={save} disabled={saving}>
+            <Button className="mt-4 w-full bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={save} disabled={saving}>
               {saving ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Saving...</> : <><Edit2 className="mr-1.5 h-4 w-4" />Save Changes</>}
             </Button>
           )}
@@ -672,7 +672,7 @@ function LeadDetailSheet({
                 onChange={(e) => setActForm((f) => ({ ...f, content: e.target.value }))}
                 placeholder="Add notes, call summary, meeting recap..."
                 rows={2} className="text-sm resize-none" />
-              <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]"
+              <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]"
                 disabled={addingAct} onClick={addActivity}>
                 {addingAct ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1 h-3.5 w-3.5" />}
                 Add Activity
@@ -1120,7 +1120,7 @@ export default function LeadsPage() {
           <p className="text-sm text-slate-500">Track, manage and convert your sales pipeline.</p>
         </div>
         {canWrite && (
-          <Button className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={() => setCreateOpen(true)}>
+          <Button className="bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={() => setCreateOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />New Lead
           </Button>
         )}
@@ -1152,7 +1152,7 @@ export default function LeadsPage() {
       <div className="mb-4 flex flex-wrap gap-2">
         {allowedSections.map((s) => (
           <Button key={s.id} size="sm" variant={s.id === section ? "default" : "outline"}
-            className={cn("h-8", s.id === section ? "bg-[#FE0000] text-white hover:bg-[#d90000]" : "")}
+            className={cn("h-8", s.id === section ? "bg-[#AA8038] text-white hover:bg-[#D98D00]" : "")}
             onClick={() => setSection(s.id)}>
             {s.label}
           </Button>
@@ -1448,7 +1448,7 @@ export default function LeadsPage() {
                       <span>Owner: {fullName(lead.owner)}</span>
                     </div>
                   </div>
-                  <Button size="sm" className="ml-3 bg-[#FE0000] text-white hover:bg-[#d90000] shrink-0"
+                  <Button size="sm" className="ml-3 bg-[#AA8038] text-white hover:bg-[#D98D00] shrink-0"
                     disabled={!canWrite || busyId === lead.id} onClick={() => convertLead(lead)}>
                     {busyId === lead.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                     Convert
@@ -1476,7 +1476,7 @@ export default function LeadsPage() {
                           <span>{s.label}</span><span>{s.count} ({s.share.toFixed(1)}%)</span>
                         </div>
                         <div className="h-2 rounded-full bg-slate-100">
-                          <div className="h-2 rounded-full bg-[#FE0000] transition-all" style={{ width: `${s.share}%` }} />
+                          <div className="h-2 rounded-full bg-[#AA8038] transition-all" style={{ width: `${s.share}%` }} />
                         </div>
                       </div>
                     ))}
@@ -1647,7 +1647,7 @@ export default function LeadsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Cancel</Button>
-            <Button className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={createLead} disabled={creating}>
+            <Button className="bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={createLead} disabled={creating}>
               {creating ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Creating...</> : <><Plus className="mr-1.5 h-4 w-4" />Create Lead</>}
             </Button>
           </DialogFooter>
@@ -1657,7 +1657,7 @@ export default function LeadsPage() {
       {/* ── Loading overlay for detail ── */}
       {loadingDetail && (
         <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[520px] items-center justify-center border-l bg-white shadow-2xl">
-          <Loader2 className="h-8 w-8 animate-spin text-[#FE0000]" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#AA8038]" />
         </div>
       )}
 

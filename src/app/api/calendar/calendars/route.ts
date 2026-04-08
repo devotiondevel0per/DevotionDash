@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    const color = isHexColor(colorInput) ? colorInput : "#FE0000";
+    const color = isHexColor(colorInput) ? colorInput : "#AA8038";
     const type = typeInput === "shared" ? "shared" : "personal";
 
     const userId = accessResult.ctx.userId;

@@ -233,8 +233,8 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(boardTopicDetailProvider(widget.topicId));
-    final me = ref.watch(userProfileProvider).valueOrNull;
-    final topic = async.valueOrNull;
+    final me = ref.watch(userProfileProvider).asData?.value;
+    final topic = async.asData?.value;
     final creatorId = ((topic?['creator'] as Map<String, dynamic>?)?['id'] ?? '').toString();
     final isCreator = me != null && creatorId == me.id;
     final canManage = me?.isAdmin == true;

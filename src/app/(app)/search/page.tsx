@@ -119,7 +119,7 @@ export default function SearchPage() {
       <div className={cn("border-b bg-white transition-all", hasSearched ? "px-6 py-3" : "px-6 py-5")}>
         {!hasSearched && (
           <div className="mb-3 text-center">
-            <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#FE0000] text-white">
+            <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#AA8038] text-white">
               <Search className="h-5 w-5" />
             </div>
             <h1 className="mb-0.5 text-xl font-bold text-gray-900">Search Everything</h1>
@@ -191,7 +191,7 @@ export default function SearchPage() {
                     setHasSearched(true);
                     void performSearch(quickSearch, moduleFilter);
                   }}
-                  className="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-[#FE0000]/10 hover:text-[#FE0000] transition-colors"
+                  className="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-[#AA8038]/10 hover:text-[#AA8038] transition-colors"
                 >
                   {quickSearch}
                 </button>

@@ -302,7 +302,7 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen>
     final theme = Theme.of(context);
     final query = _query();
     final contacts = ref.watch(contactsProvider(query));
-    final organizations = ref.watch(_organizationsProvider).valueOrNull ?? const [];
+    final organizations = ref.watch(_organizationsProvider).asData?.value ?? const [];
 
     return Scaffold(
       appBar: AppBar(

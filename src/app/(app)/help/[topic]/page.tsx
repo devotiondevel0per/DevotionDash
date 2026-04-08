@@ -34,7 +34,7 @@ export default function HelpTopicDetailPage() {
           <CardContent className="p-8 text-center">
             <FileWarning className="mx-auto mb-3 h-8 w-8 text-amber-600" />
             <p className="text-sm font-medium text-slate-800">Help topic not found.</p>
-            <Link href="/help" className="mt-3 inline-block text-sm font-medium text-[#b00715]">
+            <Link href="/help" className="mt-3 inline-block text-sm font-medium text-[#B07507]">
               Back to Help Center
             </Link>
           </CardContent>
@@ -54,7 +54,7 @@ export default function HelpTopicDetailPage() {
             <p className="mt-1 text-sm text-slate-600">
               This article belongs to <strong>{MODULE_LABEL[topic.module]}</strong> module.
             </p>
-            <Link href="/help" className="mt-3 inline-block text-sm font-medium text-[#b00715]">
+            <Link href="/help" className="mt-3 inline-block text-sm font-medium text-[#B07507]">
               Back to Help Center
             </Link>
           </CardContent>
@@ -72,7 +72,7 @@ export default function HelpTopicDetailPage() {
             Back to Help Center
           </Link>
           <div className="flex items-start gap-3">
-            <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#FE0000]/10 text-[#FE0000]">
+            <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#AA8038]/10 text-[#AA8038]">
               <LifeBuoy className="h-5 w-5" />
             </div>
             <div className="min-w-0">

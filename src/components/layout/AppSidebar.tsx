@@ -41,7 +41,7 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        "relative flex h-full shrink-0 flex-col overflow-hidden border-r border-[#5f0f16] bg-[linear-gradient(180deg,var(--twx-sidebar-from,#6e0d14)_0%,var(--twx-sidebar-mid,#560d14)_38%,var(--twx-sidebar-to,#45111a)_100%)] text-white shadow-[12px_0_30px_-24px_rgba(29,4,7,0.9)] transition-all duration-200",
+        "relative flex h-full shrink-0 flex-col overflow-hidden border-r border-[#5F430F] bg-[linear-gradient(180deg,var(--twx-sidebar-from,#6E4C0D)_0%,var(--twx-sidebar-mid,#563C0D)_38%,var(--twx-sidebar-to,#453311)_100%)] text-white shadow-[12px_0_30px_-24px_rgba(29,4,7,0.9)] transition-all duration-200",
         collapsed ? "w-[56px]" : "w-[220px]"
       )}
     >

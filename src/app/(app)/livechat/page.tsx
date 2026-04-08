@@ -320,7 +320,7 @@ function LiveChatPageContent() {
     token: "",
     brandLabel: "Live Support",
     welcomeText: "Hi there! How can we help you today?",
-    accentColor: "#FE0000",
+    accentColor: "#AA8038",
     position: "right",
     loaderUrl: "",
     widgetUrl: "",
@@ -674,7 +674,7 @@ function LiveChatPageContent() {
         token: data.token || "",
         brandLabel: data.brandLabel || "Live Support",
         welcomeText: data.welcomeText || "Hi there! How can we help you today?",
-        accentColor: data.accentColor || "#FE0000",
+        accentColor: data.accentColor || "#AA8038",
         position: data.position === "left" ? "left" : "right",
         loaderUrl: data.loaderUrl || "",
         widgetUrl: data.widgetUrl || "",
@@ -1248,7 +1248,7 @@ function LiveChatPageContent() {
         token: payload.token ?? "",
         brandLabel: payload.brandLabel ?? "Live Support",
         welcomeText: payload.welcomeText ?? "",
-        accentColor: payload.accentColor ?? "#FE0000",
+        accentColor: payload.accentColor ?? "#AA8038",
         position: payload.position === "left" ? "left" : "right",
         loaderUrl: payload.loaderUrl ?? "",
         widgetUrl: payload.widgetUrl ?? "",
@@ -1275,7 +1275,7 @@ function LiveChatPageContent() {
         token: payload.token ?? "",
         brandLabel: payload.brandLabel ?? "Live Support",
         welcomeText: payload.welcomeText ?? "",
-        accentColor: payload.accentColor ?? "#FE0000",
+        accentColor: payload.accentColor ?? "#AA8038",
         position: payload.position === "left" ? "left" : "right",
         loaderUrl: payload.loaderUrl ?? "",
         widgetUrl: payload.widgetUrl ?? "",
@@ -1367,7 +1367,7 @@ function LiveChatPageContent() {
                 key={section.id}
                 size="sm"
                 variant={section.id === selectedSection.id ? "default" : "outline"}
-                className={cn("h-8", section.id === selectedSection.id ? "bg-[#FE0000] text-white hover:bg-[#d90000]" : "")}
+                className={cn("h-8", section.id === selectedSection.id ? "bg-[#AA8038] text-white hover:bg-[#D98D00]" : "")}
                 onClick={() => setActiveSection(section.id)}
               >
                 {section.label}
@@ -1378,11 +1378,11 @@ function LiveChatPageContent() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-7">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Open Chats</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.openDialogs ?? 0}</p><MessagesSquare className="h-5 w-5 text-[#FE0000]" /></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Unassigned</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.unassignedDialogs ?? 0}</p><Users className="h-5 w-5 text-[#FE0000]" /></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Closed Today</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.closedToday ?? 0}</p><Clock3 className="h-5 w-5 text-[#FE0000]" /></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Messages Today</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.messagesToday ?? 0}</p><Activity className="h-5 w-5 text-[#FE0000]" /></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Active Queues</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.activeQueues ?? 0}</p><Headphones className="h-5 w-5 text-[#FE0000]" /></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Open Chats</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.openDialogs ?? 0}</p><MessagesSquare className="h-5 w-5 text-[#AA8038]" /></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Unassigned</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.unassignedDialogs ?? 0}</p><Users className="h-5 w-5 text-[#AA8038]" /></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Closed Today</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.closedToday ?? 0}</p><Clock3 className="h-5 w-5 text-[#AA8038]" /></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Messages Today</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.messagesToday ?? 0}</p><Activity className="h-5 w-5 text-[#AA8038]" /></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Active Queues</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.activeQueues ?? 0}</p><Headphones className="h-5 w-5 text-[#AA8038]" /></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Awaiting Agent</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.awaitingAgentReplies ?? 0}</p><MessagesSquare className="h-5 w-5 text-amber-600" /></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-600">Avg First Reply</CardTitle></CardHeader><CardContent className="flex items-center justify-between"><p className="text-2xl font-semibold">{overview?.totals.avgFirstResponseMinutes ?? 0}<span className="ml-1 text-base font-medium text-slate-500">m</span></p><Clock3 className="h-5 w-5 text-emerald-600" /></CardContent></Card>
       </div>
@@ -1397,7 +1397,7 @@ function LiveChatPageContent() {
                   <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { void loadDialogs(); void loadOverview(); }}>
                     <RefreshCw className={cn("h-4 w-4", loadingState.dialogs ? "animate-spin" : "")} />
                   </Button>
-                  {canWrite ? <Button size="sm" className="h-8 bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={() => setCreateOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" />New</Button> : null}
+                  {canWrite ? <Button size="sm" className="h-8 bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={() => setCreateOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" />New</Button> : null}
                 </div>
               </div>
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search visitor, email, subject..." />
@@ -1428,13 +1428,13 @@ function LiveChatPageContent() {
                       onClick={() => setSelectedDialogId(dialog.id)}
                       className={cn(
                         "w-full rounded-lg border px-3 py-2 text-left transition",
-                        selectedDialogId === dialog.id ? "border-[#FE0000] bg-[#FE0000]/5" : unread > 0 ? "border-amber-300 bg-amber-50 hover:bg-amber-100" : "hover:bg-slate-50"
+                        selectedDialogId === dialog.id ? "border-[#AA8038] bg-[#AA8038]/5" : unread > 0 ? "border-amber-300 bg-amber-50 hover:bg-amber-100" : "hover:bg-slate-50"
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="truncate text-sm font-medium text-slate-900">{dialog.subject}</p>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          {unread > 0 ? <span className="inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FE0000] px-1 text-[10px] font-bold text-white">{unread}</span> : null}
+                          {unread > 0 ? <span className="inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#AA8038] px-1 text-[10px] font-bold text-white">{unread}</span> : null}
                           <Badge variant={dialog.status === "open" ? "outline" : "secondary"} className="text-[10px] font-normal">{dialog.status}</Badge>
                         </div>
                       </div>
@@ -1479,7 +1479,7 @@ function LiveChatPageContent() {
                       <div className="space-y-2">
                         {canWrite ? (
                           <>
-                            <Button size="sm" className="w-full bg-[#FE0000] text-white hover:bg-[#d90000]" disabled={loadingState.action} onClick={assignToMe}>Assign To Me</Button>
+                            <Button size="sm" className="w-full bg-[#AA8038] text-white hover:bg-[#D98D00]" disabled={loadingState.action} onClick={assignToMe}>Assign To Me</Button>
                             <Select value={targetAgentId} onValueChange={(value) => setTargetAgentId(value || "none")}>
                               <SelectTrigger className="h-8">
                                 <SelectValue>
@@ -1528,7 +1528,7 @@ function LiveChatPageContent() {
                               type="checkbox"
                               checked={translatorOn}
                               onChange={(e) => setTranslatorOn(e.target.checked)}
-                              className="h-3 w-3 accent-[#FE0000]"
+                              className="h-3 w-3 accent-[#AA8038]"
                             />
                             Auto-translate to{translatorOn ? ":" : "..."}
                           </label>
@@ -1584,7 +1584,7 @@ function LiveChatPageContent() {
                             >
                               {insight.sentiment}
                             </Badge>
-                            <Badge variant="secondary" className="bg-[#FE0000]/10 text-[#b10f18]">
+                            <Badge variant="secondary" className="bg-[#AA8038]/10 text-[#B1780F]">
                               Urgency {insight.urgencyScore}
                             </Badge>
                           </div>
@@ -1780,7 +1780,7 @@ function LiveChatPageContent() {
                           }}
                         />
                         <Button
-                          className="h-10 bg-[#FE0000] text-white hover:bg-[#d90000]"
+                          className="h-10 bg-[#AA8038] text-white hover:bg-[#D98D00]"
                           disabled={sendingMessage || (!composerText.trim() && composerAttachments.length === 0) || (!canManage && !isAssignedToCurrent)}
                           onClick={() => void sendMessage()}
                         >
@@ -1851,7 +1851,7 @@ function LiveChatPageContent() {
                     placeholder="New department name..."
                     className="h-8 rounded border px-2 text-sm"
                   />
-                  <Button size="sm" onClick={() => void createDepartment()} disabled={creatingDept || !newDeptName.trim()} className="h-8 bg-[#FE0000] text-white text-xs hover:bg-[#d90000]">
+                  <Button size="sm" onClick={() => void createDepartment()} disabled={creatingDept || !newDeptName.trim()} className="h-8 bg-[#AA8038] text-white text-xs hover:bg-[#D98D00]">
                     {creatingDept ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Add
                   </Button>
                 </div>
@@ -2067,7 +2067,7 @@ function LiveChatPageContent() {
 
             <div className="flex justify-end">
               <Button
-                className="bg-[#FE0000] text-white hover:bg-[#d90000]"
+                className="bg-[#AA8038] text-white hover:bg-[#D98D00]"
                 disabled={settingsLoading || settingsSaving}
                 onClick={() => void saveAutomationSettings()}
               >
@@ -2154,7 +2154,7 @@ function LiveChatPageContent() {
                   </Select>
                 </div>
                 <Button
-                  className="w-full bg-[#FE0000] text-white hover:bg-[#d90000]"
+                  className="w-full bg-[#AA8038] text-white hover:bg-[#D98D00]"
                   disabled={queueSaving}
                   onClick={() => void createQueueGroup()}
                 >
@@ -2228,7 +2228,7 @@ function LiveChatPageContent() {
                       onChange={(event) =>
                         setWidgetForm((prev) => ({ ...prev, accentColor: event.target.value.toUpperCase() }))
                       }
-                      placeholder="#FE0000"
+                      placeholder="#AA8038"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -2288,7 +2288,7 @@ function LiveChatPageContent() {
                 </div>
 
                 <Button
-                  className="w-full bg-[#FE0000] text-white hover:bg-[#d90000]"
+                  className="w-full bg-[#AA8038] text-white hover:bg-[#D98D00]"
                   disabled={widgetSaving}
                   onClick={() => void saveWidgetSettings()}
                 >
@@ -2350,7 +2350,7 @@ function LiveChatPageContent() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={loadingState.action}>Cancel</Button>
-            <Button className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={createDialog} disabled={loadingState.action}>{loadingState.action ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Creating...</> : "Create Session"}</Button>
+            <Button className="bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={createDialog} disabled={loadingState.action}>{loadingState.action ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Creating...</> : "Create Session"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

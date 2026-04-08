@@ -134,7 +134,7 @@ export const roleTemplates: RoleTemplate[] = [
     key: "it_admin",
     label: "IT Admin",
     description: "System operations and administration controls.",
-    color: "#D15600",
+    color: "#D18800",
     permissions: {
       home: ["read"],
       administration: ["read", "write", "manage"],

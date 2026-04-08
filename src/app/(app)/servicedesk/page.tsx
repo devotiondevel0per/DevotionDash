@@ -88,13 +88,13 @@ type AiReply = { reply: string; followUps: string[]; confidence: "high" | "mediu
 type UploadedAsset = { id: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string; isImage: boolean };
 
 const STATUS_CONFIG: Record<ServiceRequest["status"], { label: string; className: string }> = {
-  open: { label: "Open", className: "bg-red-100 text-[#c70000]" },
+  open: { label: "Open", className: "bg-red-100 text-[#C78100]" },
   pending: { label: "Pending", className: "bg-amber-100 text-amber-800" },
   closed: { label: "Closed", className: "bg-slate-100 text-slate-700" },
 };
 
 const PRIORITY_CONFIG: Record<ServiceRequest["priority"], { label: string; className: string }> = {
-  high: { label: "High", className: "bg-red-100 text-[#c70000]" },
+  high: { label: "High", className: "bg-red-100 text-[#C78100]" },
   normal: { label: "Normal", className: "bg-orange-100 text-orange-800" },
   low: { label: "Low", className: "bg-slate-100 text-slate-700" },
 };
@@ -245,7 +245,7 @@ function renderBareUrls(segment: string, keyPrefix: string): ReactNode[] {
         href={url}
         target="_blank"
         rel="noreferrer noopener"
-        className="text-[#c70000] underline break-all"
+        className="text-[#C78100] underline break-all"
       >
         {url}
       </a>
@@ -280,7 +280,7 @@ function renderInlineRichText(line: string, keyPrefix: string): ReactNode[] {
           href={url}
           target="_blank"
           rel="noreferrer noopener"
-          className="text-[#c70000] underline break-all"
+          className="text-[#C78100] underline break-all"
         >
           {label}
         </a>
@@ -488,7 +488,7 @@ function CreateRequestDialog({ open, onClose, onCreated, groups, users }: Create
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
-            <Button type="submit" disabled={submitting} style={{ backgroundColor: "#FE0000", color: "#fff" }}>{submitting ? "Creating..." : "Create Request"}</Button>
+            <Button type="submit" disabled={submitting} style={{ backgroundColor: "#AA8038", color: "#fff" }}>{submitting ? "Creating..." : "Create Request"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -839,7 +839,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
           <div className="p-5 text-sm text-slate-500">Request not found.</div>
         ) : (
           <div className="min-h-0 flex-1 grid grid-cols-1 md:grid-cols-[320px_1fr]">
-            <aside className="border-r bg-[#fffdfd] p-4 space-y-3 overflow-y-auto">
+            <aside className="border-r bg-[#FFFEFD] p-4 space-y-3 overflow-y-auto">
               <div className="flex items-center flex-wrap gap-1.5">
                 <Badge className={cn("h-5 px-2 text-[11px]", STATUS_CONFIG[request.status].className)}>
                   {STATUS_CONFIG[request.status].label}
@@ -857,7 +857,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
 
               <div className="rounded-md border bg-white px-3 py-2">
                 <p className="text-xs text-slate-500">Ticket ID</p>
-                <p className="mt-0.5 font-mono text-xs text-[#c70000]">#{request.id.slice(0, 8)}</p>
+                <p className="mt-0.5 font-mono text-xs text-[#C78100]">#{request.id.slice(0, 8)}</p>
               </div>
 
               <div className="space-y-1.5">
@@ -940,7 +940,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
                 className="w-full h-9"
                 onClick={() => void saveMeta()}
                 disabled={savingMeta}
-                style={{ backgroundColor: "#FE0000", color: "#fff" }}
+                style={{ backgroundColor: "#AA8038", color: "#fff" }}
               >
                 {savingMeta ? "Saving..." : "Save Changes"}
               </Button>
@@ -984,7 +984,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
                     return (
                       <div key={item.id} className="flex gap-2 rounded-lg border bg-white p-2.5">
                         <Avatar className="h-7 w-7 shrink-0">
-                          <AvatarFallback className="text-xs bg-red-50 text-[#c70000]">{initials(author)}</AvatarFallback>
+                          <AvatarFallback className="text-xs bg-red-50 text-[#C78100]">{initials(author)}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -1051,7 +1051,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
                               Upload image
                             </button>
                             <button
-                              className="rounded bg-[#FE0000] px-2 py-1 text-xs text-white hover:bg-[#d00000]"
+                              className="rounded bg-[#AA8038] px-2 py-1 text-xs text-white hover:bg-[#D08700]"
                               onClick={applyImageInsert}
                             >
                               Apply
@@ -1092,7 +1092,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
                           />
                           <div className="flex justify-end">
                             <button
-                              className="rounded bg-[#FE0000] px-2 py-1 text-xs text-white hover:bg-[#d00000]"
+                              className="rounded bg-[#AA8038] px-2 py-1 text-xs text-white hover:bg-[#D08700]"
                               onClick={applyLinkInsert}
                             >
                               Apply
@@ -1130,7 +1130,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
                                 key={item.id}
                                 className={cn(
                                   "rounded px-2 py-1 text-xs",
-                                  emojiCategory === item.id ? "bg-[#FE0000]/10 text-[#c70000]" : "text-slate-500 hover:bg-slate-100"
+                                  emojiCategory === item.id ? "bg-[#AA8038]/10 text-[#C78100]" : "text-slate-500 hover:bg-slate-100"
                                 )}
                                 onClick={() => setEmojiCategory(item.id)}
                               >
@@ -1194,7 +1194,7 @@ function RequestDetailsDialog({ requestId, open, users, onClose, onRequestChange
                     className="h-9 px-4"
                     disabled={savingComment || uploadingFiles || !comment.trim()}
                     onClick={() => void sendComment()}
-                    style={{ backgroundColor: "#FE0000", color: "#fff" }}
+                    style={{ backgroundColor: "#AA8038", color: "#fff" }}
                   >
                     <Send className="mr-1.5 h-3.5 w-3.5" />
                     {savingComment ? "Sending..." : uploadingFiles ? "Uploading..." : "Send Reply"}
@@ -1316,17 +1316,17 @@ export default function ServiceDeskPage() {
         <div className="mb-3 px-2"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ticket Desk</p></div>
 
         <div className="space-y-1">
-          <button onClick={() => setScopeFilter("all")} className={cn("flex w-full items-center justify-between rounded-md px-3 py-2 text-sm", scopeFilter === "all" ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-slate-600 hover:bg-slate-100")}>
+          <button onClick={() => setScopeFilter("all")} className={cn("flex w-full items-center justify-between rounded-md px-3 py-2 text-sm", scopeFilter === "all" ? "bg-[#AA8038]/10 text-[#AA8038]" : "text-slate-600 hover:bg-slate-100")}>
             <span className="flex items-center gap-2"><Headphones className="h-4 w-4" />All Tickets</span>
             <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs">{requests.length}</span>
           </button>
 
-          <button onClick={() => setScopeFilter("assigned")} className={cn("flex w-full items-center justify-between rounded-md px-3 py-2 text-sm", scopeFilter === "assigned" ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-slate-600 hover:bg-slate-100")}>
+          <button onClick={() => setScopeFilter("assigned")} className={cn("flex w-full items-center justify-between rounded-md px-3 py-2 text-sm", scopeFilter === "assigned" ? "bg-[#AA8038]/10 text-[#AA8038]" : "text-slate-600 hover:bg-slate-100")}>
             <span className="flex items-center gap-2"><UserCheck className="h-4 w-4" />Assigned To Me</span>
             <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs">{assignedCount}</span>
           </button>
 
-          <button onClick={() => setScopeFilter("monitoring")} className={cn("flex w-full items-center justify-between rounded-md px-3 py-2 text-sm", scopeFilter === "monitoring" ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-slate-600 hover:bg-slate-100")}>
+          <button onClick={() => setScopeFilter("monitoring")} className={cn("flex w-full items-center justify-between rounded-md px-3 py-2 text-sm", scopeFilter === "monitoring" ? "bg-[#AA8038]/10 text-[#AA8038]" : "text-slate-600 hover:bg-slate-100")}>
             <span className="flex items-center gap-2"><Eye className="h-4 w-4" />Active Monitoring</span>
           </button>
         </div>
@@ -1338,7 +1338,7 @@ export default function ServiceDeskPage() {
           {groupItems.map((group) => {
             const key = `group:${group.id}`;
             return (
-              <button key={group.id} onClick={() => setScopeFilter(key)} className={cn("flex w-full items-center justify-between rounded-md px-3 py-2 text-sm", scopeFilter === key ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-slate-600 hover:bg-slate-100")}>
+              <button key={group.id} onClick={() => setScopeFilter(key)} className={cn("flex w-full items-center justify-between rounded-md px-3 py-2 text-sm", scopeFilter === key ? "bg-[#AA8038]/10 text-[#AA8038]" : "text-slate-600 hover:bg-slate-100")}>
                 <span className="truncate">{group.name}</span>
                 <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs">{group.count}</span>
               </button>
@@ -1352,20 +1352,20 @@ export default function ServiceDeskPage() {
         <div className="border-b bg-white px-5 pt-4 pb-3 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <TicketCheck className="h-5 w-5 text-[#FE0000]" />
+              <TicketCheck className="h-5 w-5 text-[#AA8038]" />
               <span className="text-base font-semibold text-slate-800">Ticket Desk</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button onClick={() => setCreateOpen(true)} style={{ backgroundColor: "#FE0000", color: "#fff" }}><Plus className="mr-1.5 h-4 w-4" />New Ticket</Button>
+              <Button onClick={() => setCreateOpen(true)} style={{ backgroundColor: "#AA8038", color: "#fff" }}><Plus className="mr-1.5 h-4 w-4" />New Ticket</Button>
               <Button variant="outline" size="icon" onClick={() => void loadData()} title="Refresh"><RefreshCw className="h-4 w-4" /></Button>
             </div>
           </div>
 
           {/* KPI row */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <button onClick={() => { setScopeFilter("all"); setStatusFilter("open"); }} className={cn("rounded-lg border px-3 py-2 text-left transition-colors hover:bg-[#fff5f5]", statusFilter === "open" && scopeFilter === "all" ? "border-[#FE0000]/30 bg-[#fff5f5]" : "bg-white")}>
-              <div className="flex items-center gap-1.5 mb-1"><div className="h-2 w-2 rounded-full bg-[#FE0000]" /><span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Open</span></div>
-              <p className="text-2xl font-bold text-[#c70000]">{totalOpen}</p>
+            <button onClick={() => { setScopeFilter("all"); setStatusFilter("open"); }} className={cn("rounded-lg border px-3 py-2 text-left transition-colors hover:bg-[#FFFCF5]", statusFilter === "open" && scopeFilter === "all" ? "border-[#AA8038]/30 bg-[#FFFCF5]" : "bg-white")}>
+              <div className="flex items-center gap-1.5 mb-1"><div className="h-2 w-2 rounded-full bg-[#AA8038]" /><span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Open</span></div>
+              <p className="text-2xl font-bold text-[#C78100]">{totalOpen}</p>
             </button>
             <button onClick={() => { setScopeFilter("all"); setStatusFilter("pending"); }} className={cn("rounded-lg border px-3 py-2 text-left transition-colors hover:bg-amber-50", statusFilter === "pending" && scopeFilter === "all" ? "border-amber-300 bg-amber-50" : "bg-white")}>
               <div className="flex items-center gap-1.5 mb-1"><Clock className="h-3.5 w-3.5 text-amber-500" /><span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Pending</span></div>
@@ -1423,8 +1423,8 @@ export default function ServiceDeskPage() {
               </TableHeader>
               <TableBody>
                 {filteredRequests.map((request) => (
-                  <TableRow key={request.id} onClick={() => { setActiveRequestId(request.id); setDetailsOpen(true); }} className="cursor-pointer bg-white hover:bg-[#fff5f5]/60">
-                    <TableCell className="pl-5 text-xs font-mono text-[#c70000]">#{request.id.slice(0, 8)}</TableCell>
+                  <TableRow key={request.id} onClick={() => { setActiveRequestId(request.id); setDetailsOpen(true); }} className="cursor-pointer bg-white hover:bg-[#FFFCF5]/60">
+                    <TableCell className="pl-5 text-xs font-mono text-[#C78100]">#{request.id.slice(0, 8)}</TableCell>
                     <TableCell><p className="max-w-[460px] truncate text-sm font-medium text-slate-800">{request.title}</p><p className="max-w-[460px] truncate text-xs text-slate-500">{request.category?.name ?? "General"}</p></TableCell>
                     <TableCell className="text-sm text-slate-600">{request.group?.name ?? "General"}</TableCell>
                     <TableCell className="text-sm text-slate-600">{displayName(request.requester)}</TableCell>

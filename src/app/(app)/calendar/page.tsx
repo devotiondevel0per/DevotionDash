@@ -318,7 +318,7 @@ function CreateEventDialog({
             <Button
               type="submit"
               disabled={submitting}
-              style={{ backgroundColor: "#FE0000", color: "#fff" }}
+              style={{ backgroundColor: "#AA8038", color: "#fff" }}
             >
               {submitting ? "Creating..." : "Create Event"}
             </Button>
@@ -344,14 +344,14 @@ function CreateCalendarDialog({
 }: CreateCalendarDialogProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState("personal");
-  const [color, setColor] = useState("#FE0000");
+  const [color, setColor] = useState("#AA8038");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setName("");
     setType("personal");
-    setColor("#FE0000");
+    setColor("#AA8038");
     setSaving(false);
   }, [open]);
 
@@ -427,7 +427,7 @@ function CreateCalendarDialog({
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-[#FE0000] text-white hover:bg-[#d70000]" disabled={saving}>
+            <Button type="submit" className="bg-[#AA8038] text-white hover:bg-[#D78C00]" disabled={saving}>
               {saving ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
@@ -663,7 +663,7 @@ export default function CalendarPage() {
           <Button
             size="sm"
             className="w-full"
-            style={{ backgroundColor: "#FE0000", color: "#fff" }}
+            style={{ backgroundColor: "#AA8038", color: "#fff" }}
             onClick={() => setCreateCalendarOpen(true)}
           >
             <Plus className="h-4 w-4 mr-1" />
@@ -771,7 +771,7 @@ export default function CalendarPage() {
                     "h-7 px-3 text-xs capitalize",
                     view === v ? "" : "text-gray-600"
                   )}
-                  style={view === v ? { backgroundColor: "#FE0000", color: "#fff" } : undefined}
+                  style={view === v ? { backgroundColor: "#AA8038", color: "#fff" } : undefined}
                   onClick={() => setView(v)}
                 >
                   {v}
@@ -796,7 +796,7 @@ export default function CalendarPage() {
 
           <Button
             size="sm"
-            style={{ backgroundColor: "#FE0000", color: "#fff" }}
+            style={{ backgroundColor: "#AA8038", color: "#fff" }}
             onClick={() => { setPrefillDate(undefined); setCreateOpen(true); }}
           >
             <Plus className="h-4 w-4 mr-1" />
@@ -862,7 +862,7 @@ export default function CalendarPage() {
                                 "h-6 w-6 flex items-center justify-center rounded-full text-xs mb-1 font-medium",
                                 isToday ? "text-white font-bold" : "text-gray-700"
                               )}
-                              style={isToday ? { backgroundColor: "#FE0000" } : undefined}
+                              style={isToday ? { backgroundColor: "#AA8038" } : undefined}
                             >
                               {day}
                             </div>
@@ -915,7 +915,7 @@ export default function CalendarPage() {
                       onClick={() => setSelectedDateKey(k)}
                     >
                       <p className="text-xs text-gray-500">{WEEK_DAYS_MON[(d.getDay() + 6) % 7]}</p>
-                      <p className={cn("text-sm font-semibold", isTodayCell ? "text-[#FE0000]" : "text-gray-900")}>{d.getDate()}</p>
+                      <p className={cn("text-sm font-semibold", isTodayCell ? "text-[#AA8038]" : "text-gray-900")}>{d.getDate()}</p>
                     </button>
                   );
                 })}
@@ -984,7 +984,7 @@ export default function CalendarPage() {
                             </div>
                             <button
                               onClick={() => void deleteEvent(event.id)}
-                              className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-[#FE0000] transition-colors"
+                              className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-[#AA8038] transition-colors"
                               title="Delete event"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -1008,7 +1008,7 @@ export default function CalendarPage() {
                 <Badge
                   variant="secondary"
                   className="text-xs ml-auto"
-                  style={{ backgroundColor: "#FFF0F0", color: "#FE0000" }}
+                  style={{ backgroundColor: "#FFFAF0", color: "#AA8038" }}
                 >
                   {upcomingEvents.length}
                 </Badge>
@@ -1086,7 +1086,7 @@ export default function CalendarPage() {
                             )}
                             <button
                               onClick={() => void deleteEvent(event.id)}
-                              className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-[#FE0000] transition-colors"
+                              className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-[#AA8038] transition-colors"
                               title="Delete event"
                             >
                               <Trash2 className="h-3.5 w-3.5" />

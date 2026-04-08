@@ -35,13 +35,13 @@ function normalizeHex(value: string | undefined, fallback: string) {
 
 function applySettings(settings: SettingsMap) {
   const root = document.documentElement;
-  const primary = normalizeHex(settings[THEME_PRIMARY_KEY], "#FE0000");
-  const sidebarFrom = normalizeHex(settings[THEME_SIDEBAR_FROM_KEY], "#6e0d14");
-  const sidebarMid = normalizeHex(settings[THEME_SIDEBAR_MID_KEY], "#560d14");
-  const sidebarTo = normalizeHex(settings[THEME_SIDEBAR_TO_KEY], "#45111a");
-  const topbarFrom = normalizeHex(settings[THEME_TOPBAR_FROM_KEY], "#670b11");
-  const topbarMid = normalizeHex(settings[THEME_TOPBAR_MID_KEY], "#8e0c14");
-  const topbarTo = normalizeHex(settings[THEME_TOPBAR_TO_KEY], "#bf101a");
+  const primary = normalizeHex(settings[THEME_PRIMARY_KEY], "#AA8038");
+  const sidebarFrom = normalizeHex(settings[THEME_SIDEBAR_FROM_KEY], "#6E4C0D");
+  const sidebarMid = normalizeHex(settings[THEME_SIDEBAR_MID_KEY], "#563C0D");
+  const sidebarTo = normalizeHex(settings[THEME_SIDEBAR_TO_KEY], "#453311");
+  const topbarFrom = normalizeHex(settings[THEME_TOPBAR_FROM_KEY], "#67470B");
+  const topbarMid = normalizeHex(settings[THEME_TOPBAR_MID_KEY], "#8E610C");
+  const topbarTo = normalizeHex(settings[THEME_TOPBAR_TO_KEY], "#BF8210");
   const topbarAccent = normalizeHex(settings[THEME_TOPBAR_ACCENT_KEY], primary);
 
   root.style.setProperty("--primary", primary);

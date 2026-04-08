@@ -25,15 +25,48 @@ function isMetaMaskExtensionNoise(payload: unknown): boolean {
   );
 }
 
+const SERVER_ACTION_RELOAD_KEY = "__server_action_reload_at";
+const SERVER_ACTION_RELOAD_COOLDOWN_MS = 45_000;
+
+function isServerActionVersionMismatch(payload: unknown): boolean {
+  const text = stringifyReason(payload).toLowerCase();
+  return (
+    text.includes("failed to find server action") &&
+    (text.includes("older or newer deployment") || text.includes("server action"))
+  );
+}
+
+function recoverFromServerActionMismatch() {
+  if (typeof window === "undefined") return;
+  const now = Date.now();
+  const last = Number(window.sessionStorage.getItem(SERVER_ACTION_RELOAD_KEY) ?? "0");
+  if (Number.isFinite(last) && now - last < SERVER_ACTION_RELOAD_COOLDOWN_MS) return;
+
+  window.sessionStorage.setItem(SERVER_ACTION_RELOAD_KEY, String(now));
+  const url = new URL(window.location.href);
+  url.searchParams.set("_r", String(now));
+  window.location.replace(url.toString());
+}
+
 export function RuntimeNoiseGuard() {
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
       const meta = `${event.message ?? ""}\n${event.filename ?? ""}\n${event.error?.stack ?? ""}`;
+      if (isServerActionVersionMismatch(meta)) {
+        event.preventDefault();
+        recoverFromServerActionMismatch();
+        return;
+      }
       if (!isMetaMaskExtensionNoise(meta)) return;
       event.preventDefault();
     };
 
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (isServerActionVersionMismatch(event.reason)) {
+        event.preventDefault();
+        recoverFromServerActionMismatch();
+        return;
+      }
       if (!isMetaMaskExtensionNoise(event.reason)) return;
       event.preventDefault();
     };
@@ -49,4 +82,3 @@ export function RuntimeNoiseGuard() {
 
   return null;
 }
-

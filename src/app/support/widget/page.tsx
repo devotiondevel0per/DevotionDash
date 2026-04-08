@@ -100,7 +100,7 @@ function WidgetContent() {
     if (ticketToken) void loadTicket(ticketToken);
   }, [ticketToken, loadTicket]);
 
-  const accent = config?.accentColor ?? "#B02B2C";
+  const accent = config?.accentColor ?? "#B0812B";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

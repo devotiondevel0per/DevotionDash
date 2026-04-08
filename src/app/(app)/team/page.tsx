@@ -599,7 +599,7 @@ export default function TeamPage() {
                 <TabsTrigger
                   key={value}
                   value={value}
-                  className="h-10 rounded-none border-b-2 border-transparent px-4 text-sm text-gray-500 data-[state=active]:border-[#FE0000] data-[state=active]:bg-transparent data-[state=active]:text-[#FE0000] data-[state=active]:shadow-none"
+                  className="h-10 rounded-none border-b-2 border-transparent px-4 text-sm text-gray-500 data-[state=active]:border-[#AA8038] data-[state=active]:bg-transparent data-[state=active]:text-[#AA8038] data-[state=active]:shadow-none"
                 >
                   <Icon className="mr-1.5 h-4 w-4" />
                   {label}
@@ -644,7 +644,7 @@ export default function TeamPage() {
                 {byDepartment.map(([department, departmentMembers]) => (
                   <div key={department}>
                     <div className="mb-3 flex items-center gap-2">
-                      <div className="h-5 w-1 rounded-full" style={{ backgroundColor: "#FE0000" }} />
+                      <div className="h-5 w-1 rounded-full" style={{ backgroundColor: "#AA8038" }} />
                       <h3 className="text-sm font-semibold text-gray-800">{department}</h3>
                       <Badge variant="secondary" className="bg-gray-100 text-xs text-gray-500">{departmentMembers.length}</Badge>
                     </div>
@@ -697,7 +697,7 @@ export default function TeamPage() {
               <div className="max-w-2xl space-y-3">
                 <p className="mb-4 text-xs text-gray-400">Upcoming birthdays in the next 30 days</p>
                 {birthdayMembers.map(({ member, isToday, dateLabel }, idx) => (
-                  <div key={member.id} className={cn("flex items-center gap-4 rounded-xl border bg-white p-4", isToday && "border-[#FE0000]/30 bg-red-50/30")}>
+                  <div key={member.id} className={cn("flex items-center gap-4 rounded-xl border bg-white p-4", isToday && "border-[#AA8038]/30 bg-red-50/30")}>
                     <Avatar className="h-11 w-11 shrink-0">
                       <AvatarFallback className={cn("text-base font-semibold", AVATAR_COLORS[idx % AVATAR_COLORS.length])}>{initialsOf(member)}</AvatarFallback>
                     </Avatar>
@@ -707,7 +707,7 @@ export default function TeamPage() {
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-sm font-medium text-gray-700">{dateLabel}</p>
-                      {isToday ? <Badge variant="secondary" className="mt-1 text-xs" style={{ backgroundColor: "#FFF0F0", color: "#FE0000" }}>Today</Badge> : null}
+                      {isToday ? <Badge variant="secondary" className="mt-1 text-xs" style={{ backgroundColor: "#FFFAF0", color: "#AA8038" }}>Today</Badge> : null}
                     </div>
                   </div>
                 ))}

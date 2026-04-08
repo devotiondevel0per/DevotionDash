@@ -140,7 +140,7 @@ class NotificationService {
       requestSoundPermission: true,
     );
     await _plugin.initialize(
-      const InitializationSettings(
+      settings: const InitializationSettings(
         android: androidSettings,
         iOS: darwinSettings,
         macOS: darwinSettings,
@@ -200,10 +200,10 @@ class NotificationService {
     final channelName = _channelNameForType(type);
 
     await _plugin.show(
-      _nextId(),
-      title,
-      body,
-      NotificationDetails(
+      id: _nextId(),
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           channelId,
           channelName,
@@ -263,10 +263,10 @@ class NotificationService {
   }) async {
     if (!PlatformSupport.supportsLocalNotifications) return;
     await _plugin.show(
-      _nextId(),
-      sender,
-      message,
-      NotificationDetails(
+      id: _nextId(),
+      title: sender,
+      body: message,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _chatChannel.id,
           _chatChannel.name,
@@ -293,10 +293,10 @@ class NotificationService {
   }) async {
     if (!PlatformSupport.supportsLocalNotifications) return;
     await _plugin.show(
-      _nextId(),
-      title,
-      body,
-      NotificationDetails(
+      id: _nextId(),
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _liveChatChannel.id,
           _liveChatChannel.name,
@@ -323,10 +323,10 @@ class NotificationService {
   }) async {
     if (!PlatformSupport.supportsLocalNotifications) return;
     await _plugin.show(
-      _nextId(),
-      title,
-      body,
-      NotificationDetails(
+      id: _nextId(),
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _taskChannel.id,
           _taskChannel.name,
@@ -352,10 +352,10 @@ class NotificationService {
   }) async {
     if (!PlatformSupport.supportsLocalNotifications) return;
     await _plugin.show(
-      _nextId(),
-      title,
-      body,
-      NotificationDetails(
+      id: _nextId(),
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _generalChannel.id,
           _generalChannel.name,

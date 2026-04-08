@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const serverOrigin = getServerOrigin(req);
 
     let position = "right";
-    let accent = "#FE0000";
+    let accent = "#AA8038";
     let brand = "Live Support";
 
     if (token) {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
           });
         }
         position = perWidget.position === "left" ? "left" : "right";
-        accent = perWidget.accentColor || "#FE0000";
+        accent = perWidget.accentColor || "#AA8038";
         brand = perWidget.brandLabel || "Live Support";
 
         const requestHost = getRequestHost(req.headers);
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       host ? `&site=${encodeURIComponent(host)}&grant=${encodeURIComponent(hostGrant)}` : ""
     }`;
     position = widget.position === "left" ? "left" : "right";
-    accent = widget.accentColor || "#FE0000";
+    accent = widget.accentColor || "#AA8038";
     brand = widget.brandLabel || "Live Support";
     return new NextResponse(buildLoaderScript(widgetUrl, position, accent, brand), {
       headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-store" },
@@ -111,7 +111,7 @@ function buildLoaderScript(widgetUrl: string, position: string, accent: string, 
       panel.style.maxWidth = "calc(100vw - 24px)";
       panel.style.height = "480px";
       panel.style.maxHeight = "calc(100vh - 90px)";
-      panel.style.border = "1px solid #f0d6d9";
+      panel.style.border = "1px solid #F0E7D6";
       panel.style.borderRadius = "18px";
       panel.style.boxShadow = "0 28px 64px -20px rgba(43, 8, 11, 0.35)";
       panel.style.background = "#fff";

@@ -29,6 +29,14 @@ const keyPath = process.env.SSL_KEY_PATH ?? "";
 const forceHttps = process.env.FORCE_HTTPS === "true";
 const hostname = process.env.HOSTNAME ?? "0.0.0.0";
 
+// Keep Server Actions decryption key stable across restarts/deploys.
+// Without this, users with an old tab can hit "Failed to find Server Action"
+// after deployment because action payloads can no longer be decrypted.
+if (!process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY && process.env.AUTH_SECRET) {
+  process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY = process.env.AUTH_SECRET;
+  process.stdout.write("[server] NEXT_SERVER_ACTIONS_ENCRYPTION_KEY was not set; using AUTH_SECRET fallback.\n");
+}
+
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 

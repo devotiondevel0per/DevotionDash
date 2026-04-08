@@ -165,7 +165,7 @@ function ResetPasswordContent() {
 
             <Button
               type="submit"
-              className="w-full bg-[#FE0000] hover:bg-[#d90000]"
+              className="w-full bg-[#AA8038] hover:bg-[#D98D00]"
               disabled={loading || !tokenValid || validating}
             >
               {loading ? (
@@ -180,7 +180,7 @@ function ResetPasswordContent() {
           </form>
 
           <div className="text-center">
-            <Link href="/login" className="text-sm text-[#FE0000] hover:underline">
+            <Link href="/login" className="text-sm text-[#AA8038] hover:underline">
               Back to Sign In
             </Link>
           </div>

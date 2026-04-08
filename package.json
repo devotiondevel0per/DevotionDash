@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=65536 next dev --webpack",
+    "prebuild": "prisma generate",
     "build": "next build",
     "start": "next start",
     "start:server": "cross-env node --require tsx/cjs src/server.ts",
@@ -21,7 +22,8 @@
     "test:chat-module": "tsx scripts/chat-module-deep-test.ts",
     "test:livechat-module": "tsx scripts/livechat-module-deep-test.ts",
     "setup:tenant": "tsx scripts/setup-tenant.ts",
-    "tenant:push": "prisma db push --schema=prisma/schema.prisma"
+    "tenant:push": "prisma db push --schema=prisma/schema.prisma",
+    "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

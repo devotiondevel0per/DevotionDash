@@ -1,0 +1,550 @@
+{
+  "generatedAt": "2026-03-30T17:46:25.568Z",
+  "baseUrl": "http://209.192.167.118:3000",
+  "checks": [
+    {
+      "moduleId": "home",
+      "path": "/api/home/stats"
+    },
+    {
+      "moduleId": "tasks",
+      "path": "/api/tasks?limit=1"
+    },
+    {
+      "moduleId": "projects",
+      "path": "/api/projects?limit=1"
+    },
+    {
+      "moduleId": "documents",
+      "path": "/api/documents?category=all"
+    },
+    {
+      "moduleId": "email",
+      "path": "/api/email?limit=1"
+    },
+    {
+      "moduleId": "board",
+      "path": "/api/board?limit=1"
+    },
+    {
+      "moduleId": "leads",
+      "path": "/api/leads?limit=1"
+    },
+    {
+      "moduleId": "clients",
+      "path": "/api/clients?limit=1"
+    },
+    {
+      "moduleId": "contacts",
+      "path": "/api/contacts?limit=1"
+    },
+    {
+      "moduleId": "team",
+      "path": "/api/team?limit=1"
+    },
+    {
+      "moduleId": "calendar",
+      "path": "/api/calendar/events"
+    },
+    {
+      "moduleId": "chat",
+      "path": "/api/chat/dialogs"
+    },
+    {
+      "moduleId": "livechat",
+      "path": "/api/livechat/dialogs?status=all&limit=1"
+    },
+    {
+      "moduleId": "servicedesk",
+      "path": "/api/servicedesk?limit=1"
+    },
+    {
+      "moduleId": "products",
+      "path": "/api/products?limit=1"
+    },
+    {
+      "moduleId": "accounting",
+      "path": "/api/accounting/books?limit=1"
+    },
+    {
+      "moduleId": "ebank",
+      "path": "/api/ebank/accounts"
+    },
+    {
+      "moduleId": "telephony",
+      "path": "/api/telephony/providers"
+    },
+    {
+      "moduleId": "search",
+      "path": "/api/search?q=smoke"
+    },
+    {
+      "moduleId": "administration",
+      "path": "/api/administration/users?limit=1"
+    }
+  ],
+  "qaUsers": [
+    {
+      "key": "manager",
+      "login": "qa_manager",
+      "roleName": "QA CRM Manager"
+    },
+    {
+      "key": "user",
+      "login": "qa_user",
+      "roleName": "QA Employee"
+    }
+  ],
+  "reports": [
+    {
+      "actor": "admin",
+      "login": "admin",
+      "isAdmin": true,
+      "loginOk": true,
+      "loginStatus": 200,
+      "loginError": null,
+      "checkResults": [
+        {
+          "moduleId": "home",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "tasks",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "projects",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "documents",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "email",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "board",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "leads",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "clients",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "contacts",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "team",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "calendar",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "chat",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "livechat",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "servicedesk",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "products",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "accounting",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "ebank",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "telephony",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "search",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "administration",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        }
+      ]
+    },
+    {
+      "actor": "manager",
+      "login": "qa_manager",
+      "isAdmin": false,
+      "loginOk": true,
+      "loginStatus": 200,
+      "loginError": null,
+      "checkResults": [
+        {
+          "moduleId": "home",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "tasks",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "projects",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "documents",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "email",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "board",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "leads",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "clients",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "contacts",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "team",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "calendar",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "chat",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "livechat",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "servicedesk",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "products",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "accounting",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "ebank",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "telephony",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "search",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "administration",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        }
+      ]
+    },
+    {
+      "actor": "user",
+      "login": "qa_user",
+      "isAdmin": false,
+      "loginOk": true,
+      "loginStatus": 200,
+      "loginError": null,
+      "checkResults": [
+        {
+          "moduleId": "home",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "tasks",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "projects",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "documents",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "email",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "board",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "leads",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "clients",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "contacts",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "team",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "calendar",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "chat",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "livechat",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "servicedesk",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "products",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "accounting",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "ebank",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "telephony",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "search",
+          "expectedRead": true,
+          "status": 200,
+          "outcome": "pass",
+          "reason": "OK"
+        },
+        {
+          "moduleId": "administration",
+          "expectedRead": false,
+          "status": 403,
+          "outcome": "pass",
+          "reason": "OK"
+        }
+      ]
+    }
+  ]
+}

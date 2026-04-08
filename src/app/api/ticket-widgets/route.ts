@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       token: randomBytes(20).toString("hex"),
       brandLabel: body.brandLabel?.trim() || "Support",
       welcomeText: body.welcomeText?.trim() || "Hi! How can we help you today?",
-      accentColor: body.accentColor?.trim() || "#B02B2C",
+      accentColor: body.accentColor?.trim() || "#B0812B",
       position: body.position || "right",
       defaultGroupId: body.defaultGroupId || null,
       allowDomains: body.allowDomains || null,

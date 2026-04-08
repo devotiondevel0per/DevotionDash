@@ -165,7 +165,7 @@ export function FloatingChatPanel({
     >
       {/* Header */}
       <div
-        className="flex cursor-pointer items-center justify-between gap-2 rounded-t-xl bg-[#FE0000] px-3 py-2.5 text-white"
+        className="flex cursor-pointer items-center justify-between gap-2 rounded-t-xl bg-[#AA8038] px-3 py-2.5 text-white"
         onClick={() => setMinimized((v) => !v)}
       >
         <div className="min-w-0">
@@ -203,7 +203,7 @@ export function FloatingChatPanel({
                 key={msg.id}
                 className={cn(
                   "rounded px-2 py-1 text-xs",
-                  msg.isSystem ? "bg-slate-50 text-slate-400 text-center" : msg.userId ? "bg-slate-100 text-slate-800" : "bg-[#FE0000]/10 text-slate-800"
+                  msg.isSystem ? "bg-slate-50 text-slate-400 text-center" : msg.userId ? "bg-slate-100 text-slate-800" : "bg-[#AA8038]/10 text-slate-800"
                 )}
               >
                 {!msg.isSystem ? (
@@ -314,7 +314,7 @@ export function FloatingChatPanel({
                   size="sm"
                   disabled={sending || (!composerText.trim() && composerAttachments.length === 0)}
                   onClick={() => void sendMessage()}
-                  className="h-8 w-8 shrink-0 bg-[#FE0000] p-0 hover:bg-[#d90000]"
+                  className="h-8 w-8 shrink-0 bg-[#AA8038] p-0 hover:bg-[#D98D00]"
                 >
                   {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3.5 w-3.5" />}
                 </Button>

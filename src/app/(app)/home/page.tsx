@@ -314,7 +314,7 @@ export default function HomePage() {
                     bars={[
                       { label: "Unread", value: data.breakdown.emails.unread, color: "#8b5cf6" },
                       { label: "Today", value: data.breakdown.emails.receivedToday, color: "#6366f1" },
-                      { label: "Stale", value: data.breakdown.emails.unreadOlderThan3Days, color: "#f87171" },
+                      { label: "Stale", value: data.breakdown.emails.unreadOlderThan3Days, color: "#F8C971" },
                     ]}
                   />
                 </CardContent>

@@ -1,0 +1,265 @@
+{
+  "generatedAt": "2026-03-30T17:56:10.305Z",
+  "baseUrl": "http://209.192.167.118:3000",
+  "actors": [
+    {
+      "actor": "admin",
+      "login": "admin",
+      "userId": "cmmtkxxrc00005u5xrk21prg3",
+      "isAdmin": true,
+      "tasksPermission": {
+        "read": true,
+        "write": true,
+        "manage": true
+      }
+    },
+    {
+      "actor": "manager",
+      "login": "qa_manager",
+      "userId": "cmndhbhnq000lkh70rgsz3u3h",
+      "isAdmin": false,
+      "tasksPermission": {
+        "read": false,
+        "write": false,
+        "manage": false
+      }
+    },
+    {
+      "actor": "user",
+      "login": "qa_user",
+      "userId": "cmndhbk4u000xkh70t58ufiup",
+      "isAdmin": false,
+      "tasksPermission": {
+        "read": true,
+        "write": true,
+        "manage": false
+      }
+    }
+  ],
+  "steps": [
+    {
+      "actor": "admin",
+      "step": "tasks-meta",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Meta endpoint accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Tasks list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Task created (cmndhoivn001ldwutczld117o)."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task detail loaded."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task updated to status \"completed\"."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-comment-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Task comment created."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-comment-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task comments fetched."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-favorite-add",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task favorited."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-favorite-remove",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task unfavorited."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-upload",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Task attachment uploaded."
+    },
+    {
+      "actor": "admin",
+      "step": "tasks-delete-own",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Own task deleted."
+    },
+    {
+      "actor": "manager",
+      "step": "tasks-meta",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Meta endpoint correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "tasks-list",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Tasks list correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-meta",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Meta endpoint accessible."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Tasks list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Task created (cmndhombq001wdwut0chwvqcq)."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task detail loaded."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task updated to status \"completed\"."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-comment-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Task comment created."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-comment-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task comments fetched."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-favorite-add",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task favorited."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-favorite-remove",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Task unfavorited."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-upload",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Task attachment uploaded."
+    },
+    {
+      "actor": "user",
+      "step": "tasks-delete-own",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Own task deleted."
+    },
+    {
+      "actor": "cross-role",
+      "step": "admin-create-cross-task",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Cross task created (cmndhoowu0027dwut000xdq6u)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-delete-admin-task",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "User correctly blocked from deleting admin task."
+    },
+    {
+      "actor": "cross-role",
+      "step": "manager-read-task-without-read",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager blocked from task detail as expected."
+    },
+    {
+      "actor": "cross-role",
+      "step": "admin-delete-cross-task",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Cross task cleaned up."
+    }
+  ]
+}

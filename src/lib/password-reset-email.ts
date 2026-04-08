@@ -42,12 +42,12 @@ export async function sendPasswordResetEmail(input: {
       <p>Hello ${escapeHtml(input.toName || "User")},</p>
       <p>We received a request to reset your ${escapeHtml(branding.appName)} password.</p>
       <p>
-        <a href="${input.resetUrl}" style="display:inline-block;background:#FE0000;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;">
+        <a href="${input.resetUrl}" style="display:inline-block;background:#AA8038;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;">
           Reset Password
         </a>
       </p>
       <p>If the button does not work, use this link:</p>
-      <p><a href="${input.resetUrl}" style="color:#c30000;">${escapeHtml(input.resetUrl)}</a></p>
+      <p><a href="${input.resetUrl}" style="color:#C37F00;">${escapeHtml(input.resetUrl)}</a></p>
       <p>This link will expire on <strong>${escapeHtml(expiresText)}</strong>.</p>
       <p>If you did not request this, you can safely ignore this email.</p>
     </div>

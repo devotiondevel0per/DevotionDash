@@ -293,7 +293,7 @@ function WidgetPageContent() {
     return () => window.clearInterval(timer);
   }, [session, resetSession]);
 
-  const accent = config?.accentColor || "#FE0000";
+  const accent = config?.accentColor || "#AA8038";
   const widgetLogoUrl = config?.logoUrl?.trim() || "/logo.png";
 
   function startDrag(e: React.PointerEvent<HTMLElement>) {

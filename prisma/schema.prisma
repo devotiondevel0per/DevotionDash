@@ -638,7 +638,7 @@ model LeadActivity {
 model BoardCategory {
   id          String       @id @default(cuid())
   name        String
-  color       String       @default("#FE0000")
+  color       String       @default("#AA8038")
   description String?
   createdAt   DateTime     @default(now())
   topics      BoardTopic[]
@@ -1235,7 +1235,7 @@ model LiveChatWidget {
   brandLabel   String   @default("Chat with us")
   logoUrl      String?
   welcomeText  String   @default("Hi! How can we help you today?")
-  accentColor  String   @default("#FE0000")
+  accentColor  String   @default("#AA8038")
   position     String   @default("right")
   allowDomains String?  @db.Text
   createdAt    DateTime @default(now())

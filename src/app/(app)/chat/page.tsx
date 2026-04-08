@@ -1056,15 +1056,15 @@ function ChatPageContent() {
 
   return (
     <div className="flex h-full bg-[radial-gradient(circle_at_top_left,#fff5f6_0%,#f9fafd_42%,#f3f5fa_100%)]">
-      <aside className="flex w-72 shrink-0 flex-col border-r border-[#f0c8cb] bg-[linear-gradient(180deg,#fffefe_0%,#fff7f8_100%)] shadow-[10px_0_24px_-20px_rgba(107,14,20,0.35)]">
-        <div className="border-b border-[#f1d7da] bg-[linear-gradient(120deg,#fffdfd,#fff4f5)] px-4 py-3">
+      <aside className="flex w-72 shrink-0 flex-col border-r border-[#F0E2C8] bg-[linear-gradient(180deg,#fffefe_0%,#fff7f8_100%)] shadow-[10px_0_24px_-20px_rgba(107,14,20,0.35)]">
+        <div className="border-b border-[#F1E8D7] bg-[linear-gradient(120deg,#FFFEFD,#FFFBF4)] px-4 py-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#7e1720]">Chat</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#7E5A17]">Chat</h2>
             <div className="flex items-center gap-1.5">
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 rounded-lg border border-[#f1d1d4] bg-white/80 px-2 text-xs text-[#8b1720] hover:bg-[#fff2f3]"
+                className="h-8 rounded-lg border border-[#F1E6D1] bg-white/80 px-2 text-xs text-[#8B6217] hover:bg-[#FFFAF2]"
                 onClick={() => setCreatingDialog((v) => !v)}
               >
                 <Users className="mr-1 h-3.5 w-3.5" />
@@ -1074,7 +1074,7 @@ function ChatPageContent() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-8 rounded-lg border border-[#f1d1d4] bg-white/80 px-2 text-xs text-[#8b1720] hover:bg-[#fff2f3]"
+                  className="h-8 rounded-lg border border-[#F1E6D1] bg-white/80 px-2 text-xs text-[#8B6217] hover:bg-[#FFFAF2]"
                   onClick={() => setCreatingGroup((v) => !v)}
                 >
                   <Plus className="mr-1 h-3.5 w-3.5" />
@@ -1084,23 +1084,23 @@ function ChatPageContent() {
             </div>
           </div>
           {creatingDialog ? (
-            <div className="mt-2 space-y-2 rounded-xl border border-[#f2d5d8] bg-[#fff8f9] p-2.5">
+            <div className="mt-2 space-y-2 rounded-xl border border-[#F2E8D5] bg-[#FFFDF8] p-2.5">
               <Input
                 value={newDialogTitle}
                 onChange={(e) => setNewDialogTitle(e.target.value)}
                 placeholder="Group chat title"
-                className="h-8 border-[#efcfd3] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
+                className="h-8 border-[#EFE4CF] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
               />
               <Input
                 value={groupMemberSearch}
                 onChange={(e) => setGroupMemberSearch(e.target.value)}
                 placeholder="Search members"
-                className="h-8 border-[#efcfd3] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
+                className="h-8 border-[#EFE4CF] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
               />
               <select
                 value={newDialogGroupId}
                 onChange={(e) => setNewDialogGroupId(e.target.value)}
-                className="h-8 w-full rounded-md border border-[#ebc9cd] bg-white px-2 text-xs text-slate-700"
+                className="h-8 w-full rounded-md border border-[#EBDFC9] bg-white px-2 text-xs text-slate-700"
               >
                 <option value="none">No channel</option>
                 {groups.map((group) => (
@@ -1109,7 +1109,7 @@ function ChatPageContent() {
                   </option>
                 ))}
               </select>
-              <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-[#edd5d8] bg-white p-1.5">
+              <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-[#EDE5D5] bg-white p-1.5">
                 {filteredGroupUsers.length === 0 ? (
                   <p className="px-2 py-2 text-xs text-slate-500">No users found</p>
                 ) : (
@@ -1118,7 +1118,7 @@ function ChatPageContent() {
                     return (
                       <label
                         key={`dialog-member-${user.id}`}
-                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-[#fff3f4]"
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-[#FFFBF3]"
                       >
                         <input
                           type="checkbox"
@@ -1144,7 +1144,7 @@ function ChatPageContent() {
                 <div className="flex gap-1">
                   <Button
                     size="sm"
-                    className="h-7 bg-[var(--twx-primary)] px-2 text-xs text-white hover:bg-[#da0000]"
+                    className="h-7 bg-[var(--twx-primary)] px-2 text-xs text-white hover:bg-[#DA8E00]"
                     disabled={submittingDialog}
                     onClick={() => void createGroupChat()}
                   >
@@ -1154,7 +1154,7 @@ function ChatPageContent() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 border-[#ebc9cd] px-2 text-xs text-slate-700 hover:bg-white"
+                    className="h-7 border-[#EBDFC9] px-2 text-xs text-slate-700 hover:bg-white"
                     onClick={() => setCreatingDialog(false)}
                   >
                     Cancel
@@ -1164,23 +1164,23 @@ function ChatPageContent() {
             </div>
           ) : null}
           {creatingGroup ? (
-            <div className="mt-2 space-y-2 rounded-xl border border-[#f2d5d8] bg-[#fff8f9] p-2.5">
+            <div className="mt-2 space-y-2 rounded-xl border border-[#F2E8D5] bg-[#FFFDF8] p-2.5">
               <Input
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 placeholder="Group name"
-                className="h-8 border-[#efcfd3] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
+                className="h-8 border-[#EFE4CF] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
               />
               <Input
                 value={newGroupDescription}
                 onChange={(e) => setNewGroupDescription(e.target.value)}
                 placeholder="Description (optional)"
-                className="h-8 border-[#efcfd3] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
+                className="h-8 border-[#EFE4CF] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
               />
               <div className="flex gap-1">
                 <Button
                   size="sm"
-                  className="h-7 bg-[var(--twx-primary)] px-2 text-xs text-white hover:bg-[#da0000]"
+                  className="h-7 bg-[var(--twx-primary)] px-2 text-xs text-white hover:bg-[#DA8E00]"
                   onClick={() => void createGroup()}
                 >
                   Create
@@ -1188,7 +1188,7 @@ function ChatPageContent() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 border-[#ebc9cd] px-2 text-xs text-slate-700 hover:bg-white"
+                  className="h-7 border-[#EBDFC9] px-2 text-xs text-slate-700 hover:bg-white"
                   onClick={() => setCreatingGroup(false)}
                 >
                   Cancel
@@ -1199,13 +1199,13 @@ function ChatPageContent() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex border-b border-[#f2d7da]">
+        <div className="flex border-b border-[#F2E9D7]">
           <button
             onClick={() => setSidebarTab("chats")}
             className={cn(
               "flex-1 py-2 text-xs font-medium transition-colors",
               sidebarTab === "chats"
-                ? "border-b-2 border-[var(--twx-primary)] text-[#b01018]"
+                ? "border-b-2 border-[var(--twx-primary)] text-[#B07810]"
                 : "text-slate-500 hover:text-slate-700"
             )}
           >
@@ -1216,7 +1216,7 @@ function ChatPageContent() {
             className={cn(
               "flex-1 py-2 text-xs font-medium transition-colors",
               sidebarTab === "people"
-                ? "border-b-2 border-[var(--twx-primary)] text-[#b01018]"
+                ? "border-b-2 border-[var(--twx-primary)] text-[#B07810]"
                 : "text-slate-500 hover:text-slate-700"
             )}
           >
@@ -1228,12 +1228,12 @@ function ChatPageContent() {
           <>
             <div className="p-3">
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#b46d72]" />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#B49B6D]" />
                 <Input
                   placeholder="Search chats"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 rounded-lg border-[#efcfd3] bg-white/95 pl-7 text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
+                  className="h-8 rounded-lg border-[#EFE4CF] bg-white/95 pl-7 text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
                 />
               </div>
             </div>
@@ -1247,8 +1247,8 @@ function ChatPageContent() {
                     className={cn(
                       "rounded-full px-2.5 py-1 text-xs transition-colors",
                       activeGroup === group.id
-                        ? "border border-[#f2ccd0] bg-[#fff0f2] text-[#b01018]"
-                        : "border border-transparent bg-white text-slate-600 hover:border-[#edd5d8] hover:bg-[#fff5f6]"
+                        ? "border border-[#F2E5CC] bg-[#FFFAF0] text-[#B07810]"
+                        : "border border-transparent bg-white text-slate-600 hover:border-[#EDE5D5] hover:bg-[#FFFCF5]"
                     )}
                   >
                     {group.name} ({group.count})
@@ -1257,9 +1257,9 @@ function ChatPageContent() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto border-t border-[#f2d7da]">
+            <div className="flex-1 overflow-y-auto border-t border-[#F2E9D7]">
               {loadingDialogs ? (
-                <div className="p-4 text-xs text-[#a05e63]">Loading dialogs...</div>
+                <div className="p-4 text-xs text-[#A0895E]">Loading dialogs...</div>
               ) : (
                 filteredDialogs.map((dialog) => {
                   const latest = dialog.messages[0];
@@ -1271,11 +1271,11 @@ function ChatPageContent() {
                       key={dialog.id}
                       onClick={() => setSelectedDialogId(dialog.id)}
                       className={cn(
-                        "w-full border-b border-[#f5e4e6] px-3 py-2.5 text-left transition-colors hover:bg-[#fff7f8]",
+                        "w-full border-b border-[#F5EFE4] px-3 py-2.5 text-left transition-colors hover:bg-[#FFFCF7]",
                         isGroup
-                          ? "border-l-2 border-l-[#e8b4b8]"
+                          ? "border-l-2 border-l-[#E8D6B4]"
                           : "border-l-2 border-l-transparent",
-                        selectedDialogId === dialog.id && "bg-[#fff2f4] !border-l-[var(--twx-primary)]"
+                        selectedDialogId === dialog.id && "bg-[#FFFAF2] !border-l-[var(--twx-primary)]"
                       )}
                     >
                       <div className="flex items-start gap-2.5">
@@ -1285,7 +1285,7 @@ function ChatPageContent() {
                             <AvatarFallback className={cn(
                               "text-xs font-semibold",
                               isGroup
-                                ? "bg-[#fdeaea] text-[#8b1720]"
+                                ? "bg-[#FDF6EA] text-[#8B6217]"
                                 : "bg-[#e8f0fe] text-[#3b5bdb]"
                             )}>
                               {isGroup ? <Users className="h-4 w-4" /> : initials(title)}
@@ -1297,12 +1297,12 @@ function ChatPageContent() {
                             <div className="flex min-w-0 items-center gap-1.5">
                               <p className="truncate text-sm font-medium text-slate-900">{title}</p>
                               {isGroup && (
-                                <span className="shrink-0 rounded bg-[#fff0f1] px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#a51a22]">
+                                <span className="shrink-0 rounded bg-[#FFFAF0] px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#A5741A]">
                                   group
                                 </span>
                               )}
                             </div>
-                            <span className="shrink-0 text-[11px] text-[#b58a8d]">{formatTime(dialog.updatedAt)}</span>
+                            <span className="shrink-0 text-[11px] text-[#B5A68A]">{formatTime(dialog.updatedAt)}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
                             {isGroup && (
@@ -1319,7 +1319,7 @@ function ChatPageContent() {
                 })
               )}
               {!loadingDialogs && filteredDialogs.length === 0 ? (
-                <div className="p-4 text-xs text-[#a05e63]">No conversations found.</div>
+                <div className="p-4 text-xs text-[#A0895E]">No conversations found.</div>
               ) : null}
             </div>
           </>
@@ -1327,18 +1327,18 @@ function ChatPageContent() {
           <>
             <div className="p-3">
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#b46d72]" />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#B49B6D]" />
                 <Input
                   placeholder="Search people"
                   value={peopleSearch}
                   onChange={(e) => setPeopleSearch(e.target.value)}
-                  className="h-8 rounded-lg border-[#efcfd3] bg-white/95 pl-7 text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
+                  className="h-8 rounded-lg border-[#EFE4CF] bg-white/95 pl-7 text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
                 />
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto border-t border-[#f2d7da]">
+            <div className="flex-1 overflow-y-auto border-t border-[#F2E9D7]">
               {filteredPeople.length === 0 ? (
-                <div className="p-4 text-xs text-[#a05e63]">No users found.</div>
+                <div className="p-4 text-xs text-[#A0895E]">No users found.</div>
               ) : (
                 filteredPeople.map((user) => {
                   const statusColor = getUserOnlineColor(user);
@@ -1347,13 +1347,13 @@ function ChatPageContent() {
                     <button
                       key={user.id}
                       onClick={() => void openOrCreateDirectChat(user.id)}
-                      className="w-full border-b border-[#f5e4e6] px-3 py-2.5 text-left transition-colors hover:bg-[#fff7f8]"
+                      className="w-full border-b border-[#F5EFE4] px-3 py-2.5 text-left transition-colors hover:bg-[#FFFCF7]"
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="relative shrink-0">
                           <Avatar className="h-9 w-9">
                             <AvatarImage src={user.photoUrl ?? undefined} />
-                            <AvatarFallback className="bg-[#fee5e5] text-xs font-semibold text-[#9e1313]">{initials(label)}</AvatarFallback>
+                            <AvatarFallback className="bg-[#FEF5E5] text-xs font-semibold text-[#9E6D13]">{initials(label)}</AvatarFallback>
                           </Avatar>
                           <span
                             className={cn(
@@ -1392,7 +1392,7 @@ function ChatPageContent() {
 
       <section className="flex min-w-0 flex-1 flex-col">
         {!selectedDialog ? (
-          <div className="flex flex-1 items-center justify-center text-[#b07d82]">
+          <div className="flex flex-1 items-center justify-center text-[#B09E7D]">
             <div className="text-center">
               <MessageSquare className="mx-auto mb-2 h-10 w-10 opacity-40" />
               <p>Select a conversation</p>
@@ -1400,11 +1400,11 @@ function ChatPageContent() {
           </div>
         ) : (
           <>
-            <header className="border-b border-[#edd5d8] bg-[linear-gradient(180deg,#ffffff_0%,#fff8f9_100%)] px-4 py-3">
+            <header className="border-b border-[#EDE5D5] bg-[linear-gradient(180deg,#ffffff_0%,#fff8f9_100%)] px-4 py-3">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={primaryPeer?.photoUrl ?? undefined} />
-                  <AvatarFallback className="bg-[#fee5e5] text-[#9e1313]">{initials(primaryPeer ? displayName(primaryPeer) : pickDialogTitle(selectedDialog, session?.user?.id))}</AvatarFallback>
+                  <AvatarFallback className="bg-[#FEF5E5] text-[#9E6D13]">{initials(primaryPeer ? displayName(primaryPeer) : pickDialogTitle(selectedDialog, session?.user?.id))}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-slate-900">
@@ -1432,11 +1432,11 @@ function ChatPageContent() {
                   </p>
                 </div>
                 <div className="ml-auto flex items-center gap-1">
-                  <Badge variant="secondary" className="border border-[#f2cfd2] bg-[#fff1f3] text-[11px] text-[#8f1f26]">
+                  <Badge variant="secondary" className="border border-[#F2E6CF] bg-[#FFFAF1] text-[11px] text-[#8F681F]">
                     {selectedDialog.status}
                   </Badge>
                   {selectedDialog.group?.name ? (
-                    <Badge variant="outline" className="border-[#ead2d4] bg-white text-[11px] text-slate-600">
+                    <Badge variant="outline" className="border-[#EAE2D2] bg-white text-[11px] text-slate-600">
                       {selectedDialog.group.name}
                     </Badge>
                   ) : null}
@@ -1485,7 +1485,7 @@ function ChatPageContent() {
                             "rounded-2xl px-3 py-2 shadow-sm transition-shadow",
                             mine
                               ? "rounded-tr-sm bg-[var(--twx-primary)] text-white"
-                              : "rounded-tl-sm border border-[#f0d8db] bg-white text-slate-800",
+                              : "rounded-tl-sm border border-[#F0E8D8] bg-white text-slate-800",
                             selected && "ring-2 ring-[var(--twx-primary)]/35"
                           )}
                           >
@@ -1497,10 +1497,10 @@ function ChatPageContent() {
                             <div
                               className={cn(
                                 "mb-1 rounded-md border-l-2 px-2 py-1 text-xs",
-                                mine ? "border-red-200 bg-[#d6121a]" : "border-[var(--twx-primary)]/40 bg-[#fff2f2]"
+                                mine ? "border-red-200 bg-[#D69112]" : "border-[var(--twx-primary)]/40 bg-[#FFFAF2]"
                               )}
                             >
-                              <p className={cn("font-semibold", mine ? "text-red-100" : "text-[#b31515]")}>
+                              <p className={cn("font-semibold", mine ? "text-red-100" : "text-[#B37C15]")}>
                                 {payload.replyTo.senderName || "Reply"}
                               </p>
                               <p className={cn("truncate", mine ? "text-red-50" : "text-slate-600")}>{payload.replyTo.text}</p>
@@ -1517,8 +1517,8 @@ function ChatPageContent() {
                               linkClassName={mine ? "text-red-50 hover:text-white" : "text-blue-600 hover:text-blue-800"}
                               previewClassName={
                                 mine
-                                  ? "border-red-200/30 bg-[#d6121a] text-red-50 hover:bg-[#bc0f16]"
-                                  : "border-[#ecd9db] bg-[#fdf8f9] text-slate-700 hover:bg-white"
+                                  ? "border-red-200/30 bg-[#D69112] text-red-50 hover:bg-[#BC7F0F]"
+                                  : "border-[#ECE5D9] bg-[#FDFBF8] text-slate-700 hover:bg-white"
                               }
                             />
                           ) : null}
@@ -1530,7 +1530,7 @@ function ChatPageContent() {
                                   key={attachment.id}
                                   className={cn(
                                     "overflow-hidden rounded-lg border",
-                                    mine ? "border-red-200/30 bg-[#d6121a]" : "border-[#ecd9db] bg-[#fdf8f9]"
+                                    mine ? "border-red-200/30 bg-[#D69112]" : "border-[#ECE5D9] bg-[#FDFBF8]"
                                   )}
                                 >
                                   {attachment.kind === "image" ? (
@@ -1548,7 +1548,7 @@ function ChatPageContent() {
                                       <a
                                         href={attachment.dataUrl}
                                         download={attachment.fileName}
-                                        className={cn("underline", mine ? "text-red-100" : "text-[#b31515]")}
+                                        className={cn("underline", mine ? "text-red-100" : "text-[#B37C15]")}
                                       >
                                         Download
                                       </a>
@@ -1569,14 +1569,14 @@ function ChatPageContent() {
                           <div
                             data-message-actions="true"
                             className={cn(
-                              "mt-1 flex items-center gap-1 rounded-full border border-[#f0d2d5] bg-white px-1 py-0.5 shadow-md transition-opacity",
+                              "mt-1 flex items-center gap-1 rounded-full border border-[#F0E6D2] bg-white px-1 py-0.5 shadow-md transition-opacity",
                               selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                             )}
                           >
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 px-1.5 text-[11px] text-slate-600 hover:bg-[#fff1f2] hover:text-[#ad1720]"
+                              className="h-6 px-1.5 text-[11px] text-slate-600 hover:bg-[#FFFAF1] hover:text-[#AD7917]"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setReplyTarget(message);
@@ -1588,7 +1588,7 @@ function ChatPageContent() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 px-1.5 text-[11px] text-slate-600 hover:bg-[#fff1f2] hover:text-[#ad1720]"
+                              className="h-6 px-1.5 text-[11px] text-slate-600 hover:bg-[#FFFAF1] hover:text-[#AD7917]"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setForwardTarget(message);
@@ -1602,7 +1602,7 @@ function ChatPageContent() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 px-1.5 text-[11px] text-slate-600 hover:bg-[#fff1f2] hover:text-[#ad1720]"
+                                className="h-6 px-1.5 text-[11px] text-slate-600 hover:bg-[#FFFAF1] hover:text-[#AD7917]"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   void deleteMessageAsAdmin(message.id);
@@ -1620,11 +1620,11 @@ function ChatPageContent() {
               )}
             </div>
 
-            <div className="border-t border-[#edd6d8] bg-[linear-gradient(180deg,#ffffff_0%,#fff8f9_100%)] px-4 py-3">
+            <div className="border-t border-[#EDE5D6] bg-[linear-gradient(180deg,#ffffff_0%,#fff8f9_100%)] px-4 py-3">
               {replyTarget ? (
-                <div className="mb-2 flex items-center justify-between rounded-lg border border-[var(--twx-primary)]/20 bg-[#fff3f4] px-3 py-2 text-xs">
+                <div className="mb-2 flex items-center justify-between rounded-lg border border-[var(--twx-primary)]/20 bg-[#FFFBF3] px-3 py-2 text-xs">
                   <div className="min-w-0">
-                    <p className="font-semibold text-[#b31515]">Replying to {displayName(replyTarget.user)}</p>
+                    <p className="font-semibold text-[#B37C15]">Replying to {displayName(replyTarget.user)}</p>
                     <p className="truncate text-slate-600">{replyTarget.payload.text || getMessagePreview(replyTarget)}</p>
                   </div>
                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setReplyTarget(null)}>
@@ -1634,7 +1634,7 @@ function ChatPageContent() {
               ) : null}
 
               {forwardTarget ? (
-                <div className="mb-2 flex items-center gap-2 rounded-lg border border-[#edd6d8] bg-[#fff8f9] px-3 py-2 text-xs">
+                <div className="mb-2 flex items-center gap-2 rounded-lg border border-[#EDE5D6] bg-[#FFFDF8] px-3 py-2 text-xs">
                   <p className="text-slate-600">
                     Forwarding:{" "}
                     <span className="font-medium text-slate-800">
@@ -1642,7 +1642,7 @@ function ChatPageContent() {
                     </span>
                   </p>
                   <select
-                    className="h-7 rounded-md border border-[#e7cace] bg-white px-2 text-xs"
+                    className="h-7 rounded-md border border-[#E7DDCA] bg-white px-2 text-xs"
                     value={forwardDialogId}
                     onChange={(e) => setForwardDialogId(e.target.value)}
                   >
@@ -1654,7 +1654,7 @@ function ChatPageContent() {
                   </select>
                   <Button
                     size="sm"
-                    className="h-7 bg-[var(--twx-primary)] px-2 text-xs text-white hover:bg-[#d30000]"
+                    className="h-7 bg-[var(--twx-primary)] px-2 text-xs text-white hover:bg-[#D38900]"
                     onClick={() =>
                       void sendMessage({
                         targetDialogId: forwardDialogId || selectedDialog.id,
@@ -1684,7 +1684,7 @@ function ChatPageContent() {
               {composerAttachments.length > 0 ? (
                 <div className="mb-2 flex flex-wrap gap-2">
                   {composerAttachments.map((attachment) => (
-                    <div key={attachment.id} className="relative overflow-hidden rounded-lg border border-[#ecdadd] bg-[#fff8f9]">
+                    <div key={attachment.id} className="relative overflow-hidden rounded-lg border border-[#ECE6DA] bg-[#FFFDF8]">
                       {attachment.kind === "image" ? (
                         <img src={attachment.dataUrl} alt={attachment.fileName} className="h-14 w-14 object-cover" />
                       ) : null}
@@ -1717,7 +1717,7 @@ function ChatPageContent() {
                   </Button>
                   <Button
                     size="sm"
-                    className="h-7 bg-[var(--twx-primary)] px-2 text-xs text-white hover:bg-[#d30000]"
+                    className="h-7 bg-[var(--twx-primary)] px-2 text-xs text-white hover:bg-[#D38900]"
                     onClick={() => stopRecording(true)}
                   >
                     Send voice
@@ -1726,7 +1726,7 @@ function ChatPageContent() {
               ) : null}
 
               <div className="flex items-center gap-1.5">
-                <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-slate-500 hover:bg-[#fff0f2] hover:text-[#b2141b]">
+                <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-slate-500 hover:bg-[#FFFAF0] hover:text-[#B27B14]">
                   <Paperclip className="h-4 w-4" />
                   <input type="file" className="hidden" multiple onChange={(e) => void attachFiles(e.target.files)} />
                 </label>
@@ -1735,24 +1735,24 @@ function ChatPageContent() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-9 w-9 p-0 text-slate-500 hover:bg-[#fff0f2] hover:text-[#b2141b]"
+                    className="h-9 w-9 p-0 text-slate-500 hover:bg-[#FFFAF0] hover:text-[#B27B14]"
                     onClick={() => setShowEmoji((v) => !v)}
                   >
                     <Smile className="h-4 w-4" />
                   </Button>
 
                   {showEmoji ? (
-                    <div className="absolute bottom-10 left-0 z-40 w-[320px] overflow-hidden rounded-xl border border-[#efcfd3] bg-white shadow-[0_20px_52px_-24px_rgba(93,16,23,0.5)]">
-                      <div className="border-b border-[#f0dde0] p-2">
+                    <div className="absolute bottom-10 left-0 z-40 w-[320px] overflow-hidden rounded-xl border border-[#EFE4CF] bg-white shadow-[0_20px_52px_-24px_rgba(93,16,23,0.5)]">
+                      <div className="border-b border-[#F0E9DD] p-2">
                         <Input
                           value={emojiSearch}
                           onChange={(event) => setEmojiSearch(event.target.value)}
                           placeholder="Search emoji"
-                          className="h-8 border-[#edd2d6] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
+                          className="h-8 border-[#EDE4D2] text-xs focus-visible:border-[var(--twx-primary)] focus-visible:ring-[var(--twx-primary)]/30"
                         />
                       </div>
 
-                      <div className="flex gap-1 border-b border-[#f0dde0] px-2 py-1.5">
+                      <div className="flex gap-1 border-b border-[#F0E9DD] px-2 py-1.5">
                         {EMOJI_CATEGORY_ITEMS.map((category) => (
                           <button
                             key={category.id}
@@ -1760,7 +1760,7 @@ function ChatPageContent() {
                             className={cn(
                               "rounded-md px-1.5 py-1 text-sm leading-none transition-colors",
                               emojiCategory === category.id
-                                ? "bg-[#ffeef0] text-[#b2141b]"
+                                ? "bg-[#FFF9EE] text-[#B27B14]"
                                 : "text-slate-500 hover:bg-slate-100"
                             )}
                             title={category.label}
@@ -1794,7 +1794,7 @@ function ChatPageContent() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-9 w-9 p-0 text-slate-500 hover:bg-[#fff0f2] hover:text-[#b2141b]"
+                  className="h-9 w-9 p-0 text-slate-500 hover:bg-[#FFFAF0] hover:text-[#B27B14]"
                   onClick={() => void beginRecording()}
                 >
                   <Mic className="h-4 w-4" />
@@ -1804,7 +1804,7 @@ function ChatPageContent() {
                   placeholder="Type a message"
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
-                  className="h-9 flex-1 border-[#eed6d9] bg-white"
+                  className="h-9 flex-1 border-[#EEE6D6] bg-white"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -1814,7 +1814,7 @@ function ChatPageContent() {
                 />
 
                 <Button
-                  className="h-9 bg-[var(--twx-primary)] px-3 text-white hover:bg-[#d30000]"
+                  className="h-9 bg-[var(--twx-primary)] px-3 text-white hover:bg-[#D38900]"
                   disabled={sending || (!messageInput.trim() && composerAttachments.length === 0)}
                   onClick={() => void sendMessage()}
                 >

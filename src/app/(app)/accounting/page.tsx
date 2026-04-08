@@ -180,7 +180,7 @@ export default function AccountingPage() {
             <p className="text-sm text-gray-500 mt-0.5">Manage accounting books and financial records</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" className="bg-[#FE0000] hover:bg-[#cc0000] text-white" onClick={openNewBook}>
+            <Button size="sm" className="bg-[#AA8038] hover:bg-[#CC8500] text-white" onClick={openNewBook}>
               <Plus className="h-4 w-4 mr-1" />New Book
             </Button>
             <div className="relative w-56">
@@ -253,7 +253,7 @@ export default function AccountingPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-[#FE0000] hover:bg-[#cc0000] text-white" onClick={() => void saveBook()} disabled={saving || !bookForm.name.trim()}>
+            <Button className="bg-[#AA8038] hover:bg-[#CC8500] text-white" onClick={() => void saveBook()} disabled={saving || !bookForm.name.trim()}>
               {saving ? "Creating..." : "Create Book"}
             </Button>
           </DialogFooter>

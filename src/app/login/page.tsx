@@ -154,7 +154,7 @@ export default function LoginPage() {
               </Alert>
             )}
             {stepHint && (
-              <Alert className="border-[#FE0000]/30 bg-[#FE0000]/5 text-[#9b0000]">
+              <Alert className="border-[#AA8038]/30 bg-[#AA8038]/5 text-[#9B6500]">
                 <AlertDescription>{stepHint}</AlertDescription>
               </Alert>
             )}
@@ -176,7 +176,7 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link href="/forgot-password" className="text-xs text-[#FE0000] hover:underline">
+                <Link href="/forgot-password" className="text-xs text-[#AA8038] hover:underline">
                   Forgot password?
                 </Link>
               </div>
@@ -198,7 +198,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={resetOtpStep}
-                    className="text-xs text-[#FE0000] hover:underline"
+                    className="text-xs text-[#AA8038] hover:underline"
                   >
                     Change credentials
                   </button>

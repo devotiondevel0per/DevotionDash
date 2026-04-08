@@ -786,7 +786,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
                       <button
                         onClick={() => void testConnection(mb)}
                         disabled={testingId === mb.id}
-                        className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-gray-200 text-gray-600 hover:border-[#FE0000]/40 hover:text-[#FE0000] disabled:opacity-50 transition-colors"
+                        className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-gray-200 text-gray-600 hover:border-[#AA8038]/40 hover:text-[#AA8038] disabled:opacity-50 transition-colors"
                       >
                         {testingId === mb.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
                         Test Connection
@@ -794,7 +794,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
                       <button
                         onClick={() => void syncMailbox(mb, onSync)}
                         disabled={syncingId === mb.id || !mb.isActive}
-                        className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-gray-200 text-gray-600 hover:border-[#FE0000]/40 hover:text-[#FE0000] disabled:opacity-50 transition-colors"
+                        className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-gray-200 text-gray-600 hover:border-[#AA8038]/40 hover:text-[#AA8038] disabled:opacity-50 transition-colors"
                       >
                         {syncingId === mb.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                         Sync Now
@@ -810,7 +810,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
               </div>
             )}
             <div className="flex justify-end pt-1">
-              <Button size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={openCreate}>
+              <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={openCreate}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />Add Mailbox
               </Button>
             </div>
@@ -819,11 +819,11 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
           <div className="flex max-h-[calc(90vh-7rem)] flex-col overflow-hidden py-1">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as MailboxTab)} className="flex min-h-0 flex-1 flex-col">
               <TabsList className="h-auto shrink-0 justify-start gap-1 overflow-x-auto rounded-none border-b border-gray-200 bg-transparent p-0">
-                <TabsTrigger value="information" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#FE0000] data-[state=active]:bg-white data-[state=active]:text-[#c30000]">Information</TabsTrigger>
-                <TabsTrigger value="filters" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#FE0000] data-[state=active]:bg-white data-[state=active]:text-[#c30000]">Filters</TabsTrigger>
-                <TabsTrigger value="permissions" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#FE0000] data-[state=active]:bg-white data-[state=active]:text-[#c30000]">Permissions</TabsTrigger>
-                <TabsTrigger value="signature" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#FE0000] data-[state=active]:bg-white data-[state=active]:text-[#c30000]">Signature</TabsTrigger>
-                <TabsTrigger value="auto-reply" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#FE0000] data-[state=active]:bg-white data-[state=active]:text-[#c30000]">Auto-reply</TabsTrigger>
+                <TabsTrigger value="information" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#AA8038] data-[state=active]:bg-white data-[state=active]:text-[#C37F00]">Information</TabsTrigger>
+                <TabsTrigger value="filters" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#AA8038] data-[state=active]:bg-white data-[state=active]:text-[#C37F00]">Filters</TabsTrigger>
+                <TabsTrigger value="permissions" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#AA8038] data-[state=active]:bg-white data-[state=active]:text-[#C37F00]">Permissions</TabsTrigger>
+                <TabsTrigger value="signature" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#AA8038] data-[state=active]:bg-white data-[state=active]:text-[#C37F00]">Signature</TabsTrigger>
+                <TabsTrigger value="auto-reply" className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm data-[state=active]:border-[#AA8038] data-[state=active]:bg-white data-[state=active]:text-[#C37F00]">Auto-reply</TabsTrigger>
               </TabsList>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-1 pt-3">
@@ -947,8 +947,8 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
                           className={cn(
                             "rounded-full border px-3 py-1 text-xs transition-colors",
                             extras.permissionScope === scope.id
-                              ? "border-[#FE0000]/35 bg-[#FE0000]/10 text-[#c30000]"
-                              : "border-gray-200 text-gray-600 hover:border-[#FE0000]/25 hover:text-[#c30000]"
+                              ? "border-[#AA8038]/35 bg-[#AA8038]/10 text-[#C37F00]"
+                              : "border-gray-200 text-gray-600 hover:border-[#AA8038]/25 hover:text-[#C37F00]"
                           )}
                         >
                           {scope.label}
@@ -970,16 +970,16 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
                   <div className="rounded-lg border border-gray-200 overflow-hidden">
                     <div className="relative border-b bg-gray-50 px-3 py-2">
                       <div className="flex flex-wrap items-center gap-1.5 text-gray-500">
-                        <button type="button" className="rounded border border-gray-200 px-2 py-1 text-xs hover:border-[#FE0000]/30 hover:text-[#c30000]" onClick={() => setShowSignatureLink((v) => !v)}>
+                        <button type="button" className="rounded border border-gray-200 px-2 py-1 text-xs hover:border-[#AA8038]/30 hover:text-[#C37F00]" onClick={() => setShowSignatureLink((v) => !v)}>
                           <Link2 className="mr-1 inline-block h-3.5 w-3.5" />Link
                         </button>
-                        <button type="button" className="rounded border border-gray-200 px-2 py-1 text-xs hover:border-[#FE0000]/30 hover:text-[#c30000]" onClick={() => setShowSignatureImage((v) => !v)}>
+                        <button type="button" className="rounded border border-gray-200 px-2 py-1 text-xs hover:border-[#AA8038]/30 hover:text-[#C37F00]" onClick={() => setShowSignatureImage((v) => !v)}>
                           <ImageIcon className="mr-1 inline-block h-3.5 w-3.5" />Image
                         </button>
-                        <button type="button" className="rounded border border-gray-200 px-2 py-1 text-xs hover:border-[#FE0000]/30 hover:text-[#c30000]" onClick={() => setShowSignatureEmoji((v) => !v)}>
+                        <button type="button" className="rounded border border-gray-200 px-2 py-1 text-xs hover:border-[#AA8038]/30 hover:text-[#C37F00]" onClick={() => setShowSignatureEmoji((v) => !v)}>
                           <Smile className="mr-1 inline-block h-3.5 w-3.5" />Emoji
                         </button>
-                        <button type="button" className="rounded border border-gray-200 px-2 py-1 text-xs hover:border-[#FE0000]/30 hover:text-[#c30000]" onClick={() => insertIntoSignature("\n---\n")}>
+                        <button type="button" className="rounded border border-gray-200 px-2 py-1 text-xs hover:border-[#AA8038]/30 hover:text-[#C37F00]" onClick={() => insertIntoSignature("\n---\n")}>
                           <span className="mr-1">-</span>Separator
                         </button>
                       </div>
@@ -1000,7 +1000,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
                               onChange={(e) => setSignatureLinkUrl(e.target.value)}
                               className="h-8 text-sm"
                             />
-                            <Button type="button" size="sm" onClick={applySignatureLink} style={{ backgroundColor: "#FE0000", color: "#fff" }}>Apply</Button>
+                            <Button type="button" size="sm" onClick={applySignatureLink} style={{ backgroundColor: "#AA8038", color: "#fff" }}>Apply</Button>
                           </div>
                         </div>
                       )}
@@ -1021,7 +1021,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
                               onChange={(e) => setSignatureImageUrl(e.target.value)}
                               className="h-8 text-sm"
                             />
-                            <Button type="button" size="sm" onClick={applySignatureImage} style={{ backgroundColor: "#FE0000", color: "#fff" }}>Apply</Button>
+                            <Button type="button" size="sm" onClick={applySignatureImage} style={{ backgroundColor: "#AA8038", color: "#fff" }}>Apply</Button>
                           </div>
                         </div>
                       )}
@@ -1046,7 +1046,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
                                 className={cn(
                                   "inline-flex h-7 w-7 items-center justify-center rounded text-sm",
                                   signatureEmojiCategory === item.id
-                                    ? "bg-[#FE0000]/10 text-[#c30000]"
+                                    ? "bg-[#AA8038]/10 text-[#C37F00]"
                                     : "hover:bg-gray-100"
                                 )}
                               >
@@ -1083,7 +1083,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
                       className="min-h-[260px] resize-none rounded-none border-0 focus-visible:ring-0"
                     />
                   </div>
-                  <div className="rounded-lg border border-[#FE0000]/20 bg-[#fff8f8] px-3 py-2 text-xs text-[#c30000]">
+                  <div className="rounded-lg border border-[#AA8038]/20 bg-[#FFFDF8] px-3 py-2 text-xs text-[#C37F00]">
                     Valid macros: <span className="font-medium">#name#, #surname#, #fullname#, #replyname#, #company#, #department#, #position#</span>
                   </div>
                 </TabsContent>
@@ -1138,7 +1138,7 @@ function MailboxManagerDialog({ open, onClose, mailboxes, onCreated, onUpdated, 
 
             <DialogFooter className="shrink-0 border-t pt-3">
               <Button type="button" variant="outline" onClick={() => setView("list")} disabled={saving}>Cancel</Button>
-              <Button type="button" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={() => void handleSave()} disabled={saving}>
+              <Button type="button" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={() => void handleSave()} disabled={saving}>
                 {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Saving...</> : view === "create" ? "Add Mailbox" : "Save Changes"}
               </Button>
             </DialogFooter>
@@ -1213,9 +1213,9 @@ function RecipientInput({
     <div className="space-y-1">
       <Label className="text-xs text-gray-500">{label}</Label>
       <div className="relative">
-        <div className="min-h-9 flex flex-wrap gap-1.5 items-center border border-gray-200 rounded-lg px-2 py-1.5 focus-within:border-[#FE0000]/40 focus-within:ring-1 focus-within:ring-[#FE0000]/20 transition-all">
+        <div className="min-h-9 flex flex-wrap gap-1.5 items-center border border-gray-200 rounded-lg px-2 py-1.5 focus-within:border-[#AA8038]/40 focus-within:ring-1 focus-within:ring-[#AA8038]/20 transition-all">
           {chips.map((chip) => (
-            <span key={chip.userId} className="inline-flex items-center gap-1 bg-[#FE0000]/10 text-[#c30000] text-xs rounded-full px-2 py-0.5">
+            <span key={chip.userId} className="inline-flex items-center gap-1 bg-[#AA8038]/10 text-[#C37F00] text-xs rounded-full px-2 py-0.5">
               {chip.name}
               <button type="button" onClick={() => onRemove(chip.userId)}><X className="h-2.5 w-2.5" /></button>
             </span>
@@ -1586,7 +1586,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
     }
     runRichCommand(
       "insertHTML",
-      `<div style="border:1px solid #fecaca;background:#fff8f8;border-radius:8px;padding:10px 12px;margin:8px 0;"><strong>Meeting proposal</strong><div>${escapeHtmlText(when)}</div>${link ? `<a href="${link}" target="_blank" rel="noreferrer">${escapeHtmlText(link)}</a>` : ""}</div>`
+      `<div style="border:1px solid #FEECCA;background:#FFFDF8;border-radius:8px;padding:10px 12px;margin:8px 0;"><strong>Meeting proposal</strong><div>${escapeHtmlText(when)}</div>${link ? `<a href="${link}" target="_blank" rel="noreferrer">${escapeHtmlText(link)}</a>` : ""}</div>`
     );
   }
 
@@ -1753,8 +1753,8 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all",
                 aiOpen
-                  ? "border-[#FE0000]/30 bg-[#FE0000]/10 text-[#c30000]"
-                  : "border-gray-200 text-gray-500 hover:border-[#FE0000]/30 hover:text-[#c30000]"
+                  ? "border-[#AA8038]/30 bg-[#AA8038]/10 text-[#C37F00]"
+                  : "border-gray-200 text-gray-500 hover:border-[#AA8038]/30 hover:text-[#C37F00]"
               )}
             >
               <Sparkles className="h-3.5 w-3.5" /> AI Compose
@@ -1762,8 +1762,8 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
           </div>
 
           {aiOpen && (
-            <div className="border-b border-[#FE0000]/20 bg-[#fff8f8] p-4 space-y-3">
-              <p className="flex items-center gap-1.5 text-sm font-medium text-[#c30000]"><Sparkles className="h-4 w-4" />AI Compose Assistant</p>
+            <div className="border-b border-[#AA8038]/20 bg-[#FFFDF8] p-4 space-y-3">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-[#C37F00]"><Sparkles className="h-4 w-4" />AI Compose Assistant</p>
               <div className="space-y-1.5">
                 <Label className="text-xs">What do you want to write? *</Label>
                 <Textarea rows={3} placeholder="e.g. Follow up on the Q4 proposal, ask for decision timeline..." value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} className="resize-none text-sm" />
@@ -1802,7 +1802,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      style={{ backgroundColor: "#FE0000", color: "#fff" }}
+                      style={{ backgroundColor: "#AA8038", color: "#fff" }}
                       onClick={() => {
                         if (!subject) setSubject(aiResult.subject);
                         setBody(aiResult.body);
@@ -1821,7 +1821,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
                   </div>
                 </div>
               ) : (
-                <Button size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={() => void handleAiGenerate()} disabled={aiGenerating || !aiPrompt.trim()}>
+                <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={() => void handleAiGenerate()} disabled={aiGenerating || !aiPrompt.trim()}>
                   {aiGenerating ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Generating...</> : <><Sparkles className="mr-1.5 h-3.5 w-3.5" />Generate Draft</>}
                 </Button>
               )}
@@ -1858,8 +1858,8 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
               onClearError={() => setRecipientError("")}
             />
             <div className="mt-1.5 flex gap-3 text-xs">
-              {!showCc && <button type="button" onClick={() => setShowCc(true)} className="text-[#FE0000] hover:underline">Cc</button>}
-              {!showBcc && <button type="button" onClick={() => setShowBcc(true)} className="text-[#FE0000] hover:underline">Bcc</button>}
+              {!showCc && <button type="button" onClick={() => setShowCc(true)} className="text-[#AA8038] hover:underline">Cc</button>}
+              {!showBcc && <button type="button" onClick={() => setShowBcc(true)} className="text-[#AA8038] hover:underline">Bcc</button>}
             </div>
           </div>
           {showCc && (
@@ -1881,7 +1881,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
           <div className="border-b px-4 py-1.5">
             <Input id="compose-subject" placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} className="h-9 border-0 px-0 shadow-none focus-visible:ring-0" />
             <div className="pb-1">
-              <Badge variant="secondary" className="mt-0.5 text-[10px] uppercase tracking-wide bg-[#FE0000]/10 text-[#c30000]">
+              <Badge variant="secondary" className="mt-0.5 text-[10px] uppercase tracking-wide bg-[#AA8038]/10 text-[#C37F00]">
                 {composeLabel}
               </Badge>
             </div>
@@ -2050,7 +2050,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
                       onChange={(e) => setLinkUrl(e.target.value)}
                       className="h-9 text-sm"
                     />
-                    <Button type="button" size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={applyLinkToBody}>
+                    <Button type="button" size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={applyLinkToBody}>
                       Apply
                     </Button>
                   </div>
@@ -2086,7 +2086,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
                       onChange={(e) => setImageUrl(e.target.value)}
                       className="h-9 text-sm"
                     />
-                    <Button type="button" size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={applyImageToBody}>
+                    <Button type="button" size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={applyImageToBody}>
                       Apply
                     </Button>
                   </div>
@@ -2127,7 +2127,7 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
                         className={cn(
                           "inline-flex h-7 w-7 items-center justify-center rounded text-sm",
                           emojiCategory === item.id
-                            ? "bg-[#FE0000]/10 text-[#c30000]"
+                            ? "bg-[#AA8038]/10 text-[#C37F00]"
                             : "hover:bg-gray-100 text-gray-500"
                         )}
                       >
@@ -2229,18 +2229,18 @@ function ComposeDialog({ open, onClose, onSent, onDrafted, users, prefill, mailb
               {savingDraft ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1 h-3.5 w-3.5" />}Save Draft
             </Button>
             <Button type="button" variant="outline" onClick={onClose}>Discard</Button>
-            <div className="relative inline-flex overflow-hidden rounded-full border border-[#FE0000]/20" ref={sendMenuRef}>
+            <div className="relative inline-flex overflow-hidden rounded-full border border-[#AA8038]/20" ref={sendMenuRef}>
               <button
                 type="button"
                 onClick={() => void handleSend(false)}
                 disabled={sending || !subject.trim() || !composeBodyTextPreview}
-                className="inline-flex items-center gap-1.5 bg-[#FE0000] px-4 py-2 text-sm font-medium text-white hover:bg-[#cc0000] disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 bg-[#AA8038] px-4 py-2 text-sm font-medium text-white hover:bg-[#CC8500] disabled:opacity-60"
               >
                 {sending ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Sending...</> : <><Send className="h-3.5 w-3.5" />Send</>}
               </button>
               <button
                 type="button"
-                className="bg-[#FE0000] px-2.5 text-white hover:bg-[#cc0000] border-l border-white/20"
+                className="bg-[#AA8038] px-2.5 text-white hover:bg-[#CC8500] border-l border-white/20"
                 title="Send options"
                 onClick={() => setShowSendMenu((v) => !v)}
               >
@@ -2298,7 +2298,7 @@ function renderPlainTextBody(body: string) {
               alt={imageAlt || "Email image"}
               className="max-h-60 max-w-full rounded border border-gray-200 object-contain"
             />
-            <a href={imageUrl} target="_blank" rel="noreferrer" className="text-xs text-[#c30000] hover:underline">
+            <a href={imageUrl} target="_blank" rel="noreferrer" className="text-xs text-[#C37F00] hover:underline">
               {imageAlt || imageUrl}
             </a>
           </span>
@@ -2307,7 +2307,7 @@ function renderPlainTextBody(body: string) {
         const href = linkUrl || bareUrl || "";
         const label = linkLabel || bareUrl || href;
         pieces.push(
-          <a key={`lnk-${idx}-${tokenIdx}`} href={href} target="_blank" rel="noreferrer" className="text-[#c30000] hover:underline break-all">
+          <a key={`lnk-${idx}-${tokenIdx}`} href={href} target="_blank" rel="noreferrer" className="text-[#C37F00] hover:underline break-all">
             {label}
           </a>
         );
@@ -2598,7 +2598,7 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
             <button onClick={() => void toggleStar()} className="p-1.5 rounded hover:bg-gray-100 transition-colors" title={email.isStarred ? "Unstar" : "Star"}>
               <Star className={cn("h-4 w-4", email.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-400 hover:text-yellow-500")} />
             </button>
-            <button onClick={() => void summarize()} disabled={summarizing} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border border-gray-200 text-gray-500 hover:border-[#FE0000]/30 hover:text-[#c30000] transition-all disabled:opacity-50">
+            <button onClick={() => void summarize()} disabled={summarizing} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border border-gray-200 text-gray-500 hover:border-[#AA8038]/30 hover:text-[#C37F00] transition-all disabled:opacity-50">
               {summarizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
               <span>Summarize</span>
             </button>
@@ -2620,9 +2620,9 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
       <div className="flex-1 overflow-y-auto">
         {/* AI Summary */}
         {summary && (
-          <div className="mx-6 mt-4 rounded-xl border border-[#FE0000]/20 bg-[#fff8f8] p-4">
+          <div className="mx-6 mt-4 rounded-xl border border-[#AA8038]/20 bg-[#FFFDF8] p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-[#c30000] flex items-center gap-1.5"><Sparkles className="h-4 w-4" />AI Summary</span>
+              <span className="text-sm font-semibold text-[#C37F00] flex items-center gap-1.5"><Sparkles className="h-4 w-4" />AI Summary</span>
               <div className="flex items-center gap-2">
                 {summary.actionRequired && <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700">Action Required</Badge>}
                 <Badge variant="secondary" className={cn("text-xs", SENTIMENT_CONFIG[summary.sentiment].className)}>{SENTIMENT_CONFIG[summary.sentiment].label}</Badge>
@@ -2634,7 +2634,7 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
               <ul className="space-y-1">
                 {summary.keyPoints.map((pt, i) => (
                   <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
-                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#FE0000]/50 shrink-0" />
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#AA8038]/50 shrink-0" />
                     {pt}
                   </li>
                 ))}
@@ -2776,16 +2776,16 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
                 )}
                 <div className="flex items-center justify-between gap-2 px-3 py-2 border-t bg-white">
                   <div className="flex items-center gap-2">
-                    <div className="inline-flex overflow-hidden rounded-full border border-[#FE0000]/20">
+                    <div className="inline-flex overflow-hidden rounded-full border border-[#AA8038]/20">
                       <button
                         onClick={() => void sendReply()}
                         disabled={replying || !replyBody.trim()}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-[#FE0000] hover:bg-[#cc0000] disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-[#AA8038] hover:bg-[#CC8500] disabled:opacity-60"
                       >
                         {replying ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Sending...</> : <><Send className="h-3.5 w-3.5" />Send</>}
                       </button>
                       <button
-                        className="px-2.5 text-white bg-[#FE0000] hover:bg-[#cc0000] border-l border-white/20"
+                        className="px-2.5 text-white bg-[#AA8038] hover:bg-[#CC8500] border-l border-white/20"
                         title="Send options"
                         type="button"
                       >
@@ -2831,7 +2831,7 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
                               onChange={(e) => setReplyLinkUrl(e.target.value)}
                               className="h-8 text-sm"
                             />
-                            <Button type="button" size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={applyReplyLink}>
+                            <Button type="button" size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={applyReplyLink}>
                               Apply
                             </Button>
                           </div>
@@ -2866,7 +2866,7 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
                               onChange={(e) => setReplyImageUrl(e.target.value)}
                               className="h-8 text-sm"
                             />
-                            <Button type="button" size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={applyReplyImage}>
+                            <Button type="button" size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={applyReplyImage}>
                               Apply
                             </Button>
                           </div>
@@ -2906,7 +2906,7 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
                                 className={cn(
                                   "inline-flex h-7 w-7 items-center justify-center rounded text-sm",
                                   replyEmojiCategory === item.id
-                                    ? "bg-[#FE0000]/10 text-[#c30000]"
+                                    ? "bg-[#AA8038]/10 text-[#C37F00]"
                                     : "hover:bg-gray-100 text-gray-500"
                                 )}
                               >
@@ -2968,7 +2968,7 @@ function EmailDetail({ email, allEmails, canWrite, users, onUpdate, onDelete, ma
       {/* Footer actions */}
       {canWrite && !showReply && (
         <div className="border-t px-6 py-3 flex items-center gap-2 shrink-0">
-          <Button size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={() => setShowReply(true)}>
+          <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={() => setShowReply(true)}>
             <Reply className="h-3.5 w-3.5 mr-1.5" />Reply
           </Button>
           <Button size="sm" variant="outline" onClick={openForward}>
@@ -2994,11 +2994,11 @@ function EmailListItem({ email, isSelected, onClick, onStarToggle }: {
       onClick={onClick}
       className={cn(
         "flex items-start gap-3 px-4 py-3 cursor-pointer border-b transition-colors group",
-        isSelected ? "bg-[#FE0000]/5 border-r-2 border-r-[#FE0000]" : "hover:bg-gray-50/80",
+        isSelected ? "bg-[#AA8038]/5 border-r-2 border-r-[#AA8038]" : "hover:bg-gray-50/80",
         !email.isRead && !isSelected && "bg-blue-50/20"
       )}
     >
-      <div className="mt-2 shrink-0"><div className={cn("w-2 h-2 rounded-full", email.isRead ? "bg-transparent" : "bg-[#FE0000]")} /></div>
+      <div className="mt-2 shrink-0"><div className={cn("w-2 h-2 rounded-full", email.isRead ? "bg-transparent" : "bg-[#AA8038]")} /></div>
       <Avatar className="h-8 w-8 shrink-0 mt-0.5">
         <AvatarFallback className={cn("text-xs font-medium", avatarColor(senderName))}>{initials(senderName)}</AvatarFallback>
       </Avatar>
@@ -3298,14 +3298,14 @@ export default function EmailPage() {
       <div className="w-56 border-r bg-white flex flex-col shrink-0">
         <div className="p-3 border-b flex items-center gap-2">
           {canWrite && (
-            <Button className="flex-1 bg-[#FE0000] hover:bg-[#cc0000] text-white shadow-sm" size="sm" onClick={() => setComposeOpen(true)}>
+            <Button className="flex-1 bg-[#AA8038] hover:bg-[#CC8500] text-white shadow-sm" size="sm" onClick={() => setComposeOpen(true)}>
               <Pencil className="h-4 w-4 mr-1.5" />Compose
             </Button>
           )}
           {canManage && (
             <button
               onClick={() => setMailboxMgrOpen(true)}
-              className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:text-[#FE0000] hover:border-[#FE0000]/30 transition-colors"
+              className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:text-[#AA8038] hover:border-[#AA8038]/30 transition-colors"
               title="Configure mailboxes"
             >
               <Settings className="h-4 w-4" />
@@ -3319,16 +3319,16 @@ export default function EmailPage() {
             const isActive = statusFilter === item.id;
             return (
               <button key={item.id} onClick={() => { setStatusFilter(item.id); setSearchQuery(""); if (item.id === "inbox") setInboxCategory("primary"); }}
-                className={cn("w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors", isActive ? "bg-[#FE0000]/10 text-[#FE0000] font-medium" : "text-gray-600 hover:bg-gray-100")}
+                className={cn("w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors", isActive ? "bg-[#AA8038]/10 text-[#AA8038] font-medium" : "text-gray-600 hover:bg-gray-100")}
               >
                 <div className="flex items-center gap-2.5">
                   <item.icon className={cn("h-4 w-4 shrink-0", isActive && item.id === "starred" && "fill-yellow-400 text-yellow-400")} />
                   {item.label}
                 </div>
                 {unread > 0
-                  ? <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-bold", isActive ? "bg-[#FE0000] text-white" : "bg-[#FE0000]/15 text-[#FE0000]")}>{unread}</span>
+                  ? <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-bold", isActive ? "bg-[#AA8038] text-white" : "bg-[#AA8038]/15 text-[#AA8038]")}>{unread}</span>
                   : total > 0
-                    ? <span className={cn("text-xs px-1.5 py-0.5 rounded-full", isActive ? "bg-[#FE0000]/20 text-[#c30000]" : "bg-gray-100 text-gray-500")}>{total}</span>
+                    ? <span className={cn("text-xs px-1.5 py-0.5 rounded-full", isActive ? "bg-[#AA8038]/20 text-[#C37F00]" : "bg-gray-100 text-gray-500")}>{total}</span>
                     : null
                 }
               </button>
@@ -3345,7 +3345,7 @@ export default function EmailPage() {
                   className={cn(
                     "w-full rounded px-2 py-1 text-left text-xs transition-colors",
                     active
-                      ? "bg-[#FE0000]/10 font-medium text-[#FE0000]"
+                      ? "bg-[#AA8038]/10 font-medium text-[#AA8038]"
                       : "text-gray-500 hover:bg-gray-100"
                   )}
                 >
@@ -3360,11 +3360,11 @@ export default function EmailPage() {
             <>
               <Separator className="my-2" />
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-1">Mailboxes</p>
-              <button onClick={() => setMailboxFilter("all")} className={cn("w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors", mailboxFilter === "all" ? "bg-[#FE0000]/10 text-[#FE0000] font-medium" : "text-gray-600 hover:bg-gray-100")}>
+              <button onClick={() => setMailboxFilter("all")} className={cn("w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors", mailboxFilter === "all" ? "bg-[#AA8038]/10 text-[#AA8038] font-medium" : "text-gray-600 hover:bg-gray-100")}>
                 <Server className="h-4 w-4" />All Mailboxes
               </button>
               {mailboxes.map((mb) => (
-                <button key={mb.id} onClick={() => setMailboxFilter(mb.id)} className={cn("w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors truncate", mailboxFilter === mb.id ? "bg-[#FE0000]/10 text-[#FE0000] font-medium" : "text-gray-600 hover:bg-gray-100")}>
+                <button key={mb.id} onClick={() => setMailboxFilter(mb.id)} className={cn("w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors truncate", mailboxFilter === mb.id ? "bg-[#AA8038]/10 text-[#AA8038] font-medium" : "text-gray-600 hover:bg-gray-100")}>
                   <Server className="h-4 w-4 shrink-0" /><span className="truncate">{mb.name}</span>
                 </button>
               ))}
@@ -3382,7 +3382,7 @@ export default function EmailPage() {
             {searchQuery && <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="h-3 w-3" /></button>}
           </div>
           {(canWrite || canManage) && mailboxes.length > 0 && (
-            <button onClick={() => void syncAllMailboxes({ force: true })} disabled={syncing} className="p-1.5 rounded border border-gray-200 text-gray-400 hover:text-[#FE0000] hover:border-[#FE0000]/30 disabled:opacity-50 transition-colors" title="Sync IMAP mailboxes">
+            <button onClick={() => void syncAllMailboxes({ force: true })} disabled={syncing} className="p-1.5 rounded border border-gray-200 text-gray-400 hover:text-[#AA8038] hover:border-[#AA8038]/30 disabled:opacity-50 transition-colors" title="Sync IMAP mailboxes">
               <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
             </button>
           )}
@@ -3403,7 +3403,7 @@ export default function EmailPage() {
                     className={cn(
                       "shrink-0 rounded-md px-2.5 py-1.5 text-xs transition-colors",
                       isActive
-                        ? "bg-[#FE0000]/10 font-medium text-[#FE0000]"
+                        ? "bg-[#AA8038]/10 font-medium text-[#AA8038]"
                         : "text-gray-500 hover:bg-gray-100"
                     )}
                   >
@@ -3417,7 +3417,7 @@ export default function EmailPage() {
         )}
         <div className="px-4 py-1.5 border-b bg-gray-50/50 flex items-center justify-between">
           <span className="text-xs text-gray-400">{filteredEmails.length} {filteredEmails.length === 1 ? "message" : "messages"}</span>
-          {(unreadCounts.get(statusFilter) ?? 0) > 0 && <span className="text-xs text-[#FE0000]">{unreadCounts.get(statusFilter)} unread</span>}
+          {(unreadCounts.get(statusFilter) ?? 0) > 0 && <span className="text-xs text-[#AA8038]">{unreadCounts.get(statusFilter)} unread</span>}
         </div>
 
         <div className="flex-1 overflow-y-auto">

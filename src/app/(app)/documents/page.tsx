@@ -232,7 +232,7 @@ function NewFolderDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button type="submit" disabled={saving || !name.trim()} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button type="submit" disabled={saving || !name.trim()} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {saving ? "Creating..." : "Create Folder"}
             </Button>
           </DialogFooter>
@@ -296,7 +296,7 @@ function NewDocumentDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button type="submit" disabled={saving || !name.trim()} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button type="submit" disabled={saving || !name.trim()} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {saving ? "Creating..." : "Create Document"}
             </Button>
           </DialogFooter>
@@ -364,7 +364,7 @@ function EditDocumentDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button type="submit" disabled={saving || !name.trim()} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button type="submit" disabled={saving || !name.trim()} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {saving ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
@@ -607,7 +607,7 @@ function ShareDocumentDialog({
           </Button>
           <Button
             type="button"
-            style={{ backgroundColor: "#FE0000", color: "#fff" }}
+            style={{ backgroundColor: "#AA8038", color: "#fff" }}
             onClick={() => void handleSave()}
             disabled={saving || loading || !doc}
           >
@@ -852,7 +852,7 @@ function ShareFolderDialog({
           </Button>
           <Button
             type="button"
-            style={{ backgroundColor: "#FE0000", color: "#fff" }}
+            style={{ backgroundColor: "#AA8038", color: "#fff" }}
             onClick={() => void handleSave()}
             disabled={saving || loading || !folder}
           >
@@ -1119,7 +1119,7 @@ function BulkShareDialog({
           </Button>
           <Button
             type="button"
-            style={{ backgroundColor: "#FE0000", color: "#fff" }}
+            style={{ backgroundColor: "#AA8038", color: "#fff" }}
             onClick={() => void handleSave()}
             disabled={saving || selectedCount === 0 || !targetUserId}
           >
@@ -1185,7 +1185,7 @@ function UploadDialog({
           <label
             className={cn(
               "flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-8 cursor-pointer transition-colors",
-              file ? "border-[#FE0000]/40 bg-[#FE0000]/5" : "border-gray-200 hover:border-gray-300"
+              file ? "border-[#AA8038]/40 bg-[#AA8038]/5" : "border-gray-200 hover:border-gray-300"
             )}
           >
             <Upload className="h-8 w-8 text-gray-400" />
@@ -1209,7 +1209,7 @@ function UploadDialog({
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button type="submit" disabled={saving || !file} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button type="submit" disabled={saving || !file} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {saving ? "Uploading..." : "Upload"}
             </Button>
           </DialogFooter>
@@ -1272,7 +1272,7 @@ function RenameDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button type="submit" disabled={saving || !name.trim()} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button type="submit" disabled={saving || !name.trim()} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               {saving ? "Saving..." : "Rename"}
             </Button>
           </DialogFooter>
@@ -1352,7 +1352,7 @@ function ViewDocumentDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Close</Button>
           {(resolvedDoc.fileUrl || resolvedDoc.content) && (
-            <Button onClick={handleDownload} style={{ backgroundColor: "#FE0000", color: "#fff" }}>
+            <Button onClick={handleDownload} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
               <Download className="h-3.5 w-3.5 mr-1.5" /> Download
             </Button>
           )}
@@ -1940,7 +1940,7 @@ export default function DocumentsPage() {
           {canWrite && (
             <button
               onClick={() => setNewFolderOpen(true)}
-              className="text-gray-400 hover:text-[#FE0000] transition-colors"
+              className="text-gray-400 hover:text-[#AA8038] transition-colors"
               title="New folder"
             >
               <FolderPlus className="h-4 w-4" />
@@ -1953,7 +1953,7 @@ export default function DocumentsPage() {
             onClick={() => changeCategory("all")}
             className={cn(
               "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors",
-              category === "all" ? "bg-[#FE0000]/10 text-[#FE0000] font-medium" : "text-gray-600 hover:bg-gray-100"
+              category === "all" ? "bg-[#AA8038]/10 text-[#AA8038] font-medium" : "text-gray-600 hover:bg-gray-100"
             )}
           >
             <div className="flex items-center gap-2.5 min-w-0">
@@ -1965,7 +1965,7 @@ export default function DocumentsPage() {
             onClick={() => changeCategory("shared")}
             className={cn(
               "w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
-              category === "shared" ? "bg-[#FE0000]/10 text-[#FE0000] font-medium" : "text-gray-600 hover:bg-gray-100"
+              category === "shared" ? "bg-[#AA8038]/10 text-[#AA8038] font-medium" : "text-gray-600 hover:bg-gray-100"
             )}
           >
             <span className="flex items-center gap-2.5 min-w-0">
@@ -1974,7 +1974,7 @@ export default function DocumentsPage() {
             </span>
             <span className={cn(
               "text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0",
-              category === "shared" ? "bg-[#FE0000]/15 text-[#FE0000]" : "bg-gray-100 text-gray-500"
+              category === "shared" ? "bg-[#AA8038]/15 text-[#AA8038]" : "bg-gray-100 text-gray-500"
             )}>
               {documentCounts.shared}
             </span>
@@ -1983,7 +1983,7 @@ export default function DocumentsPage() {
             onClick={() => changeCategory("sharedWithMe")}
             className={cn(
               "w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
-              category === "sharedWithMe" ? "bg-[#FE0000]/10 text-[#FE0000] font-medium" : "text-gray-600 hover:bg-gray-100"
+              category === "sharedWithMe" ? "bg-[#AA8038]/10 text-[#AA8038] font-medium" : "text-gray-600 hover:bg-gray-100"
             )}
           >
             <span className="flex items-center gap-2.5 min-w-0">
@@ -1992,7 +1992,7 @@ export default function DocumentsPage() {
             </span>
             <span className={cn(
               "text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0",
-              category === "sharedWithMe" ? "bg-[#FE0000]/15 text-[#FE0000]" : "bg-gray-100 text-gray-500"
+              category === "sharedWithMe" ? "bg-[#AA8038]/15 text-[#AA8038]" : "bg-gray-100 text-gray-500"
             )}>
               {documentCounts.sharedWithMe}
             </span>
@@ -2010,7 +2010,7 @@ export default function DocumentsPage() {
                     onClick={() => navigateTo(folder.id)}
                     className={cn(
                       "w-full flex items-center justify-between rounded-md text-sm transition-colors",
-                      activeFolder === folder.id ? "bg-[#FE0000]/10 text-[#FE0000] font-medium" : "text-gray-600 hover:bg-gray-100"
+                      activeFolder === folder.id ? "bg-[#AA8038]/10 text-[#AA8038] font-medium" : "text-gray-600 hover:bg-gray-100"
                     )}
                     style={{ padding: "7px 10px", paddingLeft: `${10 + folder.depth * 14}px` }}
                   >
@@ -2023,7 +2023,7 @@ export default function DocumentsPage() {
                     </div>
                     <span className={cn(
                       "text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-1",
-                      activeFolder === folder.id ? "bg-[#FE0000]/15 text-[#FE0000]" : "bg-gray-100 text-gray-500"
+                      activeFolder === folder.id ? "bg-[#AA8038]/15 text-[#AA8038]" : "bg-gray-100 text-gray-500"
                     )}>
                       {folder.count}
                     </span>
@@ -2041,7 +2041,7 @@ export default function DocumentsPage() {
           <div className="flex items-center gap-2 flex-wrap">
             {canWrite && (
               <>
-                <Button size="sm" style={{ backgroundColor: "#FE0000", color: "#fff" }} onClick={() => setUploadOpen(true)}>
+                <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={() => setUploadOpen(true)}>
                   <Upload className="h-4 w-4 mr-1.5" />
                   Upload
                 </Button>
@@ -2063,7 +2063,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={() => setLayoutMode("list")}
-                className={cn("h-8 px-2.5 text-xs", layoutMode === "list" ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-gray-500 hover:bg-gray-50")}
+                className={cn("h-8 px-2.5 text-xs", layoutMode === "list" ? "bg-[#AA8038]/10 text-[#AA8038]" : "text-gray-500 hover:bg-gray-50")}
                 title="List view"
               >
                 <List className="h-4 w-4" />
@@ -2071,7 +2071,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={() => setLayoutMode("grid")}
-                className={cn("h-8 px-2.5 text-xs border-l", layoutMode === "grid" ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-gray-500 hover:bg-gray-50")}
+                className={cn("h-8 px-2.5 text-xs border-l", layoutMode === "grid" ? "bg-[#AA8038]/10 text-[#AA8038]" : "text-gray-500 hover:bg-gray-50")}
                 title="Grid view"
               >
                 <LayoutGrid className="h-4 w-4" />
@@ -2108,7 +2108,7 @@ export default function DocumentsPage() {
                   }
                 }}
                 className={cn(
-                  "hover:text-[#FE0000] transition-colors",
+                  "hover:text-[#AA8038] transition-colors",
                   idx === breadcrumb.length - 1 ? "font-medium text-gray-800" : "hover:underline"
                 )}
               >
@@ -2209,7 +2209,7 @@ export default function DocumentsPage() {
                       return (
                         <TableRow
                           key={`folder-${folder.id}`}
-                          className={cn("cursor-pointer hover:bg-primary/5 group", selected && "bg-[#FE0000]/5")}
+                          className={cn("cursor-pointer hover:bg-primary/5 group", selected && "bg-[#AA8038]/5")}
                           onClick={() => navigateTo(folder.id)}
                           onContextMenu={(e) => openContextMenu(e, { type: "folder", folder })}
                         >
@@ -2318,7 +2318,7 @@ export default function DocumentsPage() {
                       return (
                         <TableRow
                           key={`doc-${doc.id}`}
-                          className={cn("cursor-pointer hover:bg-primary/5 group", selected && "bg-[#FE0000]/5")}
+                          className={cn("cursor-pointer hover:bg-primary/5 group", selected && "bg-[#AA8038]/5")}
                           onClick={() => setViewDoc(doc)}
                           onContextMenu={(e) => openContextMenu(e, { type: "document", doc })}
                         >
@@ -2437,8 +2437,8 @@ export default function DocumentsPage() {
                               key={`grid-folder-${folder.id}`}
                               type="button"
                               className={cn(
-                                "w-full text-left rounded-xl border bg-white p-3 hover:border-[#FE0000]/30 hover:shadow-sm transition",
-                                selected && "border-[#FE0000]/40 bg-[#FE0000]/5"
+                                "w-full text-left rounded-xl border bg-white p-3 hover:border-[#AA8038]/30 hover:shadow-sm transition",
+                                selected && "border-[#AA8038]/40 bg-[#AA8038]/5"
                               )}
                               onClick={() => navigateTo(folder.id)}
                               onContextMenu={(e) => openContextMenu(e, { type: "folder", folder })}
@@ -2511,8 +2511,8 @@ export default function DocumentsPage() {
                               key={`grid-doc-${doc.id}`}
                               type="button"
                               className={cn(
-                                "w-full text-left rounded-xl border bg-white p-3 hover:border-[#FE0000]/30 hover:shadow-sm transition",
-                                selected && "border-[#FE0000]/40 bg-[#FE0000]/5"
+                                "w-full text-left rounded-xl border bg-white p-3 hover:border-[#AA8038]/30 hover:shadow-sm transition",
+                                selected && "border-[#AA8038]/40 bg-[#AA8038]/5"
                               )}
                               onClick={() => setViewDoc(doc)}
                               onContextMenu={(e) => openContextMenu(e, { type: "document", doc })}

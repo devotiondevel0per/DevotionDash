@@ -85,7 +85,7 @@ export const DEFAULT_LIVECHAT_WIDGET_SETTINGS: LiveChatWidgetSettings = {
   token: "",
   brandLabel: "Live Support",
   welcomeText: "Hi there! How can we help you today?",
-  accentColor: "#FE0000",
+  accentColor: "#AA8038",
   position: "right",
 };
 

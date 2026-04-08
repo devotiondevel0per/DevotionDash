@@ -37,12 +37,12 @@ function renderOutgoingHtml(body: string) {
   html = html.replace(
     /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi,
     (_m, label: string, url: string) =>
-      `<a href=\"${url}\" target=\"_blank\" rel=\"noreferrer\" style=\"color:#c30000;text-decoration:underline;\">${escapeHtml(String(label))}</a>`
+      `<a href=\"${url}\" target=\"_blank\" rel=\"noreferrer\" style=\"color:#C37F00;text-decoration:underline;\">${escapeHtml(String(label))}</a>`
   );
   html = html.replace(
     /(^|[\s(>])(https?:\/\/[^\s<)]+)/gi,
     (_m, prefix: string, url: string) =>
-      `${prefix}<a href=\"${url}\" target=\"_blank\" rel=\"noreferrer\" style=\"color:#c30000;text-decoration:underline;\">${url}</a>`
+      `${prefix}<a href=\"${url}\" target=\"_blank\" rel=\"noreferrer\" style=\"color:#C37F00;text-decoration:underline;\">${url}</a>`
   );
   html = html.replace(/\n/g, "<br/>");
   return `<div style=\"font-family:Arial,sans-serif;line-height:1.5;color:#202124;\">${html}</div>`;

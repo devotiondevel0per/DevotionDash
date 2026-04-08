@@ -326,7 +326,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               onSelected: _changeStatus,
               itemBuilder: (_) {
                 final currentStatus = (task['status'] ?? '').toString();
-                final stages = stagesAsync.valueOrNull ?? const <Map<String, dynamic>>[];
+                final stages = stagesAsync.asData?.value ?? const <Map<String, dynamic>>[];
                 return stages
                     .where((stage) => (stage['key'] ?? '').toString().isNotEmpty)
                     .map((stage) {
@@ -379,7 +379,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         data: (task) => _buildContent(
           context,
           task,
-          stagesAsync.valueOrNull ?? const <Map<String, dynamic>>[],
+          stagesAsync.asData?.value ?? const <Map<String, dynamic>>[],
         ),
       ),
       bottomNavigationBar: _buildCommentBar(),

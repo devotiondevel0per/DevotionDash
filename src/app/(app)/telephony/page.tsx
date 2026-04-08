@@ -236,7 +236,7 @@ export default function TelephonyPage() {
 
       <div className="px-6 py-4 grid grid-cols-4 gap-4 border-b bg-gray-50">
         {[
-          { label: "Total Extensions", value: stats.total, icon: Phone, color: "text-[#FE0000]", bg: "bg-red-50" },
+          { label: "Total Extensions", value: stats.total, icon: Phone, color: "text-[#AA8038]", bg: "bg-red-50" },
           { label: "Online Extensions", value: stats.online, icon: Wifi, color: "text-green-600", bg: "bg-green-50" },
           { label: "Calls Today", value: stats.callsToday, icon: PhoneCall, color: "text-purple-600", bg: "bg-purple-50" },
           { label: "Missed Calls", value: stats.missed, icon: PhoneMissed, color: "text-red-600", bg: "bg-red-50" },
@@ -272,7 +272,7 @@ export default function TelephonyPage() {
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#FE0000] data-[state=active]:text-[#FE0000] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 h-10 text-sm"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#AA8038] data-[state=active]:text-[#AA8038] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 h-10 text-sm"
                 >
                   <tab.icon className="h-3.5 w-3.5 mr-1.5" />
                   {tab.label}

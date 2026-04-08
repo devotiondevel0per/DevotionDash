@@ -1,0 +1,737 @@
+{
+  "generatedAt": "2026-03-30T18:46:09.259Z",
+  "baseUrl": "http://209.192.167.118:3000",
+  "actors": [
+    {
+      "actor": "admin",
+      "login": "admin",
+      "userId": "cmmtkxxrc00005u5xrk21prg3",
+      "isAdmin": true,
+      "livechatPermission": {
+        "read": true,
+        "write": true,
+        "manage": true
+      }
+    },
+    {
+      "actor": "manager",
+      "login": "qa_manager",
+      "userId": "cmndhbhnq000lkh70rgsz3u3h",
+      "isAdmin": false,
+      "livechatPermission": {
+        "read": true,
+        "write": true,
+        "manage": true
+      }
+    },
+    {
+      "actor": "user",
+      "login": "qa_user",
+      "userId": "cmndhbk4u000xkh70t58ufiup",
+      "isAdmin": false,
+      "livechatPermission": {
+        "read": true,
+        "write": true,
+        "manage": false
+      }
+    }
+  ],
+  "steps": [
+    {
+      "actor": "admin",
+      "step": "livechat-dialogs-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Livechat dialogs list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-overview",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Overview endpoint accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-groups-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Groups list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-agents",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agents endpoint accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-departments-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Departments endpoint accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-groups-manage-gate",
+      "expected": "400 (manage passed; missing name)",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Manage endpoint reachable for queue create."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-departments-manage-gate",
+      "expected": "400 (manage passed; missing name)",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Manage endpoint reachable for department create."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-settings-get",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Settings GET accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-settings-patch-gate",
+      "expected": "400 (nothing to update)",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Settings PATCH reachable and validated."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-agent-status-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agent status list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-agent-status-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agent status update succeeded."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-agent-status-invalid",
+      "expected": "400",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Invalid agent status correctly rejected."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-dialog-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Dialog created (cmndjegte00dhdwutvqf8fs66)."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-dialog-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog detail accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-messages-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Messages list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-messages-order",
+      "expected": "ascending by createdAt",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Message ordering is ascending (oldest -> newest)."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-send-text",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Text reply sent."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-send-attachment",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Attachment reply sent."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-typing-post",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Typing status posted."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-typing-get",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Typing status fetched."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-transcript",
+      "expected": "200 text/plain",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Transcript endpoint works."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-insights",
+      "expected": "200 or 403 when disabled",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Insights generated."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-dialog-close",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog closed."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-dialog-reopen",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog reopened and subject updated."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-assign-self",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Self assignment works."
+    },
+    {
+      "actor": "admin",
+      "step": "livechat-transfer-self-manage",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Manage user can keep dialog assigned to self."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-dialogs-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Livechat dialogs list accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-overview",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Overview endpoint accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-groups-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Groups list accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-agents",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agents endpoint accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-departments-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Departments endpoint accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-groups-manage-gate",
+      "expected": "400 (manage passed; missing name)",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Manage endpoint reachable for queue create."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-departments-manage-gate",
+      "expected": "400 (manage passed; missing name)",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Manage endpoint reachable for department create."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-settings-get",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Settings GET accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-settings-patch-gate",
+      "expected": "400 (nothing to update)",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Settings PATCH reachable and validated."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-agent-status-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agent status list accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-agent-status-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agent status update succeeded."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-agent-status-invalid",
+      "expected": "400",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Invalid agent status correctly rejected."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-dialog-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Dialog created (cmndjfazh00ebdwut3wits5ds)."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-dialog-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog detail accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-messages-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Messages list accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-messages-order",
+      "expected": "ascending by createdAt",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Message ordering is ascending (oldest -> newest)."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-send-text",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Text reply sent."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-send-attachment",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Attachment reply sent."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-typing-post",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Typing status posted."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-typing-get",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Typing status fetched."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-transcript",
+      "expected": "200 text/plain",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Transcript endpoint works."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-insights",
+      "expected": "200 or 403 when disabled",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Insights generated."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-dialog-close",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog closed."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-dialog-reopen",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog reopened and subject updated."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-assign-self",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Self assignment works."
+    },
+    {
+      "actor": "manager",
+      "step": "livechat-transfer",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog transfer succeeded."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-dialogs-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Livechat dialogs list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-overview",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Overview endpoint accessible."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-groups-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Groups list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-agents",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agents endpoint accessible."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-departments-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Departments endpoint accessible."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-groups-manage-gate",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Queue create correctly blocked for non-manage."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-departments-manage-gate",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Department create correctly blocked for non-manage."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-settings-get",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Settings GET correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-settings-patch-gate",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Settings PATCH correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-agent-status-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agent status list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-agent-status-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Agent status update succeeded."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-agent-status-invalid",
+      "expected": "400",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Invalid agent status correctly rejected."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-dialog-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Dialog created (cmndjg55600f7dwut9098ki34)."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-dialog-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog detail accessible."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-messages-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Messages list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-messages-order",
+      "expected": "ascending by createdAt",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Message ordering is ascending (oldest -> newest)."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-send-text",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Text reply sent."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-send-attachment",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Attachment reply sent."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-typing-post",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Typing status posted."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-typing-get",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Typing status fetched."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-transcript",
+      "expected": "200 text/plain",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Transcript endpoint works."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-insights",
+      "expected": "200 or 403 when disabled",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Insights generated."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-dialog-close",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog closed."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-dialog-reopen",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog reopened and subject updated."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-assign-self",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Self assignment works."
+    },
+    {
+      "actor": "user",
+      "step": "livechat-transfer",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog transfer succeeded."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-cross-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Cross-role dialog created (cmndjgwhb00g0dwut8j7uoxs2)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-manager-view-foreign",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Manager can view foreign livechat dialog."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-manager-assign-admin",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Manager reassigned dialog to admin."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-user-send-after-unassign",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Unassigned user blocked from sending."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-user-view-after-unassign",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Unassigned user blocked from viewing."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-admin-send-after-assign",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Assigned admin can send."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-manager-transfer-user",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Manager transferred dialog back to user."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-user-send-after-transfer-back",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "User can send again after transfer back."
+    },
+    {
+      "actor": "cross-role",
+      "step": "livechat-user-view-admin-owned",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "User cannot view admin-assigned dialog."
+    }
+  ]
+}

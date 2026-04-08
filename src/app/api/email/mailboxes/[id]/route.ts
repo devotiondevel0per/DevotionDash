@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, type AccessContext } from "@/lib/api-access";
 
 const SAFE_SELECT = {
@@ -25,8 +24,9 @@ export async function PUT(
   if (!accessResult.ok) return accessResult.response;
 
   const { id } = await params;
+  const db = accessResult.ctx.db;
   try {
-    const mailbox = await prisma.mailbox.findFirst({
+    const mailbox = await db.mailbox.findFirst({
       where: mailboxAccessWhere(id, accessResult.ctx),
       select: { id: true },
     });
@@ -53,7 +53,7 @@ export async function PUT(
       }
     }
 
-    const updatedMailbox = await prisma.mailbox.update({
+    const updatedMailbox = await db.mailbox.update({
       where: { id: mailbox.id },
       data: {
         ...(body.name      !== undefined && { name: body.name }),
@@ -85,25 +85,43 @@ export async function DELETE(
   if (!accessResult.ok) return accessResult.response;
 
   const { id } = await params;
+  const db = accessResult.ctx.db;
   try {
-    const mailbox = await prisma.mailbox.findFirst({
+    const mailbox = await db.mailbox.findFirst({
       where: mailboxAccessWhere(id, accessResult.ctx),
-      select: { id: true },
+      select: { id: true, isActive: true },
     });
     if (!mailbox) {
       return NextResponse.json({ error: "Mailbox not found" }, { status: 404 });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const deletedEmails = await tx.email.deleteMany({
-        where: { mailboxId: mailbox.id },
+    if (mailbox.isActive) {
+      await db.mailbox.update({
+        where: { id: mailbox.id },
+        data: { isActive: false },
       });
+    }
 
-      await tx.mailbox.delete({ where: { id: mailbox.id } });
-      return { deletedEmails: deletedEmails.count };
-    });
+    // Large mailboxes can exceed interactive transaction timeout.
+    // Delete emails in batches without holding a long-running transaction.
+    const deleteBatchSize = 1000;
+    let deletedEmails = 0;
+    while (true) {
+      const batch = await db.email.findMany({
+        where: { mailboxId: mailbox.id },
+        select: { id: true },
+        take: deleteBatchSize,
+      });
+      if (batch.length === 0) break;
+      const result = await db.email.deleteMany({
+        where: { id: { in: batch.map((row) => row.id) } },
+      });
+      deletedEmails += result.count;
+      if (batch.length < deleteBatchSize) break;
+    }
+    await db.mailbox.delete({ where: { id: mailbox.id } });
 
-    return NextResponse.json({ ok: true, deletedEmails: result.deletedEmails });
+    return NextResponse.json({ ok: true, deletedEmails });
   } catch (error) {
     console.error("[DELETE /api/email/mailboxes/[id]]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

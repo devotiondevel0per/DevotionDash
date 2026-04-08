@@ -300,7 +300,7 @@ function FilterPanel({
           </Select>
         </div>
         <div className="flex items-end gap-2">
-          <Button className="h-9 bg-[#FE0000] text-white hover:bg-[#d40000]" onClick={onApply}>Filter</Button>
+          <Button className="h-9 bg-[#AA8038] text-white hover:bg-[#D48A00]" onClick={onApply}>Filter</Button>
           <Button className="h-9" variant="outline" onClick={onReset}>Reset</Button>
         </div>
       </div>
@@ -411,7 +411,7 @@ function TaskModal({
     }
     return result;
   }, [groups, users]);
-  const titleIcon = form.id ? <Pencil className="h-5 w-5 text-[#FE0000]" /> : <FilePlus2 className="h-5 w-5 text-[#FE0000]" />;
+  const titleIcon = form.id ? <Pencil className="h-5 w-5 text-[#AA8038]" /> : <FilePlus2 className="h-5 w-5 text-[#AA8038]" />;
 
   function toggleAssignee(userId: string, checked: boolean) {
     const next = checked
@@ -584,7 +584,7 @@ function TaskModal({
 
           <DialogFooter className="border-t px-6 py-3">
             <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button className="bg-[#FE0000] text-white hover:bg-[#d40000]" onClick={() => void submit()} disabled={saving}>
+            <Button className="bg-[#AA8038] text-white hover:bg-[#D48A00]" onClick={() => void submit()} disabled={saving}>
               {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-1 h-4 w-4" />}
               {form.id ? "Save" : "Add"}
             </Button>
@@ -701,7 +701,7 @@ function TaskDetailDialog({
       <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-[760px]">
         <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-lg leading-tight">
-            <MessageSquare className="h-5 w-5 shrink-0 text-[#FE0000]" />
+            <MessageSquare className="h-5 w-5 shrink-0 text-[#AA8038]" />
             <span className={cn("line-clamp-2", isClosed && "line-through text-slate-400")}>{task.title}</span>
           </DialogTitle>
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -755,7 +755,7 @@ function TaskDetailDialog({
                     className={cn(
                       "rounded-xl border px-3 py-3 shadow-sm",
                       isMe
-                        ? "border-[#FE0000]/25 bg-[#FE0000]/[0.03]"
+                        ? "border-[#AA8038]/25 bg-[#AA8038]/[0.03]"
                         : "border-slate-200 bg-white"
                     )}
                   >
@@ -767,7 +767,7 @@ function TaskDetailDialog({
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                           <span className="font-medium text-slate-700">{comment.user.fullname || comment.user.name}</span>
                           {isMe ? (
-                            <span className="rounded-full bg-[#FE0000]/10 px-2 py-0.5 text-[10px] font-semibold text-[#c70000]">
+                            <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
                               You
                             </span>
                           ) : null}
@@ -775,7 +775,7 @@ function TaskDetailDialog({
                           {canEditComment && !isEditing ? (
                             <button
                               type="button"
-                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#c70000] hover:bg-[#FE0000]/10"
+                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
                               onClick={() => {
                                 setEditingCommentId(comment.id);
                                 setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
@@ -810,7 +810,7 @@ function TaskDetailDialog({
                               <Button
                                 type="button"
                                 size="sm"
-                                className="bg-[#FE0000] text-white hover:bg-[#d40000]"
+                                className="bg-[#AA8038] text-white hover:bg-[#D48A00]"
                                 onClick={() => void saveCommentEdit()}
                                 disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
                               >
@@ -846,7 +846,7 @@ function TaskDetailDialog({
               />
               <div className="flex justify-end">
                 <Button
-                  className="h-10 bg-[#FE0000] text-white hover:bg-[#d40000]"
+                  className="h-10 bg-[#AA8038] text-white hover:bg-[#D48A00]"
                   size="icon"
                   onClick={() => void postComment()}
                   disabled={posting || !hasRichTextContent(commentText)}
@@ -1144,9 +1144,9 @@ export default function TasksPage() {
                 onClick={() => setCategory(item.id)}
                 className={cn(
                   "flex w-full items-center justify-between rounded-md px-3 py-2 text-sm transition-colors",
-                  active ? "font-medium text-[#FE0000]" : "text-gray-600 hover:bg-gray-100"
+                  active ? "font-medium text-[#AA8038]" : "text-gray-600 hover:bg-gray-100"
                 )}
-                style={active ? { backgroundColor: "#FFF0F0" } : undefined}
+                style={active ? { backgroundColor: "#FFFAF0" } : undefined}
               >
                 <span>{item.label}</span>
                 <span
@@ -1154,7 +1154,7 @@ export default function TasksPage() {
                     "shrink-0 rounded-full px-1.5 py-0.5 text-xs font-medium",
                     active ? "text-white" : "bg-gray-100 text-gray-500"
                   )}
-                  style={active ? { backgroundColor: "#FE0000" } : undefined}
+                  style={active ? { backgroundColor: "#AA8038" } : undefined}
                 >
                   {counts.get(item.id) ?? 0}
                 </span>
@@ -1178,9 +1178,9 @@ export default function TasksPage() {
                 }}
                 className={cn(
                   "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-                  active ? "font-medium text-[#FE0000]" : "text-gray-600 hover:bg-gray-100"
+                  active ? "font-medium text-[#AA8038]" : "text-gray-600 hover:bg-gray-100"
                 )}
-                style={active ? { backgroundColor: "#FFF0F0" } : undefined}
+                style={active ? { backgroundColor: "#FFFAF0" } : undefined}
               >
                 {tab.label}
               </button>
@@ -1194,7 +1194,7 @@ export default function TasksPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               {canWrite ? (
-                <Button className="h-8 bg-[#FE0000] text-xs text-white hover:bg-[#d40000]" onClick={openCreate}>
+                <Button className="h-8 bg-[#AA8038] text-xs text-white hover:bg-[#D48A00]" onClick={openCreate}>
                   <Plus className="mr-1 h-4 w-4" />
                   New Task
                 </Button>
@@ -1236,7 +1236,7 @@ export default function TasksPage() {
                     onClick={() => setLayout(item.id)}
                     className={cn(
                       "inline-flex h-7 items-center gap-1 rounded px-2.5 text-xs",
-                      active ? "bg-[#FE0000] text-white" : "text-slate-600 hover:bg-slate-100"
+                      active ? "bg-[#AA8038] text-white" : "text-slate-600 hover:bg-slate-100"
                     )}
                   >
                     {item.id === "list" ? <List className="h-3.5 w-3.5" /> : null}
@@ -1314,7 +1314,7 @@ export default function TasksPage() {
                     )}
                   >
                     <button
-                      className="mx-auto flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-500 hover:border-[#FE0000] hover:text-[#FE0000]"
+                      className="mx-auto flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-500 hover:border-[#AA8038] hover:text-[#AA8038]"
                       onClick={() => void toggleComplete(task)}
                       title={done ? "Reopen" : "Complete"}
                       disabled={!canWrite}
@@ -1325,7 +1325,7 @@ export default function TasksPage() {
                     <div className="min-w-0 pr-3">
                       <div className="flex items-center gap-1.5">
                         <button
-                          className={cn("truncate text-left font-semibold text-slate-800 hover:text-[#FE0000] hover:underline", done && "line-through text-slate-500")}
+                          className={cn("truncate text-left font-semibold text-slate-800 hover:text-[#AA8038] hover:underline", done && "line-through text-slate-500")}
                           onClick={() => openDetail(task)}
                           title="View details & comments"
                         >{task.title}</button>
@@ -1389,14 +1389,14 @@ export default function TasksPage() {
                 <article key={task.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
                   <div className="flex items-start justify-between gap-2">
                     <button
-                      className={cn("line-clamp-2 text-left text-sm font-semibold text-slate-900 hover:text-[#FE0000] hover:underline", (stages.find((s) => s.key === task.status)?.isClosed ?? false) && "line-through text-slate-500")}
+                      className={cn("line-clamp-2 text-left text-sm font-semibold text-slate-900 hover:text-[#AA8038] hover:underline", (stages.find((s) => s.key === task.status)?.isClosed ?? false) && "line-through text-slate-500")}
                       onClick={() => openDetail(task)}
                       title="View details & comments"
                     >
                       {task.title}
                     </button>
                     <button
-                      className="rounded border border-slate-200 p-1 text-slate-500 hover:border-[#FE0000] hover:text-[#FE0000]"
+                      className="rounded border border-slate-200 p-1 text-slate-500 hover:border-[#AA8038] hover:text-[#AA8038]"
                       onClick={() => void toggleComplete(task)}
                       disabled={!canWrite}
                       title={(stages.find((s) => s.key === task.status)?.isClosed ?? false) ? "Reopen" : "Mark complete"}
@@ -1493,7 +1493,7 @@ export default function TasksPage() {
                               className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
                             >
                               <button
-                                className={cn("line-clamp-2 w-full text-left text-sm font-semibold text-slate-900 hover:text-[#FE0000] hover:underline", stage.isClosed && "line-through text-slate-500")}
+                                className={cn("line-clamp-2 w-full text-left text-sm font-semibold text-slate-900 hover:text-[#AA8038] hover:underline", stage.isClosed && "line-through text-slate-500")}
                                 onClick={() => openDetail(task)}
                                 title="View details & comments"
                               >

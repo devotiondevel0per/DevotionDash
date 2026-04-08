@@ -50,7 +50,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             type="button"
-            className="bg-[#FE0000] text-white hover:bg-[#d70000]"
+            className="bg-[#AA8038] text-white hover:bg-[#D78C00]"
             disabled={loading}
             onClick={() => void onConfirm()}
           >

@@ -192,7 +192,7 @@ class _ServiceDeskScreenState extends ConsumerState<ServiceDeskScreen>
 
   @override
   Widget build(BuildContext context) {
-    final groups = ref.watch(_serviceDeskGroupsProvider).valueOrNull ?? const [];
+    final groups = ref.watch(_serviceDeskGroupsProvider).asData?.value ?? const [];
     return Scaffold(
       appBar: AppBar(
         title: const Text('Service Desk',
@@ -601,8 +601,8 @@ class _CreateRequestSheetState extends ConsumerState<_CreateRequestSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final groups = ref.watch(_serviceDeskGroupsProvider).valueOrNull ?? const [];
-    final users = ref.watch(_serviceDeskUsersProvider).valueOrNull ?? const [];
+    final groups = ref.watch(_serviceDeskGroupsProvider).asData?.value ?? const [];
+    final users = ref.watch(_serviceDeskUsersProvider).asData?.value ?? const [];
     Map<String, dynamic>? selectedGroup;
     for (final group in groups) {
       final item = group as Map<String, dynamic>;

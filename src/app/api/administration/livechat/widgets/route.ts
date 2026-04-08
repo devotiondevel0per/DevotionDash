@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         brandLabel: typeof body.brandLabel === "string" ? body.brandLabel.trim() || "Chat with us" : "Chat with us",
         logoUrl: typeof body.logoUrl === "string" ? body.logoUrl.trim() || null : null,
         welcomeText: typeof body.welcomeText === "string" ? body.welcomeText.trim() || "Hi! How can we help you today?" : "Hi! How can we help you today?",
-        accentColor: typeof body.accentColor === "string" && /^#[0-9a-fA-F]{6}$/.test(body.accentColor) ? body.accentColor : "#FE0000",
+        accentColor: typeof body.accentColor === "string" && /^#[0-9a-fA-F]{6}$/.test(body.accentColor) ? body.accentColor : "#AA8038",
         position: body.position === "left" ? "left" : "right",
         allowDomains: typeof body.allowDomains === "string" ? body.allowDomains.trim() || null : null,
       },

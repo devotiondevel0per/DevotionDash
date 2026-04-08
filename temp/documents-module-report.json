@@ -1,0 +1,497 @@
+{
+  "generatedAt": "2026-03-30T18:19:29.216Z",
+  "baseUrl": "http://209.192.167.118:3000",
+  "actors": [
+    {
+      "actor": "admin",
+      "login": "admin",
+      "userId": "cmmtkxxrc00005u5xrk21prg3",
+      "isAdmin": true,
+      "documentsPermission": {
+        "read": true,
+        "write": true,
+        "manage": true
+      }
+    },
+    {
+      "actor": "manager",
+      "login": "qa_manager",
+      "userId": "cmndhbhnq000lkh70rgsz3u3h",
+      "isAdmin": false,
+      "documentsPermission": {
+        "read": false,
+        "write": false,
+        "manage": false
+      }
+    },
+    {
+      "actor": "user",
+      "login": "qa_user",
+      "userId": "cmndhbk4u000xkh70t58ufiup",
+      "isAdmin": false,
+      "documentsPermission": {
+        "read": true,
+        "write": true,
+        "manage": false
+      }
+    }
+  ],
+  "steps": [
+    {
+      "actor": "admin",
+      "step": "documents-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Documents list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-folders-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Folder tree endpoint accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-counts",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Counts endpoint accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-share-users",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Share-users endpoint accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-admin-view",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Admin documents view accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-folder-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Folder created (cmndii892005ddwut7144ilqy)."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-folder-rename",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Folder rename succeeded."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Document created (cmndii8wq005fdwutl0pknwj2)."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Document detail loaded."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Document update succeeded."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-share-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Document share updated."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-share-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Document share detail loaded."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-folder-delete-non-empty",
+      "expected": "409",
+      "status": 409,
+      "outcome": "pass",
+      "details": "Non-empty folder delete correctly blocked."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-upload",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Upload succeeded (cmndiiamo005kdwutjf58cz1m)."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-download",
+      "expected": "200 + binary body",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Download worked (50 bytes)."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-uploaded-delete",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Uploaded document deleted."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-admin-by-user",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Admin by-user view works."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-bulk-share",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Bulk share processed for 1 docs."
+    },
+    {
+      "actor": "admin",
+      "step": "documents-bulk-unshare",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Bulk unshare processed."
+    },
+    {
+      "actor": "manager",
+      "step": "documents-list",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Documents list correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "documents-folders-list",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Folder tree endpoint correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "documents-counts",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Counts endpoint correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "documents-share-users",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Share-users endpoint correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "documents-admin-view",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Admin documents view correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "documents-folder-create",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Folder create correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "documents-create",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Document create correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "documents-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Documents list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "documents-folders-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Folder tree endpoint accessible."
+    },
+    {
+      "actor": "user",
+      "step": "documents-counts",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Counts endpoint accessible."
+    },
+    {
+      "actor": "user",
+      "step": "documents-share-users",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Share-users endpoint accessible."
+    },
+    {
+      "actor": "user",
+      "step": "documents-admin-view",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Admin documents view correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "documents-folder-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Folder created (cmndiig5z005qdwut1qpydz25)."
+    },
+    {
+      "actor": "user",
+      "step": "documents-folder-rename",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Folder rename succeeded."
+    },
+    {
+      "actor": "user",
+      "step": "documents-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Document created (cmndiigri005sdwut5sqc4hhn)."
+    },
+    {
+      "actor": "user",
+      "step": "documents-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Document detail loaded."
+    },
+    {
+      "actor": "user",
+      "step": "documents-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Document update succeeded."
+    },
+    {
+      "actor": "user",
+      "step": "documents-share-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Document share updated."
+    },
+    {
+      "actor": "user",
+      "step": "documents-share-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Document share detail loaded."
+    },
+    {
+      "actor": "user",
+      "step": "documents-folder-delete-non-empty",
+      "expected": "409",
+      "status": 409,
+      "outcome": "pass",
+      "details": "Non-empty folder delete correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "documents-upload",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Upload succeeded (cmndiiifl005ydwutuvjyl0g7)."
+    },
+    {
+      "actor": "user",
+      "step": "documents-download",
+      "expected": "200 + binary body",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Download worked (49 bytes)."
+    },
+    {
+      "actor": "user",
+      "step": "documents-uploaded-delete",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Uploaded document deleted."
+    },
+    {
+      "actor": "user",
+      "step": "documents-bulk-share",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Bulk share processed for 1 docs."
+    },
+    {
+      "actor": "user",
+      "step": "documents-bulk-unshare",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Bulk unshare processed."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-create-private-doc",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "User private doc created (cmndiikk60066dwutzt2tpg1g)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "manager-read-user-doc-before-share",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager blocked from reading before share."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-share-doc-to-manager",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "User shared doc to manager."
+    },
+    {
+      "actor": "cross-role",
+      "step": "manager-read-user-doc-after-share",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager still blocked due no documents module permission."
+    },
+    {
+      "actor": "cross-role",
+      "step": "admin-read-user-private-doc",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Admin can read user private doc by id."
+    },
+    {
+      "actor": "cross-role",
+      "step": "manager-update-user-doc",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager update blocked."
+    },
+    {
+      "actor": "cross-role",
+      "step": "manager-delete-user-doc",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager delete blocked."
+    },
+    {
+      "actor": "cross-role",
+      "step": "admin-create-private-doc",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Admin private doc created (cmndiimdz006bdwuth0i0ranw)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-bulk-share-admin-doc",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "User blocked from bulk sharing admin-owned docs."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-create-folder",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "User folder created (cmndiimx5006ddwutlqpbf0l6)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "manager-rename-user-folder",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager blocked from renaming user folder."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-share-folder-to-manager",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "User shared folder to manager."
+    },
+    {
+      "actor": "cross-role",
+      "step": "manager-view-folder-share",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager blocked due no documents read permission."
+    }
+  ]
+}

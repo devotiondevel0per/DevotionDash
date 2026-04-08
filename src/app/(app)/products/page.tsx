@@ -168,7 +168,7 @@ export default function ProductsPage() {
               className={cn(
                 "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors",
                 activeCategory === category.id
-                  ? "bg-[#FE0000]/10 text-[#FE0000] font-medium"
+                  ? "bg-[#AA8038]/10 text-[#AA8038] font-medium"
                   : "text-gray-600 hover:bg-gray-100"
               )}
             >
@@ -179,7 +179,7 @@ export default function ProductsPage() {
               <span
                 className={cn(
                   "text-xs px-1.5 py-0.5 rounded-full font-medium",
-                  activeCategory === category.id ? "bg-[#FE0000]/15 text-[#FE0000]" : "bg-gray-100 text-gray-500"
+                  activeCategory === category.id ? "bg-[#AA8038]/15 text-[#AA8038]" : "bg-gray-100 text-gray-500"
                 )}
               >
                 {category.count}
@@ -192,7 +192,7 @@ export default function ProductsPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="border-b bg-white px-6 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Button size="sm" className="bg-[#FE0000] hover:bg-[#cc0000] text-white" onClick={openNew}>
+            <Button size="sm" className="bg-[#AA8038] hover:bg-[#CC8500] text-white" onClick={openNew}>
               <Plus className="h-4 w-4 mr-1" />New Product
             </Button>
             <Button size="sm" variant="outline">
@@ -324,7 +324,7 @@ export default function ProductsPage() {
           </div>
           <DialogFooter>
             <button className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent" onClick={() => setDialogOpen(false)}>Cancel</button>
-            <button className="inline-flex items-center justify-center rounded-md bg-[#FE0000] px-4 py-2 text-sm font-medium text-white hover:bg-[#cc0000] disabled:opacity-50" onClick={() => void saveProduct()} disabled={saving || !form.name.trim()}>
+            <button className="inline-flex items-center justify-center rounded-md bg-[#AA8038] px-4 py-2 text-sm font-medium text-white hover:bg-[#CC8500] disabled:opacity-50" onClick={() => void saveProduct()} disabled={saving || !form.name.trim()}>
               {saving ? "Saving..." : editProduct ? "Update" : "Create"}
             </button>
           </DialogFooter>

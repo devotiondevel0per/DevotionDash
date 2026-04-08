@@ -519,7 +519,7 @@ export default function TaskDetailPage() {
               className={cn(
                 "flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors",
                 tab === t
-                  ? "border-[#FE0000] text-[#FE0000]"
+                  ? "border-[#AA8038] text-[#AA8038]"
                   : "border-transparent text-slate-500 hover:text-slate-700"
               )}
             >
@@ -573,7 +573,7 @@ export default function TaskDetailPage() {
                     className={cn(
                       "rounded-xl border px-3 py-3 shadow-sm",
                       isMe
-                        ? "border-[#FE0000]/25 bg-[#FE0000]/[0.03]"
+                        ? "border-[#AA8038]/25 bg-[#AA8038]/[0.03]"
                         : "border-slate-200 bg-white"
                     )}
                   >
@@ -585,7 +585,7 @@ export default function TaskDetailPage() {
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                           <span className="font-medium text-slate-700">{nameOf(comment.user)}</span>
                           {isMe ? (
-                            <span className="rounded-full bg-[#FE0000]/10 px-2 py-0.5 text-[10px] font-semibold text-[#c70000]">
+                            <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
                               You
                             </span>
                           ) : null}
@@ -593,7 +593,7 @@ export default function TaskDetailPage() {
                           {canEditComment && !isEditing ? (
                             <button
                               type="button"
-                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#c70000] hover:bg-[#FE0000]/10"
+                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
                               onClick={() => {
                                 setEditingCommentId(comment.id);
                                 setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
@@ -628,7 +628,7 @@ export default function TaskDetailPage() {
                               <Button
                                 type="button"
                                 size="sm"
-                                className="bg-[#FE0000] text-white hover:bg-[#d40000]"
+                                className="bg-[#AA8038] text-white hover:bg-[#D48A00]"
                                 onClick={() => void saveCommentEdit()}
                                 disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
                               >
@@ -672,7 +672,7 @@ export default function TaskDetailPage() {
                         <FileText className="h-4 w-4 shrink-0 text-slate-400" />
                       )}
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-700 group-hover:text-[#FE0000]">{att.fileName}</p>
+                        <p className="truncate font-medium text-slate-700 group-hover:text-[#AA8038]">{att.fileName}</p>
                         <p className="text-slate-400">{formatFileSize(att.fileSize)}</p>
                       </div>
                     </a>
@@ -733,7 +733,7 @@ export default function TaskDetailPage() {
                     <Paperclip className="h-4 w-4" />
                   </Button>
                   <Button
-                    className="h-9 w-9 bg-[#FE0000] text-white hover:bg-[#d40000]"
+                    className="h-9 w-9 bg-[#AA8038] text-white hover:bg-[#D48A00]"
                     size="icon"
                     onClick={() => void postComment()}
                     disabled={posting || uploading || (!hasRichTextContent(commentText) && pendingFiles.length === 0)}
@@ -887,7 +887,7 @@ export default function TaskDetailPage() {
                         <FileText className="h-5 w-5 shrink-0 text-slate-400" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-slate-700 group-hover:text-[#FE0000]">{att.fileName}</p>
+                        <p className="truncate text-sm font-medium text-slate-700 group-hover:text-[#AA8038]">{att.fileName}</p>
                         <p className="text-xs text-slate-400">{formatFileSize(att.fileSize)} · {att.mimeType}</p>
                       </div>
                       <span className="text-xs text-slate-400 shrink-0">{formatDate(att.createdAt)}</span>

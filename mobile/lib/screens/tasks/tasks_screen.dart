@@ -282,7 +282,7 @@ class _TaskList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(tasksProvider(status));
-    final stages = ref.watch(taskStagesProvider).valueOrNull ?? const <Map<String, dynamic>>[];
+    final stages = ref.watch(taskStagesProvider).asData?.value ?? const <Map<String, dynamic>>[];
 
     return async.when(
       loading: () => const ShimmerList(count: 8),

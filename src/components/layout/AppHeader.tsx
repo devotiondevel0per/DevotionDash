@@ -522,7 +522,7 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="relative flex h-16 items-center gap-4 overflow-visible border-b border-[#6e0e15] bg-[linear-gradient(115deg,var(--twx-topbar-from,#670b11)_0%,var(--twx-topbar-mid,#8e0c14)_35%,var(--twx-topbar-to,#bf101a)_62%,var(--twx-topbar-accent,#FE0000)_100%)] bg-[length:220%_220%] px-4 shadow-[0_12px_28px_-18px_rgba(52,7,9,0.92)] animate-topbar-flow">
+      <header className="relative flex h-16 items-center gap-4 overflow-visible border-b border-[#6E4C0E] bg-[linear-gradient(115deg,var(--twx-topbar-from,#67470B)_0%,var(--twx-topbar-mid,#8E610C)_35%,var(--twx-topbar-to,#BF8210)_62%,var(--twx-topbar-accent,#AA8038)_100%)] bg-[length:220%_220%] px-4 shadow-[0_12px_28px_-18px_rgba(52,7,9,0.92)] animate-topbar-flow">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_-30%,rgba(255,255,255,0.34),transparent_43%),radial-gradient(circle_at_86%_130%,rgba(255,255,255,0.18),transparent_46%)]" />
 
       <div className="relative flex w-[220px] shrink-0 items-center gap-3">
@@ -569,23 +569,23 @@ export function AppHeader() {
             >
               <MessageCircle className="h-4 w-4" />
               {chatUnreadCount > 0 ? (
-                <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[#920d14] bg-[#ffd3d6] px-1 text-[10px] font-semibold text-[#860d13]">
+                <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[#92630D] bg-[#FFF0D3] px-1 text-[10px] font-semibold text-[#865C0D]">
                   {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
                 </span>
               ) : null}
             </Button>
 
             {chatOpen ? (
-              <div className="absolute right-11 top-11 z-50 w-[360px] overflow-hidden rounded-2xl border border-[#f0c9cc] bg-white shadow-[0_28px_65px_-24px_rgba(77,9,14,0.58)]">
-                <div className="flex items-center justify-between border-b border-[#f4dadd] bg-[linear-gradient(120deg,#fff9fa,#fff2f3)] px-3 py-2.5">
+              <div className="absolute right-11 top-11 z-50 w-[360px] overflow-hidden rounded-2xl border border-[#F0E2C9] bg-white shadow-[0_28px_65px_-24px_rgba(77,9,14,0.58)]">
+                <div className="flex items-center justify-between border-b border-[#F4EBDA] bg-[linear-gradient(120deg,#FFFDF9,#FFFAF2)] px-3 py-2.5">
                   <div>
-                    <p className="text-sm font-semibold text-[#780d13]">Chats</p>
-                    <p className="text-xs text-[#a34a50]">{chatTitle}</p>
+                    <p className="text-sm font-semibold text-[#78530D]">Chats</p>
+                    <p className="text-xs text-[#A3844A]">{chatTitle}</p>
                   </div>
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 gap-1.5 px-2 text-xs text-[#9f131a] hover:bg-[#ffeef0]"
+                    className="h-8 gap-1.5 px-2 text-xs text-[#9F6E13] hover:bg-[#FFF9EE]"
                     onClick={() => void markAllChatRead()}
                   >
                     <CheckCheck className="h-3.5 w-3.5" />
@@ -612,8 +612,8 @@ export function AppHeader() {
                         <button
                           key={item.id}
                           className={cn(
-                            "w-full border-b border-[#f6e3e5] px-4 py-3 text-left transition-colors hover:bg-[#fff8f9]",
-                            !item.isRead && "bg-[#fff4f5]"
+                            "w-full border-b border-[#F6EFE3] px-4 py-3 text-left transition-colors hover:bg-[#FFFDF8]",
+                            !item.isRead && "bg-[#FFFBF4]"
                           )}
                           onClick={async () => {
                             await markNotificationRead(item.id);
@@ -623,7 +623,7 @@ export function AppHeader() {
                           }}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <p className={cn("text-sm", !item.isRead ? "font-semibold text-[#8f1218]" : "font-medium text-slate-700")}>
+                            <p className={cn("text-sm", !item.isRead ? "font-semibold text-[#8F6312]" : "font-medium text-slate-700")}>
                               {item.title}
                             </p>
                             <span className="shrink-0 text-[11px] text-slate-400">{formatRelative(item.createdAt)}</span>
@@ -652,23 +652,23 @@ export function AppHeader() {
         >
           <Bell className="h-4 w-4" />
           {unreadCount > 0 ? (
-            <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[#920d14] bg-[#ffd3d6] px-1 text-[10px] font-semibold text-[#860d13]">
+            <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[#92630D] bg-[#FFF0D3] px-1 text-[10px] font-semibold text-[#865C0D]">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           ) : null}
         </Button>
 
         {notificationsOpen ? (
-          <div className="absolute right-0 top-11 z-50 w-[360px] overflow-hidden rounded-2xl border border-[#f0c9cc] bg-white shadow-[0_28px_65px_-24px_rgba(77,9,14,0.58)]">
-            <div className="flex items-center justify-between border-b border-[#f4dadd] bg-[linear-gradient(120deg,#fff9fa,#fff2f3)] px-3 py-2.5">
+          <div className="absolute right-0 top-11 z-50 w-[360px] overflow-hidden rounded-2xl border border-[#F0E2C9] bg-white shadow-[0_28px_65px_-24px_rgba(77,9,14,0.58)]">
+            <div className="flex items-center justify-between border-b border-[#F4EBDA] bg-[linear-gradient(120deg,#FFFDF9,#FFFAF2)] px-3 py-2.5">
               <div>
-                <p className="text-sm font-semibold text-[#780d13]">Notifications</p>
-                <p className="text-xs text-[#a34a50]">{notificationTitle}</p>
+                <p className="text-sm font-semibold text-[#78530D]">Notifications</p>
+                <p className="text-xs text-[#A3844A]">{notificationTitle}</p>
               </div>
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 gap-1.5 px-2 text-xs text-[#9f131a] hover:bg-[#ffeef0]"
+                className="h-8 gap-1.5 px-2 text-xs text-[#9F6E13] hover:bg-[#FFF9EE]"
                 onClick={() => void markAllNotificationsRead()}
               >
                 <CheckCheck className="h-3.5 w-3.5" />
@@ -697,8 +697,8 @@ export function AppHeader() {
                     <button
                       key={item.id}
                       className={cn(
-                        "w-full border-b border-[#f6e3e5] px-4 py-3 text-left transition-colors hover:bg-[#fff8f9]",
-                        !item.isRead && "bg-[#fff4f5]"
+                        "w-full border-b border-[#F6EFE3] px-4 py-3 text-left transition-colors hover:bg-[#FFFDF8]",
+                        !item.isRead && "bg-[#FFFBF4]"
                       )}
                       onClick={async () => {
                         await markNotificationRead(item.id);
@@ -707,7 +707,7 @@ export function AppHeader() {
                       }}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <p className={cn("text-sm", !item.isRead ? "font-semibold text-[#8f1218]" : "font-medium text-slate-700")}>
+                        <p className={cn("text-sm", !item.isRead ? "font-semibold text-[#8F6312]" : "font-medium text-slate-700")}>
                           {item.title}
                         </p>
                         <span className="shrink-0 text-[11px] text-slate-400">{formatRelative(item.createdAt)}</span>
@@ -736,7 +736,7 @@ export function AppHeader() {
               <Activity className="h-4 w-4" />
               <span
                 className={cn(
-                  "absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border border-[#8a1318]",
+                  "absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border border-[#8A6013]",
                   workState === 1 && "bg-emerald-500",
                   workState === 2 && "bg-amber-500",
                   workState === 0 && "bg-slate-500"
@@ -744,10 +744,10 @@ export function AppHeader() {
               />
             </Button>
             {statusOpen ? (
-              <div className="absolute right-0 top-11 z-50 w-44 overflow-hidden rounded-xl border border-[#f0c9cc] bg-white shadow-[0_28px_65px_-24px_rgba(77,9,14,0.58)]">
-                <div className="border-b border-[#f4dadd] bg-[linear-gradient(120deg,#fff9fa,#fff2f3)] px-3 py-2">
-                  <p className="text-sm font-semibold text-[#780d13]">Work Status</p>
-                  <p className="text-xs text-[#a34a50]">{statusLoading ? "Loading..." : workStateLabel}</p>
+              <div className="absolute right-0 top-11 z-50 w-44 overflow-hidden rounded-xl border border-[#F0E2C9] bg-white shadow-[0_28px_65px_-24px_rgba(77,9,14,0.58)]">
+                <div className="border-b border-[#F4EBDA] bg-[linear-gradient(120deg,#FFFDF9,#FFFAF2)] px-3 py-2">
+                  <p className="text-sm font-semibold text-[#78530D]">Work Status</p>
+                  <p className="text-xs text-[#A3844A]">{statusLoading ? "Loading..." : workStateLabel}</p>
                 </div>
                 <div className="p-1.5">
                   <button
@@ -757,7 +757,7 @@ export function AppHeader() {
                       void updateWorkStatus(1);
                       setStatusOpen(false);
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-[#fff4f5] disabled:opacity-60"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-[#FFFBF4] disabled:opacity-60"
                   >
                     <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                     Online
@@ -769,7 +769,7 @@ export function AppHeader() {
                       void updateWorkStatus(2);
                       setStatusOpen(false);
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-[#fff4f5] disabled:opacity-60"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-[#FFFBF4] disabled:opacity-60"
                   >
                     <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
                     Away
@@ -781,7 +781,7 @@ export function AppHeader() {
                       void updateWorkStatus(0);
                       setStatusOpen(false);
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-[#fff4f5] disabled:opacity-60"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-[#FFFBF4] disabled:opacity-60"
                   >
                     <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
                     Offline
@@ -797,7 +797,7 @@ export function AppHeader() {
           <DropdownMenuTrigger className="group flex cursor-pointer items-center gap-2 rounded-xl border border-white/16 bg-white/10 px-2.5 py-1.5 outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-[1px] hover:border-white/30 hover:bg-white/18">
             <Avatar className="h-8 w-8 ring-1 ring-white/35">
               <AvatarImage src={localPhotoUrl ?? user?.photoUrl ?? undefined} />
-              <AvatarFallback className="bg-[linear-gradient(145deg,#fff8f8,#ffdadd)] text-xs font-semibold text-[#b31118]">
+              <AvatarFallback className="bg-[linear-gradient(145deg,#FFFDF8,#FFF2DA)] text-xs font-semibold text-[#B37A11]">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -805,7 +805,7 @@ export function AppHeader() {
               {user?.name}
             </span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52 rounded-xl border border-[#f2c6c9] shadow-[0_18px_42px_-24px_rgba(80,12,17,0.55)]">
+          <DropdownMenuContent align="end" className="w-52 rounded-xl border border-[#F2E3C6] shadow-[0_18px_42px_-24px_rgba(80,12,17,0.55)]">
             {canAdministration ? (
               <DropdownMenuItem onClick={() => router.push("/administration")}>
                 <Settings className="h-4 w-4" />
@@ -902,7 +902,7 @@ export function AppHeader() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={changingPassword} className="bg-[#FE0000] text-white hover:bg-[#d90000]">
+              <Button type="submit" disabled={changingPassword} className="bg-[#AA8038] text-white hover:bg-[#D98D00]">
                 {changingPassword ? (
                   <>
                     <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -959,8 +959,8 @@ export function AppHeader() {
               {twoFactorError ? <p className="text-sm text-red-600">{twoFactorError}</p> : null}
 
               {twoFactorSetup ? (
-                <div className="space-y-3 rounded-lg border border-[#f1d2d4] bg-[#fff8f8] p-3">
-                  <p className="text-sm font-medium text-[#8f1218]">Setup details</p>
+                <div className="space-y-3 rounded-lg border border-[#F1E6D2] bg-[#FFFDF8] p-3">
+                  <p className="text-sm font-medium text-[#8F6312]">Setup details</p>
                   {twoFactorSetup.otpAuthUri ? (
                     <div className="flex flex-col items-center gap-2">
                       <img
@@ -1038,7 +1038,7 @@ export function AppHeader() {
             ) : (
               <Button
                 type="button"
-                className="bg-[#FE0000] text-white hover:bg-[#d90000]"
+                className="bg-[#AA8038] text-white hover:bg-[#D98D00]"
                 disabled={twoFactorSaving || twoFactorLoading}
                 onClick={() => void onTwoFactorAction("enable")}
               >
@@ -1075,7 +1075,7 @@ export function AppHeader() {
                       {(profileForm.name || user?.name || "U")[0]?.toUpperCase()}
                     </div>
                   )}
-                  <label htmlFor="profile-photo-upload" className="absolute bottom-0 right-0 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-[#FE0000] text-white shadow-md hover:bg-[#d90000]">
+                  <label htmlFor="profile-photo-upload" className="absolute bottom-0 right-0 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-[#AA8038] text-white shadow-md hover:bg-[#D98D00]">
                     <Camera className="h-3.5 w-3.5" />
                   </label>
                   <input
@@ -1115,7 +1115,7 @@ export function AppHeader() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setProfileOpen(false)}>Cancel</Button>
-            <Button className="bg-[#FE0000] text-white hover:bg-[#d90000]" disabled={profileSaving || profileLoading} onClick={() => void saveProfile()}>
+            <Button className="bg-[#AA8038] text-white hover:bg-[#D98D00]" disabled={profileSaving || profileLoading} onClick={() => void saveProfile()}>
               {profileSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
               Save Changes
             </Button>

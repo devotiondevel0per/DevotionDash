@@ -266,7 +266,7 @@ function ToolbarButton({ onClick, disabled, title, children, className }: Toolba
       size="icon"
       variant="ghost"
       className={cn(
-        "h-7 w-7 text-slate-600 hover:bg-[#FE0000]/10 hover:text-[#c70000]",
+        "h-7 w-7 text-slate-600 hover:bg-[#AA8038]/10 hover:text-[#C78100]",
         className
       )}
       onClick={onClick}
@@ -416,14 +416,14 @@ export function RichTextEditor({
           onClick={toggleSourceMode}
           disabled={disabled}
           title={isSourceMode ? "Switch to editor mode" : "Switch to HTML/source mode"}
-          className={cn("w-auto px-2 text-[10px] font-semibold", isSourceMode && "bg-[#FE0000]/10 text-[#c70000]")}
+          className={cn("w-auto px-2 text-[10px] font-semibold", isSourceMode && "bg-[#AA8038]/10 text-[#C78100]")}
         >
           HTML
         </ToolbarButton>
         <span className="mx-0.5 h-5 w-px bg-slate-200" />
 
         <select
-          className="h-7 rounded border bg-white px-2 text-xs text-slate-700 outline-none focus:border-[#FE0000]/40 focus:ring-1 focus:ring-[#FE0000]/20"
+          className="h-7 rounded border bg-white px-2 text-xs text-slate-700 outline-none focus:border-[#AA8038]/40 focus:ring-1 focus:ring-[#AA8038]/20"
           defaultValue="p"
           onChange={(event) => runCommand("formatBlock", event.currentTarget.value)}
           disabled={disabled || isSourceMode}

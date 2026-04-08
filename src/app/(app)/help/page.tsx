@@ -59,7 +59,7 @@ export default function HelpPage() {
       <div className="border-b bg-white">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-5 py-5 sm:px-6">
           <div className="flex items-start gap-3">
-            <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FE0000]/10 text-[#FE0000]">
+            <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#AA8038]/10 text-[#AA8038]">
               <LifeBuoy className="h-5 w-5" />
             </div>
             <div>
@@ -155,7 +155,7 @@ export default function HelpPage() {
                   <div className="flex items-center gap-3">
                     <Link
                       href={`/help/${topic.id}`}
-                      className="inline-flex items-center gap-1 text-sm font-medium text-[#b00715] hover:text-[#91000f]"
+                      className="inline-flex items-center gap-1 text-sm font-medium text-[#B07507] hover:text-[#915E00]"
                     >
                       {topic.type === "tutorial" ? (
                         <GraduationCap className="h-4 w-4" />

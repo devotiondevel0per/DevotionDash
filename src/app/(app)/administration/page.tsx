@@ -235,7 +235,7 @@ const EMPTY_WIDGET_FORM: LiveChatWidgetForm = {
   brandLabel: "Chat with us",
   logoUrl: "",
   welcomeText: "Hi! How can we help you today?",
-  accentColor: "#FE0000",
+  accentColor: "#AA8038",
   position: "right",
   allowDomains: "",
 };
@@ -282,7 +282,7 @@ const EMPTY_TICKET_WIDGET_FORM: TicketWidgetForm = {
   name: "",
   brandLabel: "Support",
   welcomeText: "Hi! How can we help you today?",
-  accentColor: "#B02B2C",
+  accentColor: "#B0812B",
   position: "right",
   defaultGroupId: "",
   allowDomains: "",
@@ -293,7 +293,7 @@ type TelExtension = { id: string; number: string; userId: string | null; isActiv
 type TelBlacklist = { id: string; number: string; reason: string | null; createdAt: string };
 
 const moduleLabels: Record<ModuleId, string> = { home: "Home", tasks: "Tasks", projects: "Projects", documents: "Documents", email: "E-Mail", board: "Board", leads: "Leads", clients: "Organizations", contacts: "Contacts", team: "Team", calendar: "Calendar", chat: "Chat", livechat: "Live Chat", servicedesk: "Ticket Desk", products: "Products", accounting: "Accounting", ebank: "e-Bank", telephony: "Telephony", search: "Search", help: "Help", administration: "Administration" };
-const DEFAULT_SETTINGS: SettingsForm = { appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, supportEmail: "", defaultTimezone: "UTC", themePrimary: "#FE0000", sidebarFrom: "#6e0d14", sidebarMid: "#560d14", sidebarTo: "#45111a", topbarFrom: "#670b11", topbarMid: "#8e0c14", topbarTo: "#bf101a", topbarAccent: "#FE0000", aiModel: "qwen2.5:7b" };
+const DEFAULT_SETTINGS: SettingsForm = { appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, supportEmail: "", defaultTimezone: "UTC", themePrimary: "#AA8038", sidebarFrom: "#6E4C0D", sidebarMid: "#563C0D", sidebarTo: "#453311", topbarFrom: "#67470B", topbarMid: "#8E610C", topbarTo: "#BF8210", topbarAccent: "#AA8038", aiModel: "qwen2.5:7b" };
 const DEFAULT_LEAD_STAGE_FLOW = ["new", "qualified", "proposal", "negotiation", "won"];
 const DEFAULT_LEAD_SOURCE_OPTIONS = ["Website", "Referral", "Cold Call", "Social Media", "Campaign", "Partner"];
 const DEFAULT_LEAD_FORM_FIELDS: LeadConfigField[] = [
@@ -453,15 +453,15 @@ function stageToLabel(value: string) {
 
 function applyRuntimeTheme(form: SettingsForm, logoUrl?: string) {
   const root = document.documentElement;
-  root.style.setProperty("--primary", normalizeHex(form.themePrimary, "#FE0000"));
-  root.style.setProperty("--ring", normalizeHex(form.themePrimary, "#FE0000"));
-  root.style.setProperty("--twx-sidebar-from", normalizeHex(form.sidebarFrom, "#6e0d14"));
-  root.style.setProperty("--twx-sidebar-mid", normalizeHex(form.sidebarMid, "#560d14"));
-  root.style.setProperty("--twx-sidebar-to", normalizeHex(form.sidebarTo, "#45111a"));
-  root.style.setProperty("--twx-topbar-from", normalizeHex(form.topbarFrom, "#670b11"));
-  root.style.setProperty("--twx-topbar-mid", normalizeHex(form.topbarMid, "#8e0c14"));
-  root.style.setProperty("--twx-topbar-to", normalizeHex(form.topbarTo, "#bf101a"));
-  root.style.setProperty("--twx-topbar-accent", normalizeHex(form.topbarAccent, "#FE0000"));
+  root.style.setProperty("--primary", normalizeHex(form.themePrimary, "#AA8038"));
+  root.style.setProperty("--ring", normalizeHex(form.themePrimary, "#AA8038"));
+  root.style.setProperty("--twx-sidebar-from", normalizeHex(form.sidebarFrom, "#6E4C0D"));
+  root.style.setProperty("--twx-sidebar-mid", normalizeHex(form.sidebarMid, "#563C0D"));
+  root.style.setProperty("--twx-sidebar-to", normalizeHex(form.sidebarTo, "#453311"));
+  root.style.setProperty("--twx-topbar-from", normalizeHex(form.topbarFrom, "#67470B"));
+  root.style.setProperty("--twx-topbar-mid", normalizeHex(form.topbarMid, "#8E610C"));
+  root.style.setProperty("--twx-topbar-to", normalizeHex(form.topbarTo, "#BF8210"));
+  root.style.setProperty("--twx-topbar-accent", normalizeHex(form.topbarAccent, "#AA8038"));
   const resolvedLogo = logoUrl ?? "";
   try {
     const existing = JSON.parse(window.localStorage.getItem(RUNTIME_SETTINGS_STORAGE_KEY) ?? "{}") as Record<string, string>;
@@ -1127,14 +1127,14 @@ export default function AdministrationPage() {
         "app.logo": appLogoUrl,
         "app.supportEmail": settingsForm.supportEmail.trim(),
         "system.defaultTimezone": settingsForm.defaultTimezone.trim() || "UTC",
-        "theme.primary": normalizeHex(settingsForm.themePrimary, "#FE0000"),
-        "theme.sidebar.from": normalizeHex(settingsForm.sidebarFrom, "#6e0d14"),
-        "theme.sidebar.mid": normalizeHex(settingsForm.sidebarMid, "#560d14"),
-        "theme.sidebar.to": normalizeHex(settingsForm.sidebarTo, "#45111a"),
-        "theme.topbar.from": normalizeHex(settingsForm.topbarFrom, "#670b11"),
-        "theme.topbar.mid": normalizeHex(settingsForm.topbarMid, "#8e0c14"),
-        "theme.topbar.to": normalizeHex(settingsForm.topbarTo, "#bf101a"),
-        "theme.topbar.accent": normalizeHex(settingsForm.topbarAccent, "#FE0000"),
+        "theme.primary": normalizeHex(settingsForm.themePrimary, "#AA8038"),
+        "theme.sidebar.from": normalizeHex(settingsForm.sidebarFrom, "#6E4C0D"),
+        "theme.sidebar.mid": normalizeHex(settingsForm.sidebarMid, "#563C0D"),
+        "theme.sidebar.to": normalizeHex(settingsForm.sidebarTo, "#453311"),
+        "theme.topbar.from": normalizeHex(settingsForm.topbarFrom, "#67470B"),
+        "theme.topbar.mid": normalizeHex(settingsForm.topbarMid, "#8E610C"),
+        "theme.topbar.to": normalizeHex(settingsForm.topbarTo, "#BF8210"),
+        "theme.topbar.accent": normalizeHex(settingsForm.topbarAccent, "#AA8038"),
         "ai.model": settingsForm.aiModel.trim() || "qwen2.5:7b",
       };
       const response = await fetch("/api/administration/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settings: settingsPayload }) });
@@ -1704,7 +1704,7 @@ export default function AdministrationPage() {
       <aside className="w-60 shrink-0 border-r bg-white p-3">
         <div className="mb-3 px-2"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Administration</p></div>
         {sectionItems.map((item) => (
-          <button key={item.id} onClick={() => setSection(item.id)} className={cn("mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm", section === item.id ? "bg-[#FE0000]/10 text-[#FE0000]" : "text-slate-600 hover:bg-slate-100")}><item.icon className="h-4 w-4" />{item.label}</button>
+          <button key={item.id} onClick={() => setSection(item.id)} className={cn("mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm", section === item.id ? "bg-[#AA8038]/10 text-[#AA8038]" : "text-slate-600 hover:bg-slate-100")}><item.icon className="h-4 w-4" />{item.label}</button>
         ))}
         <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => void fetchAll()}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Refresh</Button>
       </aside>
@@ -1724,7 +1724,7 @@ export default function AdministrationPage() {
                 <Card><CardContent className="p-4"><p className="text-xs text-slate-500">Roles</p><p className="text-2xl font-semibold">{roles.length}</p></CardContent></Card>
                 <Card><CardContent className="p-4"><p className="text-xs text-slate-500">Enabled Modules</p><p className="text-2xl font-semibold">{moduleToggles.filter((module) => module.enabled).length}</p></CardContent></Card>
               </div>
-              <Card><CardHeader><CardTitle className="flex items-center justify-between text-sm"><span className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#FE0000]" />AI Insight</span><Button size="sm" variant="outline" onClick={() => void generateInsight()} disabled={insightLoading}>{insightLoading ? "Analyzing..." : "Generate"}</Button></CardTitle></CardHeader><CardContent className="text-sm">{!insight ? <p className="text-slate-500">Generate AI governance summary for current state.</p> : <><p>{insight.summary}</p><p className="mt-2 text-xs text-slate-400">Generated: {formatDateTime(insight.generatedAt, timezone)} ({timezone})</p></>}</CardContent></Card>
+              <Card><CardHeader><CardTitle className="flex items-center justify-between text-sm"><span className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#AA8038]" />AI Insight</span><Button size="sm" variant="outline" onClick={() => void generateInsight()} disabled={insightLoading}>{insightLoading ? "Analyzing..." : "Generate"}</Button></CardTitle></CardHeader><CardContent className="text-sm">{!insight ? <p className="text-slate-500">Generate AI governance summary for current state.</p> : <><p>{insight.summary}</p><p className="mt-2 text-xs text-slate-400">Generated: {formatDateTime(insight.generatedAt, timezone)} ({timezone})</p></>}</CardContent></Card>
             </div>
           ) : null}
 
@@ -1824,57 +1824,57 @@ export default function AdministrationPage() {
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Primary Color</label>
                       <div className="flex gap-1.5">
-                        <input type="color" value={settingsForm.themePrimary || "#FE0000"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, themePrimary: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
-                        <Input value={settingsForm.themePrimary} onChange={(e) => setSettingsForm((prev) => ({ ...prev, themePrimary: e.target.value }))} placeholder="#FE0000" className="font-mono text-xs" />
+                        <input type="color" value={settingsForm.themePrimary || "#AA8038"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, themePrimary: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
+                        <Input value={settingsForm.themePrimary} onChange={(e) => setSettingsForm((prev) => ({ ...prev, themePrimary: e.target.value }))} placeholder="#AA8038" className="font-mono text-xs" />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Sidebar From</label>
                       <div className="flex gap-1.5">
-                        <input type="color" value={settingsForm.sidebarFrom || "#7b0d12"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarFrom: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
-                        <Input value={settingsForm.sidebarFrom} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarFrom: e.target.value }))} placeholder="#7b0d12" className="font-mono text-xs" />
+                        <input type="color" value={settingsForm.sidebarFrom || "#7B550D"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarFrom: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
+                        <Input value={settingsForm.sidebarFrom} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarFrom: e.target.value }))} placeholder="#7B550D" className="font-mono text-xs" />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Sidebar Mid</label>
                       <div className="flex gap-1.5">
-                        <input type="color" value={settingsForm.sidebarMid || "#9b111e"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarMid: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
-                        <Input value={settingsForm.sidebarMid} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarMid: e.target.value }))} placeholder="#9b111e" className="font-mono text-xs" />
+                        <input type="color" value={settingsForm.sidebarMid || "#9B6B11"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarMid: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
+                        <Input value={settingsForm.sidebarMid} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarMid: e.target.value }))} placeholder="#9B6B11" className="font-mono text-xs" />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Sidebar To</label>
                       <div className="flex gap-1.5">
-                        <input type="color" value={settingsForm.sidebarTo || "#6b0c10"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarTo: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
-                        <Input value={settingsForm.sidebarTo} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarTo: e.target.value }))} placeholder="#6b0c10" className="font-mono text-xs" />
+                        <input type="color" value={settingsForm.sidebarTo || "#6B4A0C"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarTo: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
+                        <Input value={settingsForm.sidebarTo} onChange={(e) => setSettingsForm((prev) => ({ ...prev, sidebarTo: e.target.value }))} placeholder="#6B4A0C" className="font-mono text-xs" />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Topbar From</label>
                       <div className="flex gap-1.5">
-                        <input type="color" value={settingsForm.topbarFrom || "#c0121a"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarFrom: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
-                        <Input value={settingsForm.topbarFrom} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarFrom: e.target.value }))} placeholder="#c0121a" className="font-mono text-xs" />
+                        <input type="color" value={settingsForm.topbarFrom || "#C08312"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarFrom: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
+                        <Input value={settingsForm.topbarFrom} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarFrom: e.target.value }))} placeholder="#C08312" className="font-mono text-xs" />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Topbar Mid</label>
                       <div className="flex gap-1.5">
-                        <input type="color" value={settingsForm.topbarMid || "#a50e15"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarMid: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
-                        <Input value={settingsForm.topbarMid} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarMid: e.target.value }))} placeholder="#a50e15" className="font-mono text-xs" />
+                        <input type="color" value={settingsForm.topbarMid || "#A5700E"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarMid: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
+                        <Input value={settingsForm.topbarMid} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarMid: e.target.value }))} placeholder="#A5700E" className="font-mono text-xs" />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Topbar To</label>
                       <div className="flex gap-1.5">
-                        <input type="color" value={settingsForm.topbarTo || "#8b0c12"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarTo: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
-                        <Input value={settingsForm.topbarTo} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarTo: e.target.value }))} placeholder="#8b0c12" className="font-mono text-xs" />
+                        <input type="color" value={settingsForm.topbarTo || "#8B5F0C"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarTo: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
+                        <Input value={settingsForm.topbarTo} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarTo: e.target.value }))} placeholder="#8B5F0C" className="font-mono text-xs" />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">Topbar Accent</label>
                       <div className="flex gap-1.5">
-                        <input type="color" value={settingsForm.topbarAccent || "#ff4d55"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarAccent: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
-                        <Input value={settingsForm.topbarAccent} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarAccent: e.target.value }))} placeholder="#ff4d55" className="font-mono text-xs" />
+                        <input type="color" value={settingsForm.topbarAccent || "#FFC14D"} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarAccent: e.target.value }))} className="h-9 w-10 cursor-pointer rounded border p-0.5" />
+                        <Input value={settingsForm.topbarAccent} onChange={(e) => setSettingsForm((prev) => ({ ...prev, topbarAccent: e.target.value }))} placeholder="#FFC14D" className="font-mono text-xs" />
                       </div>
                     </div>
                   </div>
@@ -2196,7 +2196,7 @@ export default function AdministrationPage() {
 
                   {/* Add new custom field form */}
                   {newCustomField.open && (
-                    <div className="rounded-lg border-2 border-dashed border-[#FE0000]/30 bg-red-50/30 p-3 space-y-2">
+                    <div className="rounded-lg border-2 border-dashed border-[#AA8038]/30 bg-red-50/30 p-3 space-y-2">
                       <p className="text-xs font-semibold text-slate-700">New Custom Field</p>
                       <div className="flex flex-wrap gap-2">
                         <select
@@ -2249,7 +2249,7 @@ export default function AdministrationPage() {
                       <div className="flex gap-2 pt-1">
                         <Button
                           size="sm"
-                          className="bg-[#FE0000] text-white hover:bg-[#d90000]"
+                          className="bg-[#AA8038] text-white hover:bg-[#D98D00]"
                           onClick={() => {
                             const label = newCustomField.label.trim();
                             if (!label) { setError("Field label is required"); return; }
@@ -2307,7 +2307,7 @@ export default function AdministrationPage() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Workflow Stages</h2>
-                <Button onClick={() => void saveWorkflowConfig()} disabled={!canManage || savingWorkflow} className="bg-[#FE0000] text-white hover:bg-[#cc0000]">
+                <Button onClick={() => void saveWorkflowConfig()} disabled={!canManage || savingWorkflow} className="bg-[#AA8038] text-white hover:bg-[#CC8500]">
                   {savingWorkflow ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Save Changes
                 </Button>
@@ -2316,7 +2316,7 @@ export default function AdministrationPage() {
               <div className="flex gap-2 border-b">
                 {(["tasks", "servicedesk", "projectTasks"] as const).map((m) => (
                   <button key={m} onClick={() => setActiveWorkflowModule(m)}
-                    className={cn("px-4 py-2 text-sm border-b-2 -mb-px", activeWorkflowModule === m ? "border-[#FE0000] text-[#FE0000] font-medium" : "border-transparent text-slate-600 hover:text-slate-900")}>
+                    className={cn("px-4 py-2 text-sm border-b-2 -mb-px", activeWorkflowModule === m ? "border-[#AA8038] text-[#AA8038] font-medium" : "border-transparent text-slate-600 hover:text-slate-900")}>
                     {m === "tasks" ? "Tasks" : m === "servicedesk" ? "Ticket Desk" : "Project Tasks"}
                   </button>
                 ))}
@@ -2354,7 +2354,7 @@ export default function AdministrationPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-sm">
-                    <MessageSquare className="h-4 w-4 text-[#FE0000]" />
+                    <MessageSquare className="h-4 w-4 text-[#AA8038]" />
                     Automation Settings
                   </CardTitle>
                   <p className="text-xs text-slate-500">Routing strategy, load limits, AI, translator, and auto-close behaviour.</p>
@@ -2421,7 +2421,7 @@ export default function AdministrationPage() {
                     </div>
                   )}
                   <div className="mt-4">
-                    <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d40000]" onClick={() => void saveLcAutomation()} disabled={lcAutomationSaving || !canManage}>
+                    <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D48A00]" onClick={() => void saveLcAutomation()} disabled={lcAutomationSaving || !canManage}>
                       {lcAutomationSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
                       Save Automation Settings
                     </Button>
@@ -2435,13 +2435,13 @@ export default function AdministrationPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <CardTitle className="flex items-center gap-2 text-sm">
-                        <Globe className="h-4 w-4 text-[#FE0000]" />
+                        <Globe className="h-4 w-4 text-[#AA8038]" />
                         Chat Widgets
                       </CardTitle>
                       <p className="text-xs text-slate-500 mt-0.5">One widget per website. Each has its own token, branding, and domain allowlist.</p>
                     </div>
                     {canManage ? (
-                      <Button size="sm" className="h-8 bg-[#FE0000] text-white hover:bg-[#d40000]" onClick={() => { setLcWidgetEditing(null); setLcWidgetForm(EMPTY_WIDGET_FORM); setLcWidgetDialogOpen(true); }}>
+                      <Button size="sm" className="h-8 bg-[#AA8038] text-white hover:bg-[#D48A00]" onClick={() => { setLcWidgetEditing(null); setLcWidgetForm(EMPTY_WIDGET_FORM); setLcWidgetDialogOpen(true); }}>
                         <Plus className="mr-1 h-3.5 w-3.5" />Add Widget
                       </Button>
                     ) : null}
@@ -2586,13 +2586,13 @@ export default function AdministrationPage() {
                         value={lcWidgetForm.allowDomains}
                         onChange={(e) => setLcWidgetForm((p) => ({ ...p, allowDomains: e.target.value }))}
                         placeholder={"example.com\n*.example.com\nlocalhost"}
-                        className="w-full resize-none rounded-md border px-3 py-2 font-mono text-xs outline-none focus:ring-1 focus:ring-[#FE0000]/30"
+                        className="w-full resize-none rounded-md border px-3 py-2 font-mono text-xs outline-none focus:ring-1 focus:ring-[#AA8038]/30"
                       />
                     </div>
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setLcWidgetDialogOpen(false)} disabled={lcWidgetSaving}>Cancel</Button>
-                    <Button className="bg-[#FE0000] text-white hover:bg-[#d40000]" onClick={() => void saveLcWidget()} disabled={lcWidgetSaving || !lcWidgetForm.name.trim()}>
+                    <Button className="bg-[#AA8038] text-white hover:bg-[#D48A00]" onClick={() => void saveLcWidget()} disabled={lcWidgetSaving || !lcWidgetForm.name.trim()}>
                       {lcWidgetSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                       {lcWidgetEditing ? "Save Changes" : "Create Widget"}
                     </Button>
@@ -2647,7 +2647,7 @@ export default function AdministrationPage() {
                         key={user.id}
                         className={cn(
                           "mb-1 w-full rounded-md border px-3 py-2 text-left",
-                          selectedUserId === user.id ? "border-[#FE0000]/20 bg-[#FE0000]/10" : "hover:bg-slate-50"
+                          selectedUserId === user.id ? "border-[#AA8038]/20 bg-[#AA8038]/10" : "hover:bg-slate-50"
                         )}
                       >
                         <button
@@ -3070,7 +3070,7 @@ export default function AdministrationPage() {
           ) : null}
 
           {section === "roles" ? (
-            <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="text-sm">Roles</CardTitle></CardHeader><CardContent className="space-y-1">{roles.map((role) => (<button key={role.id} onClick={() => { setSelectedRoleId(role.id); setRoleName(role.name); setRoleColor(role.color); setRolePermissions(clonePermissions(role.permissions)); }} className={cn("w-full rounded-md border px-3 py-2 text-left", selectedRoleId === role.id ? "border-[#FE0000]/30 bg-[#FE0000]/10" : "hover:bg-slate-50")}><p className="text-sm font-medium">{role.name}</p><p className="text-xs text-slate-500">{role.memberCount} members</p></button>))}</CardContent></Card><Card><CardHeader><CardTitle className="text-sm">Role Editor</CardTitle></CardHeader><CardContent className="space-y-3"><Input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="Role name" /><Input value={roleColor} onChange={(e) => setRoleColor(e.target.value)} placeholder="#3B4A61" /><div className="max-h-64 overflow-auto border"><Table><TableHeader><TableRow><TableHead>Module</TableHead><TableHead>R</TableHead><TableHead>W</TableHead><TableHead>M</TableHead></TableRow></TableHeader><TableBody>{moduleIds.map((moduleId) => (<TableRow key={`role-${moduleId}`}><TableCell className="text-xs">{moduleLabels[moduleId]}</TableCell>{actions.map((action) => (<TableCell key={`role-${moduleId}-${action}`}><input type="checkbox" checked={(rolePermissions[moduleId] ?? []).includes(action)} disabled={!canManage} onChange={(e) => { const next = clonePermissions(rolePermissions); applyAction(next, moduleId, action, e.target.checked); setRolePermissions(next); }} /></TableCell>))}</TableRow>))}</TableBody></Table></div><div className="flex gap-2"><Button size="sm" onClick={() => void createRole()} disabled={!canManage || saving}>Create</Button><Button size="sm" variant="outline" onClick={() => void updateRole()} disabled={!canManage || saving || !selectedRoleId}>Update</Button><Button size="sm" variant="destructive" onClick={() => void deleteRole()} disabled={!canManage || saving || !selectedRoleId}>Delete</Button></div></CardContent></Card></div>
+            <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="text-sm">Roles</CardTitle></CardHeader><CardContent className="space-y-1">{roles.map((role) => (<button key={role.id} onClick={() => { setSelectedRoleId(role.id); setRoleName(role.name); setRoleColor(role.color); setRolePermissions(clonePermissions(role.permissions)); }} className={cn("w-full rounded-md border px-3 py-2 text-left", selectedRoleId === role.id ? "border-[#AA8038]/30 bg-[#AA8038]/10" : "hover:bg-slate-50")}><p className="text-sm font-medium">{role.name}</p><p className="text-xs text-slate-500">{role.memberCount} members</p></button>))}</CardContent></Card><Card><CardHeader><CardTitle className="text-sm">Role Editor</CardTitle></CardHeader><CardContent className="space-y-3"><Input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="Role name" /><Input value={roleColor} onChange={(e) => setRoleColor(e.target.value)} placeholder="#3B4A61" /><div className="max-h-64 overflow-auto border"><Table><TableHeader><TableRow><TableHead>Module</TableHead><TableHead>R</TableHead><TableHead>W</TableHead><TableHead>M</TableHead></TableRow></TableHeader><TableBody>{moduleIds.map((moduleId) => (<TableRow key={`role-${moduleId}`}><TableCell className="text-xs">{moduleLabels[moduleId]}</TableCell>{actions.map((action) => (<TableCell key={`role-${moduleId}-${action}`}><input type="checkbox" checked={(rolePermissions[moduleId] ?? []).includes(action)} disabled={!canManage} onChange={(e) => { const next = clonePermissions(rolePermissions); applyAction(next, moduleId, action, e.target.checked); setRolePermissions(next); }} /></TableCell>))}</TableRow>))}</TableBody></Table></div><div className="flex gap-2"><Button size="sm" onClick={() => void createRole()} disabled={!canManage || saving}>Create</Button><Button size="sm" variant="outline" onClick={() => void updateRole()} disabled={!canManage || saving || !selectedRoleId}>Update</Button><Button size="sm" variant="destructive" onClick={() => void deleteRole()} disabled={!canManage || saving || !selectedRoleId}>Delete</Button></div></CardContent></Card></div>
           ) : null}
 
           {section === "security" ? (
@@ -3240,7 +3240,7 @@ export default function AdministrationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm">
-                    <Server className="h-4 w-4 text-[#FE0000]" />
+                    <Server className="h-4 w-4 text-[#AA8038]" />
                     Deployment Status
                   </CardTitle>
                 </CardHeader>
@@ -3423,7 +3423,7 @@ export default function AdministrationPage() {
               </div>
               <div className="flex gap-1 border-b pb-0">
                 {(["providers", "extensions", "blacklist", "guide"] as const).map((tab) => (
-                  <button key={tab} onClick={() => setTelTab(tab)} className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors", telTab === tab ? "border-[#FE0000] text-[#FE0000]" : "border-transparent text-slate-500 hover:text-slate-800")}>
+                  <button key={tab} onClick={() => setTelTab(tab)} className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors", telTab === tab ? "border-[#AA8038] text-[#AA8038]" : "border-transparent text-slate-500 hover:text-slate-800")}>
                     {tab === "providers" ? "Providers" : tab === "extensions" ? "Extensions" : tab === "blacklist" ? "Blacklist" : "3CX Setup Guide"}
                   </button>
                 ))}
@@ -3440,7 +3440,7 @@ export default function AdministrationPage() {
                         <div className="flex items-center justify-between">
                           <p className="text-xs text-slate-500">{providers.length} provider{providers.length !== 1 ? "s" : ""} configured</p>
                           {canManage && (
-                            <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={() => {
+                            <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={() => {
                               setSelectedProvider(null);
                               setProviderForm({ name: "", providerType: "generic", host: "", port: 5060, username: "", password: "", transport: "UDP", fromDomain: "", callerIdName: "", callerIdNum: "", isActive: true, isDefault: false, notes: "" });
                               setShowProviderPassword(false);
@@ -3457,7 +3457,7 @@ export default function AdministrationPage() {
                             {providers.map((p) => {
                               const typeColors: Record<string, string> = { "3cx": "bg-blue-100 text-blue-700", asterisk: "bg-orange-100 text-orange-700", freepbx: "bg-purple-100 text-purple-700", twilio: "bg-red-100 text-red-700", vonage: "bg-indigo-100 text-indigo-700", ringcentral: "bg-emerald-100 text-emerald-700", generic: "bg-slate-100 text-slate-600" };
                               return (
-                                <Card key={p.id} className={cn("cursor-pointer transition-colors hover:bg-slate-50", selectedProvider?.id === p.id && "border-[#FE0000]/30 bg-[#FE0000]/5")} onClick={() => {
+                                <Card key={p.id} className={cn("cursor-pointer transition-colors hover:bg-slate-50", selectedProvider?.id === p.id && "border-[#AA8038]/30 bg-[#AA8038]/5")} onClick={() => {
                                   setSelectedProvider(p);
                                   setProviderForm({ name: p.name, providerType: p.providerType, host: p.host, port: p.port, username: p.username, password: p.password, transport: p.transport, fromDomain: p.fromDomain ?? "", callerIdName: p.callerIdName ?? "", callerIdNum: p.callerIdNum ?? "", isActive: p.isActive, isDefault: p.isDefault, notes: p.notes ?? "" });
                                   setShowProviderPassword(false);
@@ -3579,7 +3579,7 @@ export default function AdministrationPage() {
                             )}
                             <div className="flex items-center gap-2 pt-1">
                               {canManage && (
-                                <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" disabled={providerSaving || !providerForm.name.trim() || !providerForm.host.trim() || !providerForm.username.trim() || !providerForm.password.trim()} onClick={async () => {
+                                <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]" disabled={providerSaving || !providerForm.name.trim() || !providerForm.host.trim() || !providerForm.username.trim() || !providerForm.password.trim()} onClick={async () => {
                                   setProviderSaving(true);
                                   try {
                                     const url = selectedProvider ? `/api/telephony/providers/${selectedProvider.id}` : "/api/telephony/providers";
@@ -3627,7 +3627,7 @@ export default function AdministrationPage() {
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-slate-500">{extensions.length} extension{extensions.length !== 1 ? "s" : ""} configured</p>
                         {canManage && (
-                          <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={() => { setExtForm({ number: "", userId: "", password: "", isActive: true }); setExtFormOpen(true); }}>
+                          <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={() => { setExtForm({ number: "", userId: "", password: "", isActive: true }); setExtFormOpen(true); }}>
                             <Plus className="mr-1.5 h-3.5 w-3.5" />Add Extension
                           </Button>
                         )}
@@ -3706,7 +3706,7 @@ export default function AdministrationPage() {
                           </div>
                           <DialogFooter>
                             <Button variant="outline" size="sm" onClick={() => setExtFormOpen(false)}>Cancel</Button>
-                            <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" disabled={extSaving || !extForm.number.trim() || !extForm.password.trim()} onClick={async () => {
+                            <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]" disabled={extSaving || !extForm.number.trim() || !extForm.password.trim()} onClick={async () => {
                               setExtSaving(true);
                               try {
                                 const res = await fetch("/api/telephony/extensions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ number: extForm.number.trim(), userId: extForm.userId || undefined, password: extForm.password.trim(), isActive: extForm.isActive }) });
@@ -3740,7 +3740,7 @@ export default function AdministrationPage() {
                                 <Label className="text-xs">Reason (optional)</Label>
                                 <Input value={blReason} onChange={(e) => setBlReason(e.target.value)} placeholder="Spam caller" />
                               </div>
-                              <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" disabled={blSaving || !blNumber.trim()} onClick={async () => {
+                              <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]" disabled={blSaving || !blNumber.trim()} onClick={async () => {
                                 setBlSaving(true);
                                 try {
                                   const res = await fetch("/api/telephony/blacklist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ number: blNumber.trim(), reason: blReason.trim() || undefined }) });
@@ -3857,7 +3857,7 @@ export default function AdministrationPage() {
         <h2 className="text-sm font-semibold text-slate-800">Tenant Management</h2>
         <p className="text-xs text-slate-500">Manage subscriber tenants, plans, and billing.</p>
       </div>
-      <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={() => { setTenantForm(EMPTY_TENANT_FORM); setCreateTenantOpen(true); }}>
+      <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={() => { setTenantForm(EMPTY_TENANT_FORM); setCreateTenantOpen(true); }}>
         <Plus className="mr-1.5 h-3.5 w-3.5" />New Tenant
       </Button>
     </div>
@@ -3871,7 +3871,7 @@ export default function AdministrationPage() {
         {tenants.map((tenant) => {
           const statusColor = tenant.status === "active" ? "text-emerald-700 bg-emerald-100 border-emerald-200" : tenant.status === "trial" ? "text-blue-700 bg-blue-100 border-blue-200" : tenant.status === "suspended" ? "text-amber-700 bg-amber-100 border-amber-200" : "text-slate-600 bg-slate-100 border-slate-200";
           return (
-            <Card key={tenant.id} className={cn("cursor-pointer transition-colors hover:bg-slate-50", selectedTenant?.id === tenant.id && "border-[#FE0000]/30 bg-[#FE0000]/5")} onClick={() => setSelectedTenant(selectedTenant?.id === tenant.id ? null : tenant)}>
+            <Card key={tenant.id} className={cn("cursor-pointer transition-colors hover:bg-slate-50", selectedTenant?.id === tenant.id && "border-[#AA8038]/30 bg-[#AA8038]/5")} onClick={() => setSelectedTenant(selectedTenant?.id === tenant.id ? null : tenant)}>
               <CardContent className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
@@ -3989,7 +3989,7 @@ export default function AdministrationPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" disabled={tenantSaving} onClick={async () => {
+                      <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]" disabled={tenantSaving} onClick={async () => {
                         if (!selectedTenant) return;
                         setTenantSaving(true);
                         try {
@@ -4103,7 +4103,7 @@ export default function AdministrationPage() {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setCreateTenantOpen(false)}>Cancel</Button>
-          <Button className="bg-[#FE0000] text-white hover:bg-[#d90000]" disabled={tenantSaving || !tenantForm.name || !tenantForm.slug || !tenantForm.defaultDomain || !tenantForm.databaseUrl || !tenantForm.adminEmail} onClick={async () => {
+          <Button className="bg-[#AA8038] text-white hover:bg-[#D98D00]" disabled={tenantSaving || !tenantForm.name || !tenantForm.slug || !tenantForm.defaultDomain || !tenantForm.databaseUrl || !tenantForm.adminEmail} onClick={async () => {
             setTenantSaving(true);
             try {
               const r = await fetch("/api/platform/tenants", {
@@ -4141,7 +4141,7 @@ export default function AdministrationPage() {
                   <h2 className="text-sm font-semibold text-slate-800">Ticket Widgets</h2>
                   <p className="text-xs text-slate-500">Embed a support widget on any website. Each widget has its own token and configuration.</p>
                 </div>
-                <Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d90000]" onClick={() => { setWidgetForm(EMPTY_TICKET_WIDGET_FORM); setEditingTicketWidgetId(null); setCreateWidgetOpen(true); }}>
+                <Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D98D00]" onClick={() => { setWidgetForm(EMPTY_TICKET_WIDGET_FORM); setEditingTicketWidgetId(null); setCreateWidgetOpen(true); }}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" />New Widget
                 </Button>
               </div>
@@ -4290,7 +4290,7 @@ export default function AdministrationPage() {
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setCreateWidgetOpen(false)} disabled={widgetSaving}>Cancel</Button>
                     <Button
-                      className="bg-[#FE0000] text-white hover:bg-[#d90000]"
+                      className="bg-[#AA8038] text-white hover:bg-[#D98D00]"
                       disabled={widgetSaving || !widgetForm.name.trim()}
                       onClick={async () => {
                         setWidgetSaving(true);
@@ -4324,7 +4324,7 @@ export default function AdministrationPage() {
           ) : null}
 
           {section === "reports" ? (
-            <Card><CardHeader><CardTitle className="flex items-center justify-between text-sm"><span>Module Reports & Employee Review</span><div className="flex items-center gap-2"><select className="h-8 rounded-md border px-2 text-xs" value={reportDays} onChange={(e) => setReportDays(Number(e.target.value))}><option value={14}>Last 14 days</option><option value={30}>Last 30 days</option><option value={60}>Last 60 days</option><option value={90}>Last 90 days</option></select><Button size="sm" variant="outline" onClick={() => void loadReports()} disabled={reportsLoading}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />{reportsLoading ? "Loading..." : "Refresh"}</Button><Button size="sm" onClick={() => void loadReports(true)} disabled={reportsInsightLoading}><Sparkles className="mr-1.5 h-3.5 w-3.5" />{reportsInsightLoading ? "Analyzing..." : "AI Summary"}</Button></div></CardTitle></CardHeader><CardContent className="space-y-4">{!reports ? <p className="text-sm text-slate-500">Loading report data...</p> : <><div className="grid gap-3 sm:grid-cols-6"><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Users</p><p className="text-lg font-semibold">{reports.totals.users}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Active Users</p><p className="text-lg font-semibold">{reports.totals.activeUsers}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Unread Emails</p><p className="text-lg font-semibold">{reports.totals.unreadEmails}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Open Requests</p><p className="text-lg font-semibold">{reports.totals.openServiceRequests}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Sent Emails</p><p className="text-lg font-semibold">{reports.totals.sentEmails}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Audit Events</p><p className="text-lg font-semibold">{reports.totals.auditEvents}</p></CardContent></Card></div><p className="text-xs text-slate-500">Generated: {formatDateTime(reports.generatedAt, reports.timezone)} ({reports.timezone})</p><div className="overflow-auto rounded-md border"><Table><TableHeader><TableRow><TableHead>Module</TableHead><TableHead>Total</TableHead><TableHead>Recent</TableHead><TableHead>Backlog</TableHead><TableHead>Trend</TableHead></TableRow></TableHeader><TableBody>{reports.modules.map((moduleRow) => (<TableRow key={moduleRow.moduleId}><TableCell className="text-xs font-medium">{moduleRow.label}</TableCell><TableCell className="text-xs">{moduleRow.total}</TableCell><TableCell className="text-xs">{moduleRow.recent}</TableCell><TableCell className="text-xs">{moduleRow.backlog}</TableCell><TableCell className="text-xs"><Badge variant="outline" className={cn(moduleRow.trend === "up" && "border-emerald-300 text-emerald-700", moduleRow.trend === "down" && "border-amber-300 text-amber-700")}>{moduleRow.trend}</Badge></TableCell></TableRow>))}</TableBody></Table></div><div className="overflow-auto rounded-md border"><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Department</TableHead><TableHead>Score</TableHead><TableHead>Tasks</TableHead><TableHead>Tickets</TableHead><TableHead>Emails Sent</TableHead><TableHead>Last Activity</TableHead></TableRow></TableHeader><TableBody>{reports.employees.slice(0, 25).map((employee) => (<TableRow key={employee.userId}><TableCell className="text-xs"><div className="font-medium">{employee.name}</div><div className="text-[11px] text-slate-500">{employee.email}</div></TableCell><TableCell className="text-xs">{employee.department || "-"}</TableCell><TableCell className="text-xs"><Badge variant="outline" className={cn(employee.activityScore >= 75 && "border-emerald-300 text-emerald-700", employee.activityScore < 45 && "border-rose-300 text-rose-700")}>{employee.activityScore}</Badge></TableCell><TableCell className="text-xs">{employee.tasksCompleted}/{employee.tasksAssigned}{employee.tasksOverdue > 0 ? ` (${employee.tasksOverdue} overdue)` : ""}</TableCell><TableCell className="text-xs">{employee.ticketsClosed}/{employee.ticketsAssigned}</TableCell><TableCell className="text-xs">{employee.emailsSent}</TableCell><TableCell className="text-xs">{formatDateTime(employee.lastActivity, reports.timezone)}</TableCell></TableRow>))}</TableBody></Table></div>{reports.insight ? <Card className="border-[#FE0000]/20 bg-[#FE0000]/5"><CardHeader><CardTitle className="text-sm">AI Report Summary</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>{reports.insight.summary}</p>{reports.insight.highlights.length > 0 ? <div><p className="text-xs font-semibold uppercase text-slate-500">Highlights</p><ul className="mt-1 space-y-1 text-xs text-slate-700">{reports.insight.highlights.map((item, idx) => (<li key={`h-${idx}`}>- {item}</li>))}</ul></div> : null}{reports.insight.risks.length > 0 ? <div><p className="text-xs font-semibold uppercase text-slate-500">Risks</p><ul className="mt-1 space-y-1 text-xs text-slate-700">{reports.insight.risks.map((item, idx) => (<li key={`r-${idx}`}>- {item}</li>))}</ul></div> : null}{reports.insight.actions.length > 0 ? <div><p className="text-xs font-semibold uppercase text-slate-500">Actions</p><ul className="mt-1 space-y-1 text-xs text-slate-700">{reports.insight.actions.map((item, idx) => (<li key={`a-${idx}`}>- {item}</li>))}</ul></div> : null}</CardContent></Card> : null}</>}</CardContent></Card>
+            <Card><CardHeader><CardTitle className="flex items-center justify-between text-sm"><span>Module Reports & Employee Review</span><div className="flex items-center gap-2"><select className="h-8 rounded-md border px-2 text-xs" value={reportDays} onChange={(e) => setReportDays(Number(e.target.value))}><option value={14}>Last 14 days</option><option value={30}>Last 30 days</option><option value={60}>Last 60 days</option><option value={90}>Last 90 days</option></select><Button size="sm" variant="outline" onClick={() => void loadReports()} disabled={reportsLoading}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />{reportsLoading ? "Loading..." : "Refresh"}</Button><Button size="sm" onClick={() => void loadReports(true)} disabled={reportsInsightLoading}><Sparkles className="mr-1.5 h-3.5 w-3.5" />{reportsInsightLoading ? "Analyzing..." : "AI Summary"}</Button></div></CardTitle></CardHeader><CardContent className="space-y-4">{!reports ? <p className="text-sm text-slate-500">Loading report data...</p> : <><div className="grid gap-3 sm:grid-cols-6"><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Users</p><p className="text-lg font-semibold">{reports.totals.users}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Active Users</p><p className="text-lg font-semibold">{reports.totals.activeUsers}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Unread Emails</p><p className="text-lg font-semibold">{reports.totals.unreadEmails}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Open Requests</p><p className="text-lg font-semibold">{reports.totals.openServiceRequests}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Sent Emails</p><p className="text-lg font-semibold">{reports.totals.sentEmails}</p></CardContent></Card><Card><CardContent className="p-3"><p className="text-[11px] text-slate-500">Audit Events</p><p className="text-lg font-semibold">{reports.totals.auditEvents}</p></CardContent></Card></div><p className="text-xs text-slate-500">Generated: {formatDateTime(reports.generatedAt, reports.timezone)} ({reports.timezone})</p><div className="overflow-auto rounded-md border"><Table><TableHeader><TableRow><TableHead>Module</TableHead><TableHead>Total</TableHead><TableHead>Recent</TableHead><TableHead>Backlog</TableHead><TableHead>Trend</TableHead></TableRow></TableHeader><TableBody>{reports.modules.map((moduleRow) => (<TableRow key={moduleRow.moduleId}><TableCell className="text-xs font-medium">{moduleRow.label}</TableCell><TableCell className="text-xs">{moduleRow.total}</TableCell><TableCell className="text-xs">{moduleRow.recent}</TableCell><TableCell className="text-xs">{moduleRow.backlog}</TableCell><TableCell className="text-xs"><Badge variant="outline" className={cn(moduleRow.trend === "up" && "border-emerald-300 text-emerald-700", moduleRow.trend === "down" && "border-amber-300 text-amber-700")}>{moduleRow.trend}</Badge></TableCell></TableRow>))}</TableBody></Table></div><div className="overflow-auto rounded-md border"><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Department</TableHead><TableHead>Score</TableHead><TableHead>Tasks</TableHead><TableHead>Tickets</TableHead><TableHead>Emails Sent</TableHead><TableHead>Last Activity</TableHead></TableRow></TableHeader><TableBody>{reports.employees.slice(0, 25).map((employee) => (<TableRow key={employee.userId}><TableCell className="text-xs"><div className="font-medium">{employee.name}</div><div className="text-[11px] text-slate-500">{employee.email}</div></TableCell><TableCell className="text-xs">{employee.department || "-"}</TableCell><TableCell className="text-xs"><Badge variant="outline" className={cn(employee.activityScore >= 75 && "border-emerald-300 text-emerald-700", employee.activityScore < 45 && "border-rose-300 text-rose-700")}>{employee.activityScore}</Badge></TableCell><TableCell className="text-xs">{employee.tasksCompleted}/{employee.tasksAssigned}{employee.tasksOverdue > 0 ? ` (${employee.tasksOverdue} overdue)` : ""}</TableCell><TableCell className="text-xs">{employee.ticketsClosed}/{employee.ticketsAssigned}</TableCell><TableCell className="text-xs">{employee.emailsSent}</TableCell><TableCell className="text-xs">{formatDateTime(employee.lastActivity, reports.timezone)}</TableCell></TableRow>))}</TableBody></Table></div>{reports.insight ? <Card className="border-[#AA8038]/20 bg-[#AA8038]/5"><CardHeader><CardTitle className="text-sm">AI Report Summary</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>{reports.insight.summary}</p>{reports.insight.highlights.length > 0 ? <div><p className="text-xs font-semibold uppercase text-slate-500">Highlights</p><ul className="mt-1 space-y-1 text-xs text-slate-700">{reports.insight.highlights.map((item, idx) => (<li key={`h-${idx}`}>- {item}</li>))}</ul></div> : null}{reports.insight.risks.length > 0 ? <div><p className="text-xs font-semibold uppercase text-slate-500">Risks</p><ul className="mt-1 space-y-1 text-xs text-slate-700">{reports.insight.risks.map((item, idx) => (<li key={`r-${idx}`}>- {item}</li>))}</ul></div> : null}{reports.insight.actions.length > 0 ? <div><p className="text-xs font-semibold uppercase text-slate-500">Actions</p><ul className="mt-1 space-y-1 text-xs text-slate-700">{reports.insight.actions.map((item, idx) => (<li key={`a-${idx}`}>- {item}</li>))}</ul></div> : null}</CardContent></Card> : null}</>}</CardContent></Card>
           ) : null}
 
           {section === "logs" ? (
@@ -4336,7 +4336,7 @@ export default function AdministrationPage() {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-[#FE0000]" />
+                <Building2 className="h-4 w-4 text-[#AA8038]" />
                 Department Management
               </DialogTitle>
             </DialogHeader>
@@ -4454,7 +4454,7 @@ export default function AdministrationPage() {
               </Button>
               <Button
                 type="button"
-                style={{ backgroundColor: "#FE0000", color: "#fff" }}
+                style={{ backgroundColor: "#AA8038", color: "#fff" }}
                 onClick={() => void saveDepartments()}
                 disabled={!canManage || departmentSaving}
               >
@@ -4647,7 +4647,7 @@ export default function AdministrationPage() {
               </Button>
               <Button
                 type="button"
-                style={{ backgroundColor: "#FE0000", color: "#fff" }}
+                style={{ backgroundColor: "#AA8038", color: "#fff" }}
                 onClick={() => void createUser()}
                 disabled={
                   !canManage ||
@@ -4714,7 +4714,7 @@ export default function AdministrationPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setEmailConfigOpen(false)}>Cancel</Button>
-              <Button onClick={() => void saveUserEmailConfig()} disabled={savingEmailConfig || !userEmailConfig} className="bg-[#FE0000] text-white hover:bg-[#cc0000]">
+              <Button onClick={() => void saveUserEmailConfig()} disabled={savingEmailConfig || !userEmailConfig} className="bg-[#AA8038] text-white hover:bg-[#CC8500]">
                 {savingEmailConfig ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Save Config
               </Button>

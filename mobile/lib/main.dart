@@ -21,7 +21,7 @@ class ZedDashApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
-    final branding = ref.watch(appBrandingProvider).valueOrNull ??
+    final branding = ref.watch(appBrandingProvider).asData?.value ??
         AppBranding.fallback();
 
     // Start socket listener once logged in

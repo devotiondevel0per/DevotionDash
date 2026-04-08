@@ -158,7 +158,7 @@ export default function EBankPage() {
               className={cn(
                 "w-full text-left px-3 py-3 rounded-lg transition-colors",
                 activeAccount === account.id
-                  ? "bg-[#FE0000]/5 border border-[#FE0000]/30"
+                  ? "bg-[#AA8038]/5 border border-[#AA8038]/30"
                   : "hover:bg-gray-50 border border-transparent"
               )}
             >
@@ -197,7 +197,7 @@ export default function EBankPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="border-b bg-white px-6 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Button size="sm" className="bg-[#FE0000] hover:bg-[#cc0000] text-white" onClick={openNewAccount}>
+            <Button size="sm" className="bg-[#AA8038] hover:bg-[#CC8500] text-white" onClick={openNewAccount}>
               <Plus className="h-4 w-4 mr-1" />New Account
             </Button>
             <Button size="sm" variant="outline">
@@ -357,7 +357,7 @@ export default function EBankPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-[#FE0000] hover:bg-[#cc0000] text-white" onClick={() => void saveAccount()} disabled={saving || !accForm.name.trim() || !accForm.accountNumber.trim()}>
+            <Button className="bg-[#AA8038] hover:bg-[#CC8500] text-white" onClick={() => void saveAccount()} disabled={saving || !accForm.name.trim() || !accForm.accountNumber.trim()}>
               {saving ? "Creating..." : "Create Account"}
             </Button>
           </DialogFooter>

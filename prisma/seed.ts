@@ -9,8 +9,8 @@ async function main() {
 
   await prisma.user.upsert({
     where: { login: "admin" },
-    update: { email: "admin@zeddash.local", password, name: "Admin", surname: "User", fullname: "Admin User", isAdmin: true, isActive: true },
-    create: { login: "admin", email: "admin@zeddash.local", password, name: "Admin", surname: "User", fullname: "Admin User", isAdmin: true, isActive: true },
+    update: { email: "admin@devotionbusiness.com", password, name: "Admin", surname: "User", fullname: "Admin User", isAdmin: true, isActive: true },
+    create: { login: "admin", email: "admin@devotionbusiness.com", password, name: "Admin", surname: "User", fullname: "Admin User", isAdmin: true, isActive: true },
   });
 
   for (const [key, value] of [

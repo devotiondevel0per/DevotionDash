@@ -131,7 +131,7 @@ function PopupContent() {
   return (
     <div className="flex h-screen flex-col bg-white text-slate-900">
       {/* Header */}
-      <header className="flex items-center justify-between border-b bg-[#FE0000] px-3 py-2 text-white">
+      <header className="flex items-center justify-between border-b bg-[#AA8038] px-3 py-2 text-white">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{dialog.subject}</p>
           <p className="text-[11px] text-white/80">
@@ -204,7 +204,7 @@ function PopupContent() {
             <div className="flex flex-col gap-1">
               <Button
                 size="sm"
-                className="h-8 bg-[#FE0000] text-white hover:bg-[#d90000] px-3"
+                className="h-8 bg-[#AA8038] text-white hover:bg-[#D98D00] px-3"
                 disabled={sending || !composerText.trim()}
                 onClick={() => void sendMessage()}
               >

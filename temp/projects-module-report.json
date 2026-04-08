@@ -1,0 +1,337 @@
+{
+  "generatedAt": "2026-03-30T18:01:53.988Z",
+  "baseUrl": "http://209.192.167.118:3000",
+  "actors": [
+    {
+      "actor": "admin",
+      "login": "admin",
+      "userId": "cmmtkxxrc00005u5xrk21prg3",
+      "isAdmin": true,
+      "projectsPermission": {
+        "read": true,
+        "write": true,
+        "manage": true
+      }
+    },
+    {
+      "actor": "manager",
+      "login": "qa_manager",
+      "userId": "cmndhbhnq000lkh70rgsz3u3h",
+      "isAdmin": false,
+      "projectsPermission": {
+        "read": false,
+        "write": false,
+        "manage": false
+      }
+    },
+    {
+      "actor": "user",
+      "login": "qa_user",
+      "userId": "cmndhbk4u000xkh70t58ufiup",
+      "isAdmin": false,
+      "projectsPermission": {
+        "read": true,
+        "write": true,
+        "manage": false
+      }
+    }
+  ],
+  "steps": [
+    {
+      "actor": "admin",
+      "step": "projects-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Projects list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Project created (cmndhvrx6003zdwutxgmsm9mq)."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Project detail loaded."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-update-manager-only",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Project updated by project manager."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-phase-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Phase created."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-member-add",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Member added."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-task-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Project task created."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-task-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Project task updated."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-task-delete",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Project task deleted."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-phase-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Phase updated."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-phase-delete",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Phase deleted."
+    },
+    {
+      "actor": "admin",
+      "step": "projects-member-remove",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Member removed."
+    },
+    {
+      "actor": "manager",
+      "step": "projects-list",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Projects list correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "projects-create",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Project create correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "projects-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Projects list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "projects-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Project created (cmndhvvw80049dwut3tki8y8y)."
+    },
+    {
+      "actor": "user",
+      "step": "projects-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Project detail loaded."
+    },
+    {
+      "actor": "user",
+      "step": "projects-update-manager-only",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Project updated by project manager."
+    },
+    {
+      "actor": "user",
+      "step": "projects-phase-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Phase created."
+    },
+    {
+      "actor": "user",
+      "step": "projects-member-add",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Member added."
+    },
+    {
+      "actor": "user",
+      "step": "projects-task-create",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Project task created."
+    },
+    {
+      "actor": "user",
+      "step": "projects-task-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Project task updated."
+    },
+    {
+      "actor": "user",
+      "step": "projects-task-delete",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Project task deleted."
+    },
+    {
+      "actor": "user",
+      "step": "projects-phase-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Phase updated."
+    },
+    {
+      "actor": "user",
+      "step": "projects-phase-delete",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Phase deleted."
+    },
+    {
+      "actor": "user",
+      "step": "projects-member-remove",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Member removed."
+    },
+    {
+      "actor": "cross-role",
+      "step": "admin-create-project-A",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Project A created (cmndhvzdf004jdwuthyyozaab)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-read-project-before-membership",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "User blocked before membership."
+    },
+    {
+      "actor": "cross-role",
+      "step": "admin-add-user-member",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "User added as project member."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-read-project-after-membership",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "User can read project after membership."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-update-project-manager-only",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "User blocked from manager-only project update."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-create-phase-manager-only",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "User blocked from manager-only phase create."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-create-project-task-as-member",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "User created project task as member."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-delete-project-task-as-member",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "User deleted project task as member."
+    },
+    {
+      "actor": "cross-role",
+      "step": "admin-create-project-B",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Project B created (cmndhw1hb004rdwutuj9sqdow)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "user-list-excludes-non-member-project",
+      "expected": "project B hidden",
+      "status": 200,
+      "outcome": "pass",
+      "details": "User list excludes non-member project."
+    },
+    {
+      "actor": "cross-role",
+      "step": "manager-module-block-even-if-member",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager blocked by module permissions."
+    }
+  ]
+}

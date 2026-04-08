@@ -211,7 +211,7 @@ const RATING_BADGE: Record<string, string> = {
 };
 
 const AVATAR_COLORS = [
-  "bg-[#FE0000]/10 text-[#FE0000]",
+  "bg-[#AA8038]/10 text-[#AA8038]",
   "bg-blue-100 text-blue-700",
   "bg-green-100 text-green-700",
   "bg-orange-100 text-orange-700",
@@ -548,7 +548,7 @@ function OrganizationFormDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
-          <Button className="bg-[#FE0000] text-white hover:bg-[#d70000]" onClick={() => void save()} disabled={saving || !form.name.trim()}>
+          <Button className="bg-[#AA8038] text-white hover:bg-[#D78C00]" onClick={() => void save()} disabled={saving || !form.name.trim()}>
             {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
             {isEdit ? "Save Changes" : "Create Organization"}
           </Button>
@@ -711,10 +711,10 @@ function OrganizationDetailView({
       <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
         <div className="border-b bg-white px-6">
           <TabsList className="h-10 rounded-none border-none bg-transparent p-0">
-            <TabsTrigger value="overview" className="h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-[#FE0000] data-[state=active]:bg-transparent data-[state=active]:text-[#FE0000]">Overview</TabsTrigger>
-            <TabsTrigger value="contacts" className="h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-[#FE0000] data-[state=active]:bg-transparent data-[state=active]:text-[#FE0000]">Contacts</TabsTrigger>
-            <TabsTrigger value="timeline" className="h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-[#FE0000] data-[state=active]:bg-transparent data-[state=active]:text-[#FE0000]">Timeline</TabsTrigger>
-            <TabsTrigger value="insights" onClick={() => { if (!insights) void refreshInsights(); }} className="h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-[#FE0000] data-[state=active]:bg-transparent data-[state=active]:text-[#FE0000]">AI Insights</TabsTrigger>
+            <TabsTrigger value="overview" className="h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-[#AA8038] data-[state=active]:bg-transparent data-[state=active]:text-[#AA8038]">Overview</TabsTrigger>
+            <TabsTrigger value="contacts" className="h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-[#AA8038] data-[state=active]:bg-transparent data-[state=active]:text-[#AA8038]">Contacts</TabsTrigger>
+            <TabsTrigger value="timeline" className="h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-[#AA8038] data-[state=active]:bg-transparent data-[state=active]:text-[#AA8038]">Timeline</TabsTrigger>
+            <TabsTrigger value="insights" onClick={() => { if (!insights) void refreshInsights(); }} className="h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-[#AA8038] data-[state=active]:bg-transparent data-[state=active]:text-[#AA8038]">AI Insights</TabsTrigger>
           </TabsList>
         </div>
 
@@ -724,7 +724,7 @@ function OrganizationDetailView({
             <div className="space-y-2 text-sm text-gray-700">
               {organization.email ? <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-gray-400" />{organization.email}</div> : null}
               {organization.phone ? <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-gray-400" />{organization.phone}</div> : null}
-              {organization.website ? <div className="flex items-center gap-2"><Search className="h-4 w-4 text-gray-400" /><a href={organization.website.startsWith("http") ? organization.website : `https://${organization.website}`} target="_blank" rel="noreferrer" className="text-[#FE0000] hover:underline">{organization.website}</a></div> : null}
+              {organization.website ? <div className="flex items-center gap-2"><Search className="h-4 w-4 text-gray-400" /><a href={organization.website.startsWith("http") ? organization.website : `https://${organization.website}`} target="_blank" rel="noreferrer" className="text-[#AA8038] hover:underline">{organization.website}</a></div> : null}
               {(organization.city || organization.country) ? <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-gray-400" />{[organization.city, organization.country].filter(Boolean).join(", ")}</div> : null}
             </div>
           </div>
@@ -768,7 +768,7 @@ function OrganizationDetailView({
           {canWrite ? (
             <div className="border-b bg-white px-5 py-4">
               <Textarea rows={2} value={newNote} onChange={(event) => setNewNote(event.target.value)} placeholder="Add timeline note..." className="resize-none" onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void addHistoryNote(); }} />
-              <div className="mt-2 flex justify-end"><Button size="sm" className="bg-[#FE0000] text-white hover:bg-[#d70000]" onClick={() => void addHistoryNote()} disabled={addingNote || !newNote.trim()}>{addingNote ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Add Note</Button></div>
+              <div className="mt-2 flex justify-end"><Button size="sm" className="bg-[#AA8038] text-white hover:bg-[#D78C00]" onClick={() => void addHistoryNote()} disabled={addingNote || !newNote.trim()}>{addingNote ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Add Note</Button></div>
             </div>
           ) : null}
 
@@ -776,8 +776,8 @@ function OrganizationDetailView({
             {historyLoading ? <Skeleton className="h-12 w-full" /> : null}
             {history.length === 0 ? <div className="rounded-xl border border-dashed bg-white py-12 text-center text-gray-500">No timeline entries yet.</div> : history.map((entry) => (
               <div key={entry.id} className="flex gap-2.5">
-                <div className={cn("mt-0.5 h-6 w-6 shrink-0 rounded-full flex items-center justify-center", entry.isSystem ? "bg-gray-100" : "bg-[#FE0000]/10")}>
-                  {entry.isSystem ? <AlertCircle className="h-3.5 w-3.5 text-gray-500" /> : <UserCircle className="h-3.5 w-3.5 text-[#FE0000]" />}
+                <div className={cn("mt-0.5 h-6 w-6 shrink-0 rounded-full flex items-center justify-center", entry.isSystem ? "bg-gray-100" : "bg-[#AA8038]/10")}>
+                  {entry.isSystem ? <AlertCircle className="h-3.5 w-3.5 text-gray-500" /> : <UserCircle className="h-3.5 w-3.5 text-[#AA8038]" />}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm text-gray-700">{entry.content}</p>
@@ -791,7 +791,7 @@ function OrganizationDetailView({
         <TabsContent value="insights" className="mt-0 flex-1 overflow-y-auto p-5 bg-gray-50">
           <div className="rounded-xl border border-red-100 bg-red-50/40 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[#b00000]"><Sparkles className="h-4 w-4" />AI Insights</div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#B07200]"><Sparkles className="h-4 w-4" />AI Insights</div>
               <Button size="sm" variant="outline" onClick={() => void refreshInsights()}>{insightsLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Refresh</Button>
             </div>
             {insightsLoading ? <div className="space-y-2"><Skeleton className="h-4 w-4/5" /><Skeleton className="h-4 w-2/3" /></div> : null}
@@ -925,7 +925,7 @@ export default function ClientsPage() {
           </div>
           <div className="flex-1 space-y-1 overflow-y-auto p-2">
             {sidebar.map((item) => (
-              <button key={item.id} onClick={() => setActiveType(item.id)} className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm", activeType === item.id ? "bg-red-50 text-[#FE0000]" : "text-gray-600 hover:bg-gray-100")}>
+              <button key={item.id} onClick={() => setActiveType(item.id)} className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm", activeType === item.id ? "bg-red-50 text-[#AA8038]" : "text-gray-600 hover:bg-gray-100")}>
                 <span>{item.label}</span>
                 <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{item.count}</span>
               </button>
@@ -959,7 +959,7 @@ export default function ClientsPage() {
         </div>
         <div className="flex-1 space-y-1 overflow-y-auto p-2">
           {sidebar.map((item) => (
-            <button key={item.id} onClick={() => setActiveType(item.id)} className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm", activeType === item.id ? "bg-red-50 text-[#FE0000]" : "text-gray-600 hover:bg-gray-100")}>
+            <button key={item.id} onClick={() => setActiveType(item.id)} className={cn("flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm", activeType === item.id ? "bg-red-50 text-[#AA8038]" : "text-gray-600 hover:bg-gray-100")}>
               <span>{item.label}</span>
               <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{item.count}</span>
             </button>
@@ -969,7 +969,7 @@ export default function ClientsPage() {
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b bg-white px-6 py-5">
-          <div className="rounded-2xl bg-gradient-to-r from-[#FE0000] via-[#d50000] to-[#8c0000] p-5 text-white shadow-md">
+          <div className="rounded-2xl bg-gradient-to-r from-[#AA8038] via-[#D58A00] to-[#8C5B00] p-5 text-white shadow-md">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-semibold">Organization Command Center</h1>
@@ -978,7 +978,7 @@ export default function ClientsPage() {
               <div className="flex items-center gap-2">
                 <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => void loadOrganizations()}><RefreshCw className="mr-1.5 h-4 w-4" />Refresh</Button>
                 <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" onClick={() => exportCSV(visibleOrganizations)}><Download className="mr-1.5 h-4 w-4" />Export</Button>
-                {canWrite ? <Button className="bg-white text-[#b40000] hover:bg-red-50" onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New Organization</Button> : null}
+                {canWrite ? <Button className="bg-white text-[#B47500] hover:bg-red-50" onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New Organization</Button> : null}
               </div>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -994,7 +994,7 @@ export default function ClientsPage() {
             <Select value={status} onValueChange={(value) => setStatus(value ?? "all")}><SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All status</SelectItem>{STATUS_ITEMS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
             <Select value={rating} onValueChange={(value) => setRating(value ?? "all")}><SelectTrigger className="h-9 w-[130px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All rating</SelectItem>{RATING_ITEMS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
             <Select value={sort} onValueChange={(value) => setSort(value ?? "recent")}><SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="recent">Latest update</SelectItem><SelectItem value="name">Name A-Z</SelectItem><SelectItem value="created">Recently created</SelectItem><SelectItem value="rating">By rating</SelectItem></SelectContent></Select>
-            <Button variant={mineOnly ? "default" : "outline"} onClick={() => setMineOnly((prev) => !prev)} className={mineOnly ? "h-9 bg-[#FE0000] text-white hover:bg-[#d70000]" : "h-9"}><Star className="mr-1.5 h-4 w-4" />My Accounts</Button>
+            <Button variant={mineOnly ? "default" : "outline"} onClick={() => setMineOnly((prev) => !prev)} className={mineOnly ? "h-9 bg-[#AA8038] text-white hover:bg-[#D78C00]" : "h-9"}><Star className="mr-1.5 h-4 w-4" />My Accounts</Button>
           </div>
         </div>
 
@@ -1003,7 +1003,7 @@ export default function ClientsPage() {
             visibleOrganizations.length === 0 ? <div className="rounded-2xl border border-dashed bg-white py-16 text-center text-gray-500"><Building2 className="mx-auto mb-2 h-10 w-10 opacity-30" />No organizations matched your filters.</div> :
             <div className="space-y-2">
               {visibleOrganizations.map((organization) => (
-                <button key={organization.id} onClick={() => setSelectedOrganizationId(organization.id)} className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-[#FE0000]/30 hover:shadow-md">
+                <button key={organization.id} onClick={() => setSelectedOrganizationId(organization.id)} className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-[#AA8038]/30 hover:shadow-md">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <Avatar className="h-10 w-10"><AvatarFallback className={cn("text-xs font-semibold", avatarColor(organization.name))}>{initials(organization.name)}</AvatarFallback></Avatar>

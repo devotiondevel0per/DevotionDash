@@ -1,0 +1,441 @@
+{
+  "generatedAt": "2026-03-30T23:41:41.881Z",
+  "baseUrl": "http://209.192.167.118:3000",
+  "actors": [
+    {
+      "actor": "admin",
+      "login": "admin",
+      "userId": "cmmtkxxrc00005u5xrk21prg3",
+      "isAdmin": true,
+      "chatPermission": {
+        "read": true,
+        "write": true,
+        "manage": true
+      }
+    },
+    {
+      "actor": "manager",
+      "login": "qa_manager",
+      "userId": "cmndhbhnq000lkh70rgsz3u3h",
+      "isAdmin": false,
+      "chatPermission": {
+        "read": true,
+        "write": true,
+        "manage": false
+      }
+    },
+    {
+      "actor": "user",
+      "login": "qa_user",
+      "userId": "cmndhbk4u000xkh70t58ufiup",
+      "isAdmin": false,
+      "chatPermission": {
+        "read": true,
+        "write": true,
+        "manage": false
+      }
+    }
+  ],
+  "steps": [
+    {
+      "actor": "admin",
+      "step": "chat-users",
+      "expected": "200 without self",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Users endpoint excludes self."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-groups-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Groups list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-groups-manage-gate",
+      "expected": "400 (manage passed; missing name)",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Manage endpoint reachable; validation executed."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-dialogs-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialogs list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-dialogs-dedupe",
+      "expected": "no duplicate direct keys",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog list dedupe is working."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-dm-create",
+      "expected": "200/201 with dialog id",
+      "status": 200,
+      "outcome": "pass",
+      "details": "DM available (cmndip5an007udwut8x2aocvk)."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-dm-find-existing",
+      "expected": "200 with same dialog id",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Direct dialog dedupe works."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-dialog-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog detail accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-messages-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Messages list accessible."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-send-text",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Text message sent (cmndu0rjt000jmp5xak7dik2m)."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-send-attachment",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Attachment message sent."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-dialog-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog update succeeded."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-dialog-invalid-status",
+      "expected": "400",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Invalid status correctly rejected."
+    },
+    {
+      "actor": "admin",
+      "step": "chat-message-delete-manage",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Manage message delete succeeded."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-users",
+      "expected": "200 without self",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Users endpoint excludes self."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-groups-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Groups list accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-groups-manage-gate",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manage endpoint correctly blocked."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-dialogs-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialogs list accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-dialogs-dedupe",
+      "expected": "no duplicate direct keys",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog list dedupe is working."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-dm-create",
+      "expected": "200/201 with dialog id",
+      "status": 200,
+      "outcome": "pass",
+      "details": "DM available (cmndip6h90081dwutznoe433z)."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-dm-find-existing",
+      "expected": "200 with same dialog id",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Direct dialog dedupe works."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-dialog-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog detail accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-messages-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Messages list accessible."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-send-text",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Text message sent (cmndu0v80000pmp5xjl434ee2)."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-send-attachment",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Attachment message sent."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-dialog-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog update succeeded."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-dialog-invalid-status",
+      "expected": "400",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Invalid status correctly rejected."
+    },
+    {
+      "actor": "manager",
+      "step": "chat-message-delete-manage",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Non-manage delete correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "chat-users",
+      "expected": "200 without self",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Users endpoint excludes self."
+    },
+    {
+      "actor": "user",
+      "step": "chat-groups-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Groups list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "chat-groups-manage-gate",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manage endpoint correctly blocked."
+    },
+    {
+      "actor": "user",
+      "step": "chat-dialogs-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialogs list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "chat-dialogs-dedupe",
+      "expected": "no duplicate direct keys",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog list dedupe is working."
+    },
+    {
+      "actor": "user",
+      "step": "chat-dm-create",
+      "expected": "200/201 with dialog id",
+      "status": 201,
+      "outcome": "pass",
+      "details": "DM available (cmndu0xuv000ump5xxoietpz1)."
+    },
+    {
+      "actor": "user",
+      "step": "chat-dm-find-existing",
+      "expected": "200 with same dialog id",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Direct dialog dedupe works."
+    },
+    {
+      "actor": "user",
+      "step": "chat-dialog-detail",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog detail accessible."
+    },
+    {
+      "actor": "user",
+      "step": "chat-messages-list",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Messages list accessible."
+    },
+    {
+      "actor": "user",
+      "step": "chat-send-text",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Text message sent (cmndu0z1h000zmp5xt1zuyckr)."
+    },
+    {
+      "actor": "user",
+      "step": "chat-send-attachment",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Attachment message sent."
+    },
+    {
+      "actor": "user",
+      "step": "chat-dialog-update",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Dialog update succeeded."
+    },
+    {
+      "actor": "user",
+      "step": "chat-dialog-invalid-status",
+      "expected": "400",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Invalid status correctly rejected."
+    },
+    {
+      "actor": "user",
+      "step": "chat-message-delete-manage",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Non-manage delete correctly blocked."
+    },
+    {
+      "actor": "cross-role",
+      "step": "chat-self-dialog-block",
+      "expected": "400",
+      "status": 400,
+      "outcome": "pass",
+      "details": "Self-only dialog creation is blocked."
+    },
+    {
+      "actor": "cross-role",
+      "step": "chat-admin-user-dm",
+      "expected": "200/201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Admin-user DM available (cmndu10qo0014mp5x89kzs9s6)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "chat-manager-cannot-read-foreign-dm",
+      "expected": "403",
+      "status": 403,
+      "outcome": "pass",
+      "details": "Manager blocked from non-member dialog."
+    },
+    {
+      "actor": "cross-role",
+      "step": "chat-user-read-member-dm",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "User can read member dialog."
+    },
+    {
+      "actor": "cross-role",
+      "step": "chat-user-send-member-dm",
+      "expected": "201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "User can send message in member dialog."
+    },
+    {
+      "actor": "cross-role",
+      "step": "chat-manager-user-dm",
+      "expected": "200/201",
+      "status": 201,
+      "outcome": "pass",
+      "details": "Manager-user DM available (cmndu11wx001bmp5x1pae4q1y)."
+    },
+    {
+      "actor": "cross-role",
+      "step": "chat-manager-close-dm",
+      "expected": "200",
+      "status": 200,
+      "outcome": "pass",
+      "details": "Manager can update member dialog status."
+    },
+    {
+      "actor": "cross-role",
+      "step": "chat-admin-delete-missing-message",
+      "expected": "404",
+      "status": 404,
+      "outcome": "pass",
+      "details": "Admin delete on missing message returns 404."
+    }
+  ]
+}

@@ -25,6 +25,11 @@ function makeClient(dbUrl: string): PrismaClient {
   return new PrismaClient({
     datasources: { db: { url: dbUrl } },
     log: process.env.NODE_ENV === "development" ? ["error"] : ["error"],
+    transactionOptions: {
+      // Keep parity with platform client timeout settings.
+      maxWait: 10_000,
+      timeout: 120_000,
+    },
   });
 }
 
