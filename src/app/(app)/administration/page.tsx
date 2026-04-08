@@ -1417,8 +1417,33 @@ export default function AdministrationPage() {
       roleIds: Array.from(new Set(newUserForm.roleIds)),
     };
 
-    if (!payload.login || !payload.email || !payload.name || payload.password.length < 8) {
-      setError("Login, email, first name, and password (min 8 chars) are required.");
+    if (!payload.login || !payload.email || !payload.name || !payload.password) {
+      setError("Login, email, first name, and password are required.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9._-]{3,32}$/.test(payload.login)) {
+      setError("Login must be 3-32 characters and use letters, numbers, dot, underscore, or dash.");
+      return;
+    }
+    const minPasswordLength = Math.max(8, Number(securityForm.minPasswordLength || 8));
+    if (payload.password.length < minPasswordLength) {
+      setError(`Password must be at least ${minPasswordLength} characters.`);
+      return;
+    }
+    if (securityForm.requireUpper && !/[A-Z]/.test(payload.password)) {
+      setError("Password must include at least one uppercase letter.");
+      return;
+    }
+    if (securityForm.requireLower && !/[a-z]/.test(payload.password)) {
+      setError("Password must include at least one lowercase letter.");
+      return;
+    }
+    if (securityForm.requireNumber && !/[0-9]/.test(payload.password)) {
+      setError("Password must include at least one number.");
+      return;
+    }
+    if (securityForm.requireSymbol && !/[^a-zA-Z0-9]/.test(payload.password)) {
+      setError("Password must include at least one symbol.");
       return;
     }
 
@@ -4587,9 +4612,10 @@ export default function AdministrationPage() {
                     <Input
                       id="new-user-password"
                       type="text"
+                      autoComplete="new-password"
                       value={newUserForm.password}
                       onChange={(event) => setNewUserForm((prev) => ({ ...prev, password: event.target.value }))}
-                      placeholder="At least 8 characters"
+                      placeholder={`At least ${Math.max(8, Number(securityForm.minPasswordLength || 8))} characters`}
                     />
                     <Button
                       type="button"
@@ -4648,6 +4674,7 @@ export default function AdministrationPage() {
                   Administrator
                 </label>
               </div>
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
             </div>
 
             <DialogFooter>
@@ -4672,7 +4699,7 @@ export default function AdministrationPage() {
                   !newUserForm.login.trim() ||
                   !newUserForm.email.trim() ||
                   !newUserForm.name.trim() ||
-                  newUserForm.password.trim().length < 8
+                  newUserForm.password.trim().length < Math.max(8, Number(securityForm.minPasswordLength || 8))
                 }
               >
                 {createUserSaving ? "Creating..." : "Create User"}
