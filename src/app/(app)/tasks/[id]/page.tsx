@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/use-permissions";
+import { buildThreadTree, type ThreadNode } from "@/lib/task-comment-thread";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -60,6 +61,7 @@ type TaskAttachment = {
 
 type TaskComment = {
   id: string;
+  parentCommentId: string | null;
   content: string;
   createdAt: string;
   user: TaskUser;
@@ -174,38 +176,6 @@ function toText(value: string | null) {
     .replace(/&nbsp;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function buildReplyQuote(comment: TaskComment) {
-  const author = nameOf(comment.user);
-  const preview = toText(comment.content).slice(0, 220) || "Attachment";
-  return `<p><strong>Replying to ${escapeHtml(author)}:</strong></p><blockquote><p>${escapeHtml(preview)}</p></blockquote>`;
-}
-
-type TimelineEntry =
-  | { kind: "created"; at: string }
-  | { kind: "comment"; comment: TaskComment };
-
-function buildTimeline(task: TaskDetail): TimelineEntry[] {
-  const entries: TimelineEntry[] = [{ kind: "created", at: task.createdAt }];
-  for (const comment of task.comments) {
-    entries.push({ kind: "comment", comment });
-  }
-  entries.sort((a, b) => {
-    const aTime = a.kind === "created" ? a.at : a.comment.createdAt;
-    const bTime = b.kind === "created" ? b.at : b.comment.createdAt;
-    return new Date(aTime).getTime() - new Date(bTime).getTime();
-  });
-  return entries;
 }
 
 export default function TaskDetailPage() {
@@ -325,16 +295,18 @@ export default function TaskDetailPage() {
       toast.error("You can view this task, but commenting is disabled for your assignment");
       return;
     }
-    const content = replyToComment
-      ? `${buildReplyQuote(replyToComment)}${normalizedContent}`
-      : normalizedContent;
+    const content = normalizedContent;
 
     setPosting(true);
     try {
       const res = await fetch(`/api/tasks/${id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, allowEmpty: hasFiles }),
+        body: JSON.stringify({
+          content,
+          allowEmpty: hasFiles,
+          parentCommentId: replyToComment?.id ?? null,
+        }),
       });
       const data = (await res.json().catch(() => null)) as TaskComment | { error?: string } | null;
       if (!res.ok || !data || "error" in data) {
@@ -446,7 +418,7 @@ export default function TaskDetailPage() {
   const isClosed = stages.find((s) => s.key === task.status)?.isClosed ?? false;
   const priorityMeta = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
-  const timeline = buildTimeline(task);
+  const commentTree = useMemo(() => buildThreadTree(task.comments), [task.comments]);
   const canEditConversation = task.type === "note" && canWrite;
   const canComment =
     task.canComment ??
@@ -460,6 +432,141 @@ export default function TaskDetailPage() {
     0
   );
   const totalAttachmentCount = task.attachments.length + commentAttachmentCount;
+
+  const renderCommentNode = (comment: ThreadNode<TaskComment>, depth: number): ReactNode => {
+    const isMe = comment.user.id === meId;
+    const canEditComment = canEditConversation && isMe;
+    const isEditing = editingCommentId === comment.id;
+    const depthOffset = Math.min(depth, 6) * 14;
+
+    return (
+      <div key={comment.id} className="space-y-2" style={{ marginLeft: `${depthOffset}px` }}>
+        <div
+          className={cn(
+            "rounded-xl border px-3 py-3 shadow-sm",
+            isMe
+              ? "border-[#AA8038]/25 bg-[#AA8038]/[0.03]"
+              : "border-slate-200 bg-white"
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-400 text-xs font-semibold text-white">
+              {initials(nameOf(comment.user))}
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                <span className="font-medium text-slate-700">{nameOf(comment.user)}</span>
+                {isMe ? (
+                  <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
+                    You
+                  </span>
+                ) : null}
+                <span>{formatDateTime(comment.createdAt)}</span>
+                {canComment && !isEditing ? (
+                  <button
+                    type="button"
+                    className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
+                    onClick={() => {
+                      setReplyToComment(comment);
+                      setEditingCommentId(null);
+                      setEditingCommentHtml("");
+                    }}
+                  >
+                    <Reply className="mr-1 inline h-3 w-3" />
+                    Reply
+                  </button>
+                ) : null}
+                {canEditComment && !isEditing ? (
+                  <button
+                    type="button"
+                    className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
+                    onClick={() => {
+                      setEditingCommentId(comment.id);
+                      setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
+                    }}
+                  >
+                    Edit
+                  </button>
+                ) : null}
+              </div>
+              {isEditing ? (
+                <div className="space-y-2 rounded-lg border bg-white p-2">
+                  <RichTextEditor
+                    value={editingCommentHtml}
+                    onChange={setEditingCommentHtml}
+                    placeholder="Edit conversation..."
+                    minHeight={110}
+                    disabled={savingEdit}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingCommentId(null);
+                        setEditingCommentHtml("");
+                      }}
+                      disabled={savingEdit}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-[#AA8038] text-white hover:bg-[#D48A00]"
+                      onClick={() => void saveCommentEdit()}
+                      disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
+                    >
+                      {savingEdit ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {hasRichTextContent(comment.content) ? (
+                    <div
+                      className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
+                      dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
+                    />
+                  ) : null}
+                  {comment.attachments.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+                      {comment.attachments.map((att) => (
+                        <a
+                          key={att.id}
+                          href={att.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-lg border bg-white px-2.5 py-2 text-xs hover:bg-slate-50"
+                        >
+                          {isImage(att.mimeType) ? (
+                            <Image className="h-4 w-4 shrink-0 text-blue-500" />
+                          ) : (
+                            <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-slate-700">{att.fileName}</p>
+                            <p className="text-slate-400">{formatFileSize(att.fileSize)}</p>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        {comment.replies.length > 0 ? (
+          <div className="ml-3 space-y-2 border-l border-[#AA8038]/25 pl-3">
+            {comment.replies.map((child) => renderCommentNode(child, depth + 1))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -597,145 +704,20 @@ export default function TaskDetailPage() {
 
             {/* Timeline */}
             <div className="space-y-3">
-              {timeline.map((entry, idx) => {
-                if (entry.kind === "created") {
-                  return (
-                    <div key={`created-${idx}`} className="flex items-center gap-3 text-xs text-slate-400">
-                      <div className="h-px flex-1 bg-slate-200" />
-                      <span className="shrink-0 rounded-full border bg-white px-2 py-0.5">
-                        Task created · {formatDateTime(entry.at)}
-                      </span>
-                      <div className="h-px flex-1 bg-slate-200" />
-                    </div>
-                  );
-                }
-
-                const comment = entry.comment;
-                const isMe = comment.user.id === meId;
-                const canEditComment = canEditConversation && isMe;
-                const isEditing = editingCommentId === comment.id;
-                return (
-                  <div
-                    key={comment.id}
-                    className={cn(
-                      "rounded-xl border px-3 py-3 shadow-sm",
-                      isMe
-                        ? "border-[#AA8038]/25 bg-[#AA8038]/[0.03]"
-                        : "border-slate-200 bg-white"
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-400 text-xs font-semibold text-white">
-                        {initials(nameOf(comment.user))}
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                          <span className="font-medium text-slate-700">{nameOf(comment.user)}</span>
-                          {isMe ? (
-                            <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
-                              You
-                            </span>
-                          ) : null}
-                          <span>{formatDateTime(comment.createdAt)}</span>
-                          {canComment && !isEditing ? (
-                            <button
-                              type="button"
-                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
-                              onClick={() => {
-                                setReplyToComment(comment);
-                                setEditingCommentId(null);
-                                setEditingCommentHtml("");
-                              }}
-                            >
-                              <Reply className="mr-1 inline h-3 w-3" />
-                              Reply
-                            </button>
-                          ) : null}
-                          {canEditComment && !isEditing ? (
-                            <button
-                              type="button"
-                              className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
-                              onClick={() => {
-                                setEditingCommentId(comment.id);
-                                setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
-                              }}
-                            >
-                              Edit
-                            </button>
-                          ) : null}
-                        </div>
-                        {isEditing ? (
-                          <div className="space-y-2 rounded-lg border bg-white p-2">
-                            <RichTextEditor
-                              value={editingCommentHtml}
-                              onChange={setEditingCommentHtml}
-                              placeholder="Edit conversation..."
-                              minHeight={110}
-                              disabled={savingEdit}
-                            />
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingCommentId(null);
-                                  setEditingCommentHtml("");
-                                }}
-                                disabled={savingEdit}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="bg-[#AA8038] text-white hover:bg-[#D48A00]"
-                                onClick={() => void saveCommentEdit()}
-                                disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
-                              >
-                                {savingEdit ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-                                Save
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {hasRichTextContent(comment.content) ? (
-                              <div
-                                className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
-                                dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
-                              />
-                            ) : null}
-                            {comment.attachments.length > 0 ? (
-                              <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
-                                {comment.attachments.map((att) => (
-                                  <a
-                                    key={att.id}
-                                    href={att.fileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 rounded-lg border bg-white px-2.5 py-2 text-xs hover:bg-slate-50"
-                                  >
-                                    {isImage(att.mimeType) ? (
-                                      <Image className="h-4 w-4 shrink-0 text-blue-500" />
-                                    ) : (
-                                      <FileText className="h-4 w-4 shrink-0 text-slate-400" />
-                                    )}
-                                    <div className="min-w-0">
-                                      <p className="truncate font-medium text-slate-700">{att.fileName}</p>
-                                      <p className="text-slate-400">{formatFileSize(att.fileSize)}</p>
-                                    </div>
-                                  </a>
-                                ))}
-                              </div>
-                            ) : null}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              <div className="flex items-center gap-3 text-xs text-slate-400">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="shrink-0 rounded-full border bg-white px-2 py-0.5">
+                  Task created - {formatDateTime(task.createdAt)}
+                </span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+              {commentTree.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-4 text-sm italic text-slate-400">
+                  No comments yet. Start the conversation.
+                </p>
+              ) : (
+                commentTree.map((comment) => renderCommentNode(comment, 0))
+              )}
             </div>
 
             {/* Attachments */}

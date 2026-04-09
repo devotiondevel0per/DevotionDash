@@ -21,17 +21,25 @@ const attachmentSelect = {
   createdAt: true,
 } as const;
 
-function isMissingTaskCommentColumn(error: unknown) {
+function isMissingColumn(error: unknown, columnName: string) {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
     const meta = (error.meta ?? {}) as Record<string, unknown>;
     const column = String(meta.column ?? meta.field_name ?? "");
-    if (column.toLowerCase().includes("taskcommentid")) {
+    if (column.toLowerCase().includes(columnName.toLowerCase())) {
       return true;
     }
   }
 
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return /taskcommentid/i.test(message) && /(unknown column|doesn't exist|p2022|not found)/i.test(message);
+  return new RegExp(columnName, "i").test(message) && /(unknown column|doesn't exist|p2022|not found)/i.test(message);
+}
+
+function isMissingTaskCommentAttachmentColumn(error: unknown) {
+  return isMissingColumn(error, "taskcommentid");
+}
+
+function isMissingTaskCommentParentColumn(error: unknown) {
+  return isMissingColumn(error, "parentcommentid");
 }
 
 function taskAssigneeSelect(includeCanComment: boolean) {
@@ -53,8 +61,9 @@ function taskInclude(options: {
   userId: string;
   includeCanComment: boolean;
   includeTaskCommentAttachments: boolean;
+  includeTaskCommentParent: boolean;
 }) {
-  const { userId, includeCanComment, includeTaskCommentAttachments } = options;
+  const { userId, includeCanComment, includeTaskCommentAttachments, includeTaskCommentParent } = options;
   return {
     creator: { select: { id: true, name: true, fullname: true } },
     assignees: {
@@ -62,11 +71,17 @@ function taskInclude(options: {
     },
     comments: {
       orderBy: { createdAt: "asc" as const },
-      include: {
+      select: {
+        id: true,
+        taskId: true,
+        userId: true,
+        content: true,
+        createdAt: true,
+        ...(includeTaskCommentParent ? { parentCommentId: true } : {}),
         user: { select: { id: true, name: true, fullname: true } },
         ...(includeTaskCommentAttachments
           ? {
-              attachments: {
+            attachments: {
                 orderBy: { createdAt: "asc" as const },
                 select: attachmentSelect,
               },
@@ -94,10 +109,14 @@ function taskInclude(options: {
 
 async function findTaskWithCompat(id: string, userId: string) {
   const attempts = [
-    { includeCanComment: true, includeTaskCommentAttachments: true },
-    { includeCanComment: false, includeTaskCommentAttachments: true },
-    { includeCanComment: true, includeTaskCommentAttachments: false },
-    { includeCanComment: false, includeTaskCommentAttachments: false },
+    { includeCanComment: true, includeTaskCommentAttachments: true, includeTaskCommentParent: true },
+    { includeCanComment: false, includeTaskCommentAttachments: true, includeTaskCommentParent: true },
+    { includeCanComment: true, includeTaskCommentAttachments: false, includeTaskCommentParent: true },
+    { includeCanComment: false, includeTaskCommentAttachments: false, includeTaskCommentParent: true },
+    { includeCanComment: true, includeTaskCommentAttachments: true, includeTaskCommentParent: false },
+    { includeCanComment: false, includeTaskCommentAttachments: true, includeTaskCommentParent: false },
+    { includeCanComment: true, includeTaskCommentAttachments: false, includeTaskCommentParent: false },
+    { includeCanComment: false, includeTaskCommentAttachments: false, includeTaskCommentParent: false },
   ] as const;
 
   let lastError: unknown = null;
@@ -109,14 +128,17 @@ async function findTaskWithCompat(id: string, userId: string) {
           userId,
           includeCanComment: attempt.includeCanComment,
           includeTaskCommentAttachments: attempt.includeTaskCommentAttachments,
+          includeTaskCommentParent: attempt.includeTaskCommentParent,
         }),
       });
     } catch (error) {
       const missingCanComment =
         attempt.includeCanComment && isMissingTaskAssigneeCanCommentColumn(error);
       const missingTaskCommentAttachment =
-        attempt.includeTaskCommentAttachments && isMissingTaskCommentColumn(error);
-      if (!missingCanComment && !missingTaskCommentAttachment) throw error;
+        attempt.includeTaskCommentAttachments && isMissingTaskCommentAttachmentColumn(error);
+      const missingTaskCommentParent =
+        attempt.includeTaskCommentParent && isMissingTaskCommentParentColumn(error);
+      if (!missingCanComment && !missingTaskCommentAttachment && !missingTaskCommentParent) throw error;
       lastError = error;
     }
   }
@@ -129,6 +151,24 @@ type NormalizedTaskAssignee = {
   userId: string;
   canComment: boolean;
   user: { id: string; name: string; fullname: string };
+};
+
+type NormalizedTaskComment = {
+  id: string;
+  taskId: string;
+  userId: string;
+  parentCommentId: string | null;
+  content: string;
+  createdAt: Date;
+  user: { id: string; name: string; fullname: string };
+  attachments: Array<{
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    fileSize: number;
+    mimeType: string;
+    createdAt: Date;
+  }>;
 };
 
 function normalizeTaskAssigneesForResponse(
@@ -148,6 +188,53 @@ function normalizeTaskAssigneesForResponse(
       name: String(entry.user?.name ?? ""),
       fullname: String(entry.user?.fullname ?? ""),
     },
+  }));
+}
+
+function normalizeTaskCommentsForResponse(
+  comments: Array<{
+    id?: string;
+    taskId?: string;
+    userId?: string;
+    parentCommentId?: string | null;
+    content?: string;
+    createdAt?: Date;
+    user?: { id?: string; name?: string; fullname?: string };
+    attachments?: Array<{
+      id?: string;
+      fileName?: string;
+      fileUrl?: string;
+      fileSize?: number;
+      mimeType?: string;
+      createdAt?: Date;
+    }>;
+  }>
+): NormalizedTaskComment[] {
+  return comments.map((entry) => ({
+    id: String(entry.id ?? ""),
+    taskId: String(entry.taskId ?? ""),
+    userId: String(entry.userId ?? ""),
+    parentCommentId:
+      typeof entry.parentCommentId === "string" && entry.parentCommentId.trim()
+        ? entry.parentCommentId
+        : null,
+    content: String(entry.content ?? ""),
+    createdAt: entry.createdAt instanceof Date ? entry.createdAt : new Date(0),
+    user: {
+      id: String(entry.user?.id ?? ""),
+      name: String(entry.user?.name ?? ""),
+      fullname: String(entry.user?.fullname ?? ""),
+    },
+    attachments: Array.isArray(entry.attachments)
+      ? entry.attachments.map((attachment) => ({
+          id: String(attachment.id ?? ""),
+          fileName: String(attachment.fileName ?? ""),
+          fileUrl: String(attachment.fileUrl ?? ""),
+          fileSize: Number(attachment.fileSize ?? 0),
+          mimeType: String(attachment.mimeType ?? ""),
+          createdAt: attachment.createdAt instanceof Date ? attachment.createdAt : new Date(0),
+        }))
+      : [],
   }));
 }
 
@@ -172,6 +259,25 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
         user?: { id?: string; name?: string; fullname?: string };
       }>
     );
+    const normalizedComments = normalizeTaskCommentsForResponse(
+      task.comments as Array<{
+        id?: string;
+        taskId?: string;
+        userId?: string;
+        parentCommentId?: string | null;
+        content?: string;
+        createdAt?: Date;
+        user?: { id?: string; name?: string; fullname?: string };
+        attachments?: Array<{
+          id?: string;
+          fileName?: string;
+          fileUrl?: string;
+          fileSize?: number;
+          mimeType?: string;
+          createdAt?: Date;
+        }>;
+      }>
+    );
 
     const canComment = canCurrentUserCommentOnTask(
       {
@@ -190,6 +296,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({
       ...task,
       assignees: normalizedAssignees,
+      comments: normalizedComments,
       canComment,
       canDelete,
       isFavorite: task.favorites.length > 0,

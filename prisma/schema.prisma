@@ -179,15 +179,19 @@ model TaskAssignee {
 }
 
 model TaskComment {
-  id        String   @id @default(cuid())
-  taskId    String
-  userId    String
-  content   String   @db.Text
-  createdAt DateTime @default(now())
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id])
-  attachments Attachment[]
+  id              String        @id @default(cuid())
+  taskId          String
+  userId          String
+  parentCommentId String?
+  content         String        @db.Text
+  createdAt       DateTime      @default(now())
+  task            Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id])
+  parent          TaskComment?  @relation("TaskCommentThread", fields: [parentCommentId], references: [id], onDelete: SetNull)
+  replies         TaskComment[] @relation("TaskCommentThread")
+  attachments     Attachment[]
 
+  @@index([taskId, parentCommentId, createdAt])
   @@map("task_comments")
 }
 
