@@ -1069,12 +1069,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   child: Text(label),
                 );
               }).toList(),
-              onChanged: (next) {
-                if (_canChangeStatus && next != null && next != status) {
-                  _changeStatus(next);
-                }
-              },
-              enabled: _canChangeStatus,
+              onChanged: _canChangeStatus
+                  ? (next) {
+                      if (next != null && next != status) {
+                        _changeStatus(next);
+                      }
+                    }
+                  : null,
             ),
           ],
           const SizedBox(height: 20),
@@ -1179,10 +1180,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                         'td': Style(
                           padding: HtmlPaddings.all(8),
                         ),
-                        'img': Style(
-                          width: Width.auto(),
-                          maxWidth: MaxWidth(100.percent),
-                        ),
+                        'img': Style(width: Width.auto()),
                       },
                       onLinkTap: (url, _, __) => _openAttachmentUrl(url),
                     )
@@ -1370,10 +1368,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                                             Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14,
                                           ),
                                         ),
-                                        'img': Style(
-                                          width: Width.auto(),
-                                          maxWidth: MaxWidth(100.percent),
-                                        ),
+                                        'img': Style(width: Width.auto()),
                                       },
                                       onLinkTap: (url, _, __) => _openAttachmentUrl(url),
                                     )

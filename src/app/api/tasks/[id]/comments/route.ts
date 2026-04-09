@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { canCurrentUserCommentOnTask, loadTaskCommentAccessInfo } from "@/lib/task-access";
+import { notifyTaskConversation } from "@/lib/task-notifications";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -134,6 +135,19 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         { status: 403 }
       );
     }
+    const taskForNotification = await prisma.task.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        creatorId: true,
+        isPrivate: true,
+        assignees: { select: { userId: true } },
+      },
+    });
+    if (!taskForNotification) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
 
     const body = await req.json();
     const { content, allowEmpty, parentCommentId } = body as {
@@ -148,14 +162,16 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const normalizedParentCommentId = typeof parentCommentId === "string" && parentCommentId.trim()
       ? parentCommentId.trim()
       : null;
+    let repliedToUserId: string | null = null;
     if (normalizedParentCommentId) {
       const parent = await prisma.taskComment.findUnique({
         where: { id: normalizedParentCommentId },
-        select: { id: true, taskId: true },
+        select: { id: true, taskId: true, userId: true },
       });
       if (!parent || parent.taskId !== id) {
         return NextResponse.json({ error: "Reply target comment not found" }, { status: 400 });
       }
+      repliedToUserId = parent.userId;
     }
 
     const attempts = [
@@ -199,6 +215,19 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     }
 
     if (!comment) throw lastError;
+
+    await notifyTaskConversation({
+      taskId: taskForNotification.id,
+      taskTitle: taskForNotification.title,
+      creatorId: taskForNotification.creatorId,
+      assigneeIds: taskForNotification.assignees.map((entry) => entry.userId),
+      actorUserId: accessResult.ctx.userId,
+      isPrivate: taskForNotification.isPrivate,
+      commentPreview: normalizedContent,
+      repliedToUserId,
+    }).catch((notifyError) => {
+      console.error("[tasks notify comment]", notifyError);
+    });
 
     return NextResponse.json(comment, { status: 201 });
   } catch (error) {

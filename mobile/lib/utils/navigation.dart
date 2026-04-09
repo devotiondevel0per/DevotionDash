@@ -14,6 +14,8 @@ void navigateFromNotification(String payload) {
     final uri = Uri.tryParse(trimmed);
     if (uri != null) {
       final dialogId = uri.queryParameters['dialog']?.trim();
+      final taskIdFromQuery =
+          uri.queryParameters['task']?.trim() ?? uri.queryParameters['id']?.trim();
       final segments = uri.pathSegments;
       switch (uri.path) {
         case '/chat':
@@ -32,9 +34,8 @@ void navigateFromNotification(String payload) {
           }
           break;
         case '/tasks':
-          final taskId = uri.queryParameters['id']?.trim();
-          if (taskId != null && taskId.isNotEmpty) {
-            context.push('/tasks/$taskId');
+          if (taskIdFromQuery != null && taskIdFromQuery.isNotEmpty) {
+            context.push('/tasks/$taskIdFromQuery');
             return;
           }
           break;

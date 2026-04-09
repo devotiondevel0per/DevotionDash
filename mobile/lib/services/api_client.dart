@@ -272,11 +272,34 @@ class ApiClient {
     String id,
     String text, {
     bool allowEmpty = false,
+    String? parentCommentId,
   }) async {
     final res = await _dio.post('/tasks/$id/comments', data: {
       'content': text,
       if (allowEmpty) 'allowEmpty': true,
+      if (parentCommentId != null && parentCommentId.trim().isNotEmpty)
+        'parentCommentId': parentCommentId.trim(),
     });
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateTaskComment(
+    String taskId,
+    String commentId,
+    String text,
+  ) async {
+    final res = await _dio.put(
+      '/tasks/$taskId/comments/$commentId',
+      data: {'content': text},
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> deleteTaskComment(
+    String taskId,
+    String commentId,
+  ) async {
+    final res = await _dio.delete('/tasks/$taskId/comments/$commentId');
     return res.data as Map<String, dynamic>;
   }
 

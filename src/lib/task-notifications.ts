@@ -13,6 +13,17 @@ type NotifyTaskChangeInput = {
   summary?: string;
 };
 
+type NotifyTaskConversationInput = {
+  taskId: string;
+  taskTitle: string;
+  creatorId: string;
+  assigneeIds: string[];
+  actorUserId: string;
+  isPrivate: boolean;
+  commentPreview?: string;
+  repliedToUserId?: string | null;
+};
+
 function displayName(user: { fullname?: string | null; name?: string | null }) {
   const full = user.fullname?.trim();
   if (full) return full;
@@ -21,7 +32,12 @@ function displayName(user: { fullname?: string | null; name?: string | null }) {
   return "A user";
 }
 
-export async function notifyTaskChange(input: NotifyTaskChangeInput) {
+async function resolveTaskRecipients(input: {
+  creatorId: string;
+  assigneeIds: string[];
+  actorUserId: string;
+  isPrivate: boolean;
+}): Promise<string[]> {
   const directRelated = new Set<string>([input.creatorId, ...input.assigneeIds]);
   const recipientCandidates = new Set<string>(directRelated);
 
@@ -42,7 +58,7 @@ export async function notifyTaskChange(input: NotifyTaskChangeInput) {
   }
 
   recipientCandidates.delete(input.actorUserId);
-  if (recipientCandidates.size === 0) return;
+  if (recipientCandidates.size === 0) return [];
 
   const activeUsers = await prisma.user.findMany({
     where: {
@@ -51,7 +67,7 @@ export async function notifyTaskChange(input: NotifyTaskChangeInput) {
     },
     select: { id: true },
   });
-  if (activeUsers.length === 0) return;
+  if (activeUsers.length === 0) return [];
 
   const accessChecks = await Promise.all(
     activeUsers.map(async (user) => {
@@ -60,6 +76,22 @@ export async function notifyTaskChange(input: NotifyTaskChangeInput) {
     })
   );
   const allowedRecipients = accessChecks.filter((value): value is string => Boolean(value));
+  return allowedRecipients;
+}
+
+function taskLink(taskId: string) {
+  return `/tasks/${taskId}`;
+}
+
+function normalizePreview(input: string | undefined, maxLength = 180) {
+  const text = (input ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1)}…`;
+}
+
+export async function notifyTaskChange(input: NotifyTaskChangeInput) {
+  const allowedRecipients = await resolveTaskRecipients(input);
   if (allowedRecipients.length === 0) return;
 
   const actor = await prisma.user.findUnique({
@@ -76,11 +108,44 @@ export async function notifyTaskChange(input: NotifyTaskChangeInput) {
   await prisma.notification.createMany({
     data: allowedRecipients.map((userId) => ({
       userId,
-      type: "tasks",
-      title: input.action === "created" ? "New task assigned/updated" : "Task updated",
+      type: "task",
+      title: input.action === "created" ? "New Task Assigned" : "Task Updated",
       body: body.slice(0, 260),
-      link: `/tasks?task=${input.taskId}`,
+      link: taskLink(input.taskId),
       isRead: false,
     })),
+  });
+}
+
+export async function notifyTaskConversation(input: NotifyTaskConversationInput) {
+  const allowedRecipients = await resolveTaskRecipients(input);
+  if (allowedRecipients.length === 0) return;
+
+  const actor = await prisma.user.findUnique({
+    where: { id: input.actorUserId },
+    select: { name: true, fullname: true },
+  });
+  const actorName = displayName(actor ?? {});
+  const preview = normalizePreview(input.commentPreview);
+  const defaultBody = preview
+    ? `${actorName} commented on "${input.taskTitle}": ${preview}`
+    : `${actorName} commented on "${input.taskTitle}".`;
+
+  await prisma.notification.createMany({
+    data: allowedRecipients.map((userId) => {
+      const isDirectReply =
+        input.repliedToUserId != null &&
+        input.repliedToUserId.length > 0 &&
+        input.repliedToUserId === userId;
+      const title = isDirectReply ? "Task Reply" : "Task Comment";
+      return {
+        userId,
+        type: isDirectReply ? "task_reply" : "task_comment",
+        title,
+        body: defaultBody.slice(0, 260),
+        link: taskLink(input.taskId),
+        isRead: false,
+      };
+    }),
   });
 }
