@@ -32,10 +32,9 @@ export function resolveAppTagline(value: string | undefined | null) {
 }
 
 export function resolveBranding(settings: Record<string, string | undefined | null>) {
-  const rawLogo = (settings[APP_LOGO_KEY] ?? "").trim();
   return {
     appName: resolveAppName(settings[APP_NAME_KEY] ?? settings[LEGACY_APP_NAME_KEY]),
     appTagline: resolveAppTagline(settings[APP_TAGLINE_KEY]),
-    logoUrl: rawLogo || DEFAULT_APP_LOGO,
+    logoUrl: DEFAULT_APP_LOGO,
   };
 }

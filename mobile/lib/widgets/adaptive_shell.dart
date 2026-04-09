@@ -24,7 +24,7 @@ class _NavItem {
 }
 
 const _moreRoute = '/more';
-const _logoAsset = 'assets/images/logo.png';
+const _logoAsset = 'assets/images/devotion_group_d_small.png';
 
 class AdaptiveShell extends ConsumerWidget {
   const AdaptiveShell({super.key, required this.child});

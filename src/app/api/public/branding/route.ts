@@ -43,7 +43,7 @@ export async function GET() {
     if (!out[APP_NAME_KEY] && out[LEGACY_APP_NAME_KEY]) out[APP_NAME_KEY] = out[LEGACY_APP_NAME_KEY];
     if (!out[APP_NAME_KEY]) out[APP_NAME_KEY] = DEFAULT_APP_NAME;
     if (!out[APP_TAGLINE_KEY]) out[APP_TAGLINE_KEY] = DEFAULT_APP_TAGLINE;
-    if (!out[APP_LOGO_KEY]) out[APP_LOGO_KEY] = DEFAULT_APP_LOGO;
+    out[APP_LOGO_KEY] = DEFAULT_APP_LOGO;
     return NextResponse.json(out);
   } catch {
     return NextResponse.json({

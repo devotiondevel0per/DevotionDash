@@ -20,13 +20,11 @@ class AppBranding {
         .toString()
         .trim();
     final resolvedTagline = (json['app.tagline'] ?? '').toString().trim();
-    final logo = (json['app.logo'] ?? '').toString().trim();
-
     return AppBranding(
       appName: resolvedName.isNotEmpty ? resolvedName : runtime.fallbackAppName,
       appTagline:
           resolvedTagline.isNotEmpty ? resolvedTagline : runtime.fallbackTagline,
-      logoUrl: logo.isNotEmpty ? runtime.resolveUrl(logo) : null,
+      logoUrl: null,
     );
   }
 

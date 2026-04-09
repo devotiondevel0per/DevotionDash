@@ -15,7 +15,7 @@ Flutter mobile client for the DevotionDash business groupware platform.
 2. **Configure the API base URL**
    Edit `lib/services/api_client.dart`:
    ```dart
-   const String kBaseUrl = 'http://YOUR_SERVER_IP:3000/api';
+   const String kBaseUrl = 'http://YOUR_SERVER_IP:3030/api';
    ```
    > For Android emulator use `10.0.2.2` instead of `localhost`
 
