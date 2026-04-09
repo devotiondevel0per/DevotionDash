@@ -37,6 +37,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ArrowRightLeft,
   ChevronDown,
   ChevronRight,
   Columns3,
@@ -98,6 +99,7 @@ type TaskItem = {
     user: { id: string; name: string; fullname: string };
   }>;
   assignedGroups?: TaskGroup[];
+  isGroupBucket?: boolean;
   searchMatchText?: string | null;
   canComment?: boolean;
   canEditTask?: boolean;
@@ -158,7 +160,7 @@ const VIEW_TABS: Array<{ id: TaskView; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "personal", label: "Personal" },
   { id: "assigned", label: "Assigned" },
-  { id: "groups", label: "Groups" },
+  { id: "groups", label: "Group Bucket" },
   { id: "all", label: "All" },
   { id: "filter", label: "Filter" },
 ];
@@ -1413,6 +1415,9 @@ export default function TasksPage() {
   const [formInitial, setFormInitial] = useState<TaskFormState>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<TaskItem | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [moveBucketTarget, setMoveBucketTarget] = useState<TaskItem | null>(null);
+  const [moveGroupId, setMoveGroupId] = useState("");
+  const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
 
   const [refreshToken, setRefreshToken] = useState(0);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
@@ -1609,6 +1614,61 @@ export default function TasksPage() {
       toast.success(`Task moved to ${stageMeta.label.toLowerCase()}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Task update failed");
+    }
+  }
+
+  function isGroupBucketTask(task: TaskItem) {
+    if (typeof task.isGroupBucket === "boolean") return task.isGroupBucket;
+    return Array.isArray(task.assignedGroups) && task.assignedGroups.length > 0;
+  }
+
+  async function moveTaskToMain(task: TaskItem) {
+    if (!(task.canEditTask ?? canWrite)) {
+      toast.error("You do not have permission to move this task");
+      return;
+    }
+    setMovingTaskId(task.id);
+    try {
+      await patchTask(task.id, { groupIds: [] });
+      toast.success("Moved to Main tasks");
+      setRefreshToken((prev) => prev + 1);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to move task");
+    } finally {
+      setMovingTaskId(null);
+    }
+  }
+
+  function openMoveToBucket(task: TaskItem) {
+    if (!(task.canEditTask ?? canWrite)) {
+      toast.error("You do not have permission to move this task");
+      return;
+    }
+    if (groups.length === 0) {
+      toast.error("No groups available to move this task");
+      return;
+    }
+    setMoveBucketTarget(task);
+    setMoveGroupId(task.assignedGroups?.[0]?.id ?? groups[0]?.id ?? "");
+  }
+
+  async function confirmMoveToBucket() {
+    if (!moveBucketTarget) return;
+    if (!moveGroupId) {
+      toast.error("Select a group bucket");
+      return;
+    }
+    setMovingTaskId(moveBucketTarget.id);
+    try {
+      await patchTask(moveBucketTarget.id, { groupIds: [moveGroupId] });
+      toast.success("Moved to Group Bucket");
+      setMoveBucketTarget(null);
+      setMoveGroupId("");
+      setRefreshToken((prev) => prev + 1);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to move task");
+    } finally {
+      setMovingTaskId(null);
     }
   }
 
@@ -1863,6 +1923,7 @@ export default function TasksPage() {
                 const canEditTaskItem = task.canEditTask ?? canWrite;
                 const canChangeStatus = task.canChangeStatus ?? canEditTaskItem;
                 const canDeleteTaskItem = task.canDelete ?? canManage;
+                const groupBucket = isGroupBucketTask(task);
                 return (
                   <div
                     key={task.id}
@@ -1889,6 +1950,11 @@ export default function TasksPage() {
                         >{task.title}</button>
                         <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority])}>{task.priority}</Badge>
                         <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type])}>{task.type}</Badge>
+                        {groupBucket ? (
+                          <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
+                            Group Bucket
+                          </Badge>
+                        ) : null}
                       </div>
                       {task.searchMatchText || task.description ? (
                         <p className="truncate text-xs text-slate-500">
@@ -1928,6 +1994,20 @@ export default function TasksPage() {
                       </button>
                       <button
                         className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
+                        onClick={() => {
+                          if (groupBucket) {
+                            void moveTaskToMain(task);
+                          } else {
+                            openMoveToBucket(task);
+                          }
+                        }}
+                        title={groupBucket ? "Move to Main" : "Move to Group Bucket"}
+                        disabled={!canEditTaskItem || movingTaskId === task.id || (!groupBucket && groups.length === 0)}
+                      >
+                        {movingTaskId === task.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
+                      </button>
+                      <button
+                        className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
                         onClick={() => void openEdit(task)}
                         title="Edit"
                         disabled={!canEditTaskItem}
@@ -1953,6 +2033,7 @@ export default function TasksPage() {
                 const canEditTaskItem = task.canEditTask ?? canWrite;
                 const canChangeStatus = task.canChangeStatus ?? canEditTaskItem;
                 const canDeleteTaskItem = task.canDelete ?? canManage;
+                const groupBucket = isGroupBucketTask(task);
                 return (
                 <article key={task.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
                   <div className="flex items-start justify-between gap-2">
@@ -1977,6 +2058,11 @@ export default function TasksPage() {
                     <Badge variant="outline" style={getStageMeta(stages, task.status).badgeStyle} className="h-5 px-1.5 text-[10px]">{getStageMeta(stages, task.status).label}</Badge>
                     <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority])}>{task.priority}</Badge>
                     <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type])}>{task.type}</Badge>
+                    {groupBucket ? (
+                      <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
+                        Group Bucket
+                      </Badge>
+                    ) : null}
                   </div>
 
                   <p className="mt-2 line-clamp-3 min-h-[3.5rem] text-xs text-slate-600">
@@ -2007,6 +2093,20 @@ export default function TasksPage() {
                       title="Favorite"
                     >
                       <Star className={cn("h-3.5 w-3.5", task.isFavorite && "fill-current")} />
+                    </button>
+                    <button
+                      className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
+                      onClick={() => {
+                        if (groupBucket) {
+                          void moveTaskToMain(task);
+                        } else {
+                          openMoveToBucket(task);
+                        }
+                      }}
+                      title={groupBucket ? "Move to Main" : "Move to Group Bucket"}
+                      disabled={!canEditTaskItem || movingTaskId === task.id || (!groupBucket && groups.length === 0)}
+                    >
+                      {movingTaskId === task.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
                     </button>
                     <button
                       className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
@@ -2079,6 +2179,11 @@ export default function TasksPage() {
                               <div className="mt-1.5 flex flex-wrap gap-1">
                                 <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority as TaskPriority])}>{task.priority}</Badge>
                                 <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type as TaskType])}>{task.type}</Badge>
+                                {isGroupBucketTask(task) ? (
+                                  <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
+                                    Group Bucket
+                                  </Badge>
+                                ) : null}
                               </div>
                               <p className="mt-2 line-clamp-2 text-xs text-slate-600">
                                 {task.searchMatchText
@@ -2116,6 +2221,20 @@ export default function TasksPage() {
                                     title="Favorite"
                                   >
                                     <Star className={cn("h-3.5 w-3.5", task.isFavorite && "fill-current")} />
+                                  </button>
+                                  <button
+                                    className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
+                                    onClick={() => {
+                                      if (isGroupBucketTask(task)) {
+                                        void moveTaskToMain(task);
+                                      } else {
+                                        openMoveToBucket(task);
+                                      }
+                                    }}
+                                    title={isGroupBucketTask(task) ? "Move to Main" : "Move to Group Bucket"}
+                                    disabled={!(task.canEditTask ?? canWrite) || movingTaskId === task.id || (!isGroupBucketTask(task) && groups.length === 0)}
+                                  >
+                                    {movingTaskId === task.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
                                   </button>
                                   <button
                                     className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
@@ -2172,6 +2291,60 @@ export default function TasksPage() {
           return removeTask(deleteTarget);
         }}
       />
+      <Dialog
+        open={Boolean(moveBucketTarget)}
+        onOpenChange={(next) => {
+          if (!next) {
+            setMoveBucketTarget(null);
+            setMoveGroupId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move To Group Bucket</DialogTitle>
+            <DialogDescription>
+              Select a target group bucket for this task.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Group Bucket</Label>
+            <Select value={moveGroupId} onValueChange={(value) => setMoveGroupId(value ?? "")}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select group" />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map((group) => (
+                  <SelectItem key={`move-group-${group.id}`} value={group.id}>
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMoveBucketTarget(null);
+                setMoveGroupId("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#AA8038] text-white hover:bg-[#D48A00]"
+              onClick={() => void confirmMoveToBucket()}
+              disabled={!moveGroupId || (moveBucketTarget ? movingTaskId === moveBucketTarget.id : false)}
+            >
+              {moveBucketTarget && movingTaskId === moveBucketTarget.id ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : null}
+              Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -177,6 +177,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   String? _editingCommentId;
   String? _deletingCommentId;
   bool _savingCommentEdit = false;
+  bool _movingBucket = false;
+  List<Map<String, dynamic>> _availableGroups = const [];
   final _editingCommentCtrl = TextEditingController();
   List<PlatformFile> _pendingFiles = [];
   Map<String, dynamic>? _replyTarget;
@@ -192,6 +194,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   void initState() {
     super.initState();
     _loadComments();
+    _loadAvailableGroups();
   }
 
   @override
@@ -382,6 +385,143 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           SnackBar(content: Text('Failed to update status: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _loadAvailableGroups() async {
+    try {
+      final meta = await ref.read(apiClientProvider).getTasksMeta();
+      final groupsRaw = meta['groups'];
+      if (groupsRaw is! List || !mounted) return;
+      final groups = groupsRaw
+          .whereType<Map>()
+          .map((entry) => Map<String, dynamic>.from(entry))
+          .where((entry) => (entry['id'] ?? '').toString().isNotEmpty)
+          .toList();
+      setState(() => _availableGroups = groups);
+    } catch (_) {
+      // Non-fatal
+    }
+  }
+
+  bool _isGroupBucketTask(Map<String, dynamic> task) {
+    final assignedGroups = task['assignedGroups'];
+    if (task['isGroupBucket'] is bool) {
+      return task['isGroupBucket'] == true;
+    }
+    return assignedGroups is List && assignedGroups.isNotEmpty;
+  }
+
+  Future<void> _moveTaskToMain(Map<String, dynamic> task) async {
+    final canEditTask = (task['canEditTask'] as bool?) ?? false;
+    if (!canEditTask) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You do not have permission to move this task')),
+        );
+      }
+      return;
+    }
+    setState(() => _movingBucket = true);
+    try {
+      await ref.read(apiClientProvider).updateTask(widget.taskId, {'groupIds': <String>[]});
+      ref.invalidate(_taskDetailProvider(widget.taskId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Moved to Main tasks')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to move task: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _movingBucket = false);
+    }
+  }
+
+  Future<void> _moveTaskToGroupBucket(Map<String, dynamic> task) async {
+    final canEditTask = (task['canEditTask'] as bool?) ?? false;
+    if (!canEditTask) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You do not have permission to move this task')),
+        );
+      }
+      return;
+    }
+    if (_availableGroups.isEmpty) {
+      await _loadAvailableGroups();
+    }
+    if (_availableGroups.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No group bucket available')),
+        );
+      }
+      return;
+    }
+    String selectedGroupId = _availableGroups.first['id'].toString();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: const Text('Move To Group Bucket'),
+          content: DropdownButtonFormField<String>(
+            initialValue: selectedGroupId,
+            decoration: const InputDecoration(
+              labelText: 'Group Bucket',
+              isDense: true,
+            ),
+            items: _availableGroups.map((group) {
+              final id = (group['id'] ?? '').toString();
+              final name = (group['name'] ?? '').toString();
+              return DropdownMenuItem<String>(
+                value: id,
+                child: Text(name.isEmpty ? id : name),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value == null || value.isEmpty) return;
+              setStateDialog(() => selectedGroupId = value);
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Move'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _movingBucket = true);
+    try {
+      await ref.read(apiClientProvider).updateTask(widget.taskId, {
+        'groupIds': <String>[selectedGroupId],
+      });
+      ref.invalidate(_taskDetailProvider(widget.taskId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Moved to Group Bucket')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to move task: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _movingBucket = false);
     }
   }
 
@@ -918,12 +1058,30 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               if (task == null) return;
               if (action == 'edit') _openTaskEditor(task);
               if (action == 'delete') _deleteTask();
+              if (action == 'move-main') {
+                void _moveTaskToMain(task);
+              }
+              if (action == 'move-group') {
+                void _moveTaskToGroupBucket(task);
+              }
             },
             itemBuilder: (_) {
               final task = taskAsync.asData?.value;
               final canEditTask = (task?['canEditTask'] as bool?) ?? false;
               final canDelete = (task?['canDelete'] as bool?) ?? false;
+              final isGroupBucket = task != null ? _isGroupBucketTask(task) : false;
               final items = <PopupMenuEntry<String>>[
+                PopupMenuItem(
+                  value: isGroupBucket ? 'move-main' : 'move-group',
+                  enabled: canEditTask && !_movingBucket,
+                  child: ListTile(
+                    leading: Icon(
+                      isGroupBucket ? Icons.inbox_rounded : Icons.move_to_inbox_rounded,
+                    ),
+                    title: Text(isGroupBucket ? 'Move to Main' : 'Move to Group Bucket'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'edit',
                   enabled: canEditTask,
@@ -1706,7 +1864,36 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     adjustHeightForKeyboard: true,
                   ),
                   htmlToolbarOptions: const HtmlToolbarOptions(
-                    toolbarType: ToolbarType.nativeScrollable,
+                    toolbarType: ToolbarType.nativeExpandable,
+                    initiallyExpanded: true,
+                    defaultToolbarButtons: [
+                      StyleButtons(),
+                      FontSettingButtons(fontSizeUnit: false),
+                      FontButtons(clearAll: true),
+                      ColorButtons(),
+                      ListButtons(listStyles: true),
+                      ParagraphButtons(
+                        textDirection: false,
+                        lineHeight: false,
+                        caseConverter: false,
+                      ),
+                      InsertButtons(
+                        audio: false,
+                        video: false,
+                        otherFile: false,
+                        table: true,
+                        hr: true,
+                      ),
+                      OtherButtons(
+                        fullscreen: false,
+                        help: false,
+                        copy: false,
+                        paste: false,
+                        codeview: true,
+                        undo: true,
+                        redo: true,
+                      ),
+                    ],
                   ),
                   otherOptions: OtherOptions(
                     height: 220,

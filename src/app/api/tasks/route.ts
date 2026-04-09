@@ -217,6 +217,12 @@ export async function GET(req: NextRequest) {
     const periodFromRaw = searchParams.get("periodFrom");
     const periodToRaw = searchParams.get("periodTo");
     const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 200);
+    const isGroupBucketView = view === "groups";
+    const isMainBucketView =
+      view === "overview" ||
+      view === "personal" ||
+      view === "assigned" ||
+      view === "filter";
 
     const scopeFilters: Record<string, unknown>[] = [];
     const isSubordinateCategory = category === "subordinate";
@@ -241,11 +247,11 @@ export async function GET(req: NextRequest) {
     } else if (view === "assigned" && !isSubordinateCategory) {
       scopeFilters.push({ assignees: { some: { userId } } });
     } else if (!canManageTasks && view === "groups" && !isSubordinateCategory) {
-      if (groupedUserIds.length === 0) {
+      if (groupIds.length === 0) {
         scopeFilters.push({ id: "__none__" });
       } else {
         scopeFilters.push({
-          assignees: { some: { userId: { in: groupedUserIds } } },
+          assignedGroups: { some: { groupId: { in: groupIds } } },
         });
       }
     }
@@ -255,6 +261,15 @@ export async function GET(req: NextRequest) {
     }
 
     const where: Record<string, unknown> = scopeFilters.length > 0 ? { AND: [...scopeFilters] } : {};
+    {
+      const and = (where.AND as Record<string, unknown>[] | undefined) ?? [];
+      if (isGroupBucketView) {
+        and.push({ assignedGroups: { some: {} } });
+      } else if (isMainBucketView) {
+        and.push({ assignedGroups: { none: {} } });
+      }
+      where.AND = and;
+    }
 
     if (status && status !== "all") {
       const and = (where.AND as Record<string, unknown>[] | undefined) ?? [];
@@ -421,6 +436,7 @@ export async function GET(req: NextRequest) {
         ...rawTask,
         assignees: normalizedAssignees,
         assignedGroups: normalizedGroups,
+        isGroupBucket: normalizedGroups.length > 0,
         searchMatchText: searchSnippet || null,
         canComment,
         canEditTask: canWriteTasks,

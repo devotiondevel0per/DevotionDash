@@ -197,7 +197,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
     ('Overview', 'overview'),
     ('Personal', 'personal'),
     ('Assigned', 'assigned'),
-    ('Groups', 'groups'),
+    ('Group Bucket', 'groups'),
     ('All', 'all'),
     ('Completed', 'completed'),
   ];
