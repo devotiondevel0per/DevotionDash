@@ -850,6 +850,8 @@ function TaskDetailDialog({
     }
   }
 
+  const commentTree = useMemo(() => buildThreadTree(comments), [comments]);
+
   if (!task) return null;
   const stageMeta = getStageMeta(stages, task.status);
   const isClosed = stages.find((s) => s.key === task.status)?.isClosed ?? false;
@@ -862,7 +864,6 @@ function TaskDetailDialog({
     task.assignees.some(
       (entry) => entry.user.id === meId && (entry.canComment ?? true)
     );
-  const commentTree = useMemo(() => buildThreadTree(comments), [comments]);
 
   const renderCommentNode = (comment: ThreadNode<TaskComment>, depth: number): ReactNode => {
     const isMe = comment.user.id === meId;

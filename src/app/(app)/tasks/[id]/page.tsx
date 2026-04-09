@@ -393,6 +393,11 @@ export default function TaskDetailPage() {
     }
   }
 
+  const commentTree = useMemo(
+    () => buildThreadTree(task?.comments ?? []),
+    [task?.comments]
+  );
+
   if (loading) {
     return (
       <div className="p-6 space-y-4">
@@ -418,7 +423,6 @@ export default function TaskDetailPage() {
   const isClosed = stages.find((s) => s.key === task.status)?.isClosed ?? false;
   const priorityMeta = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
-  const commentTree = useMemo(() => buildThreadTree(task.comments), [task.comments]);
   const canEditConversation = task.type === "note" && canWrite;
   const canComment =
     task.canComment ??
