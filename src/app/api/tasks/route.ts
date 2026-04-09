@@ -197,7 +197,7 @@ export async function GET(req: NextRequest) {
       groupedUserIds = Array.from(new Set(members.map((member) => member.userId)));
     }
 
-    if (view === "overview" && !isSubordinateCategory) {
+    if (!canManageTasks && view === "overview" && !isSubordinateCategory) {
       scopeFilters.push({
         OR: [{ creatorId: userId }, { assignees: { some: { userId } } }],
       });
@@ -205,7 +205,7 @@ export async function GET(req: NextRequest) {
       scopeFilters.push({ creatorId: userId });
     } else if (view === "assigned" && !isSubordinateCategory) {
       scopeFilters.push({ assignees: { some: { userId } } });
-    } else if (view === "groups" && !isSubordinateCategory) {
+    } else if (!canManageTasks && view === "groups" && !isSubordinateCategory) {
       if (groupedUserIds.length === 0) {
         scopeFilters.push({ id: "__none__" });
       } else {
@@ -218,7 +218,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (scopeFilters.length === 0 && !accessResult.ctx.access.isAdmin && !isSubordinateCategory) {
+    if (scopeFilters.length === 0 && !canManageTasks && !isSubordinateCategory) {
       scopeFilters.push({
         OR: [{ creatorId: userId }, { assignees: { some: { userId } } }],
       });

@@ -246,6 +246,13 @@ function formatDate(value: string | null) {
   return dt.toLocaleDateString();
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) return "-";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "-";
+  return dt.toLocaleString();
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -1220,7 +1227,7 @@ function TaskDetailDialog({
                   </span>
                 </span>
               ) : null}
-              <span>Created: <span className="font-medium text-slate-800">{formatDate(task.createdAt)}</span></span>
+              <span>Created: <span className="font-medium text-slate-800">{formatDateTime(task.createdAt)}</span></span>
             </div>
             {task.description ? (
               <div
@@ -1864,7 +1871,7 @@ export default function TasksPage() {
                     </div>
                     <div className="flex items-center gap-1 text-xs text-slate-600">
                       <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
-                      {formatDate(task.createdAt)}
+                      {formatDateTime(task.createdAt)}
                     </div>
                     <div className="truncate text-xs text-slate-700">
                       {task.assignees.length > 0 ? task.assignees.map((entry) => nameOf(entry.user)).join(", ") : "-"}

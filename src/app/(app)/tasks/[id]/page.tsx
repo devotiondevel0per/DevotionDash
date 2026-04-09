@@ -833,7 +833,7 @@ export default function TaskDetailPage() {
             )}
             <span className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />
-              Created {formatDate(task.createdAt)}
+              Created {formatDateTime(task.createdAt)}
             </span>
             {task.dueDate && (
               <span className="flex items-center gap-1">
