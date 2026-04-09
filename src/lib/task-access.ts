@@ -67,7 +67,6 @@ export function canCurrentUserCommentOnTask(
   access: UserAccess
 ) {
   if (access.isAdmin || access.permissions.tasks.manage) return true;
-  if (task.creatorId === currentUserId) return true;
   const assignee = task.assignees.find((entry) => entry.userId === currentUserId);
   if (!assignee) return false;
   return assignee.canComment;

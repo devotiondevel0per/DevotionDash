@@ -62,9 +62,21 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   try {
     const { id } = await params;
-
-    const task = await prisma.task.findUnique({ where: { id }, select: { id: true } });
-    if (!task) {
+    const taskAccess = await loadTaskCommentAccessInfo(
+      prisma,
+      id,
+      accessResult.ctx.userId
+    );
+    if (!taskAccess) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    const canManage =
+      accessResult.ctx.access.isAdmin ||
+      accessResult.ctx.access.permissions.tasks.manage;
+    const isAssigned = taskAccess.assignees.some(
+      (entry) => entry.userId === accessResult.ctx.userId
+    );
+    if (!canManage && !isAssigned) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 

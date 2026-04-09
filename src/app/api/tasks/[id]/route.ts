@@ -443,6 +443,12 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
         user?: { id?: string; name?: string; fullname?: string };
       }>
     );
+    const canReadTask =
+      canManageTasks ||
+      normalizedAssignees.some((entry) => entry.userId === userId);
+    if (!canReadTask) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
     const normalizedAssignedGroups = usedAttempt.includeTaskGroups
       ? normalizeTaskGroupsForResponse(
           (task as { assignedGroups?: Array<{ groupId?: string; group?: { id?: string; name?: string; color?: string } }> })

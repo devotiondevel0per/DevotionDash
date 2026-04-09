@@ -198,10 +198,11 @@ export async function GET(req: NextRequest) {
     }
 
     if (!canManageTasks && view === "overview" && !isSubordinateCategory) {
-      scopeFilters.push({
-        OR: [{ creatorId: userId }, { assignees: { some: { userId } } }],
-      });
-    } else if (view === "personal" && !isSubordinateCategory) {
+      scopeFilters.push({ assignees: { some: { userId } } });
+    } else if (!canManageTasks && view === "personal" && !isSubordinateCategory) {
+      scopeFilters.push({ creatorId: userId });
+      scopeFilters.push({ assignees: { some: { userId } } });
+    } else if (canManageTasks && view === "personal" && !isSubordinateCategory) {
       scopeFilters.push({ creatorId: userId });
     } else if (view === "assigned" && !isSubordinateCategory) {
       scopeFilters.push({ assignees: { some: { userId } } });
@@ -210,18 +211,13 @@ export async function GET(req: NextRequest) {
         scopeFilters.push({ id: "__none__" });
       } else {
         scopeFilters.push({
-          OR: [
-            { creatorId: { in: groupedUserIds } },
-            { assignees: { some: { userId: { in: groupedUserIds } } } },
-          ],
+          assignees: { some: { userId: { in: groupedUserIds } } },
         });
       }
     }
 
     if (scopeFilters.length === 0 && !canManageTasks && !isSubordinateCategory) {
-      scopeFilters.push({
-        OR: [{ creatorId: userId }, { assignees: { some: { userId } } }],
-      });
+      scopeFilters.push({ assignees: { some: { userId } } });
     }
 
     const where: Record<string, unknown> = scopeFilters.length > 0 ? { AND: [...scopeFilters] } : {};
@@ -364,7 +360,6 @@ export async function GET(req: NextRequest) {
         : [];
       const canComment =
         canManageTasks ||
-        task.creatorId === userId ||
         normalizedAssignees.some(
           (entry) => entry.userId === userId && Boolean(entry.canComment)
         );

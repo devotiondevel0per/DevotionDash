@@ -371,6 +371,7 @@ function TaskModal({
   groups,
   initial,
   stages,
+  meId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -379,16 +380,27 @@ function TaskModal({
   groups: TaskGroup[];
   initial: TaskFormState;
   stages: WorkflowStage[];
+  meId: string;
 }) {
   const [form, setForm] = useState<TaskFormState>(initial);
   const [saving, setSaving] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
 
+  function ensureCreatorAssignee(next: TaskFormState): TaskFormState {
+    // For new tasks, creator must stay assigned by default.
+    if (next.id || !meId) return next;
+    if (next.assignees.some((entry) => entry.userId === meId)) return next;
+    return {
+      ...next,
+      assignees: [{ userId: meId, canComment: true }, ...next.assignees],
+    };
+  }
+
   useEffect(() => {
     if (!open) return;
-    setForm(initial);
+    setForm(ensureCreatorAssignee(initial));
     setFiles([]);
-  }, [open, initial]);
+  }, [open, initial, meId]);
 
   async function uploadFiles(taskId: string) {
     if (files.length === 0) return;
@@ -402,7 +414,8 @@ function TaskModal({
   }
 
   async function submit() {
-    if (!form.title.trim()) {
+    const preparedForm = ensureCreatorAssignee(form);
+    if (!preparedForm.title.trim()) {
       toast.error("Subject is required");
       return;
     }
@@ -410,15 +423,15 @@ function TaskModal({
     setSaving(true);
     try {
       const payload = {
-        title: form.title.trim(),
-        description: form.descriptionHtml,
-        type: form.type,
-        status: form.status,
-        priority: form.priority,
-        dueDate: form.dueDate || null,
-        isPrivate: form.isPrivate,
-        assignees: form.assignees,
-        groupIds: form.groupIds,
+        title: preparedForm.title.trim(),
+        description: preparedForm.descriptionHtml,
+        type: preparedForm.type,
+        status: preparedForm.status,
+        priority: preparedForm.priority,
+        dueDate: preparedForm.dueDate || null,
+        isPrivate: preparedForm.isPrivate,
+        assignees: preparedForm.assignees,
+        groupIds: preparedForm.groupIds,
       };
 
       const response = await fetch(form.id ? `/api/tasks/${form.id}` : "/api/tasks", {
@@ -476,6 +489,7 @@ function TaskModal({
 
   function toggleAssignee(userId: string, checked: boolean) {
     setForm((prev) => {
+      if (!prev.id && userId === meId && !checked) return prev;
       if (checked) {
         if (prev.assignees.some((entry) => entry.userId === userId)) return prev;
         return {
@@ -502,7 +516,10 @@ function TaskModal({
       }
       return {
         ...prev,
-        assignees: prev.assignees.filter((entry) => !userIds.includes(entry.userId)),
+        assignees: prev.assignees.filter((entry) => {
+          if (!prev.id && entry.userId === meId) return true;
+          return !userIds.includes(entry.userId);
+        }),
       };
     });
   }
@@ -684,18 +701,28 @@ function TaskModal({
                       </label>
                     </div>
                     <div className="space-y-1">
-                      {section.users.map((u) => (
+                      {section.users.map((u) => {
+                        const isCreate = !form.id;
+                        const forceCreatorAssigned = isCreate && u.id === meId;
+                        const isSelected = selected.has(u.id) || forceCreatorAssigned;
+                        return (
                         <div key={u.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-white">
                           <input
                             type="checkbox"
-                            checked={selected.has(u.id)}
+                            checked={isSelected}
+                            disabled={forceCreatorAssigned}
                             onChange={(event) => toggleAssignee(u.id, event.target.checked)}
                           />
                           <span className="min-w-0 flex-1 text-sm">
                             <span className="block truncate font-medium text-slate-800">{u.fullname}</span>
                             {u.email ? <span className="block truncate text-xs text-slate-500">{u.email}</span> : null}
                           </span>
-                          {selected.has(u.id) ? (
+                          {forceCreatorAssigned ? (
+                            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              Creator
+                            </span>
+                          ) : null}
+                          {isSelected ? (
                             <Select
                               value={assigneeCanCommentMap.get(u.id) === false ? "view" : "comment"}
                               onValueChange={(value) => setAssigneeCommentAccess(u.id, value !== "view")}
@@ -710,7 +737,8 @@ function TaskModal({
                             </Select>
                           ) : null}
                         </div>
-                      ))}
+                      );
+                    })}
                     </div>
                   </div>
                 );
@@ -719,6 +747,11 @@ function TaskModal({
             <p className="rounded border bg-white px-3 py-2 text-xs text-slate-600">
               Assignee comment access is controlled per person.
             </p>
+            {!form.id ? (
+              <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Creator is auto-assigned and cannot be removed while creating a task.
+              </p>
+            ) : null}
             <label className="flex items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
               <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm((p) => ({ ...p, isPrivate: e.target.checked }))} />
               Private task
@@ -999,7 +1032,6 @@ function TaskDetailDialog({
   const canComment =
     task.canComment ??
     (canManage ||
-      task.creatorId === meId ||
       task.assignees.some(
         (entry) => entry.user.id === meId && (entry.canComment ?? true)
       ));
@@ -2101,7 +2133,16 @@ export default function TasksPage() {
         </section>
       </div>
 
-      <TaskModal open={formOpen} onClose={() => setFormOpen(false)} onSaved={() => setRefreshToken((p) => p + 1)} users={users} groups={groups} initial={formInitial} stages={stages} />
+      <TaskModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onSaved={() => setRefreshToken((p) => p + 1)}
+        users={users}
+        groups={groups}
+        initial={formInitial}
+        stages={stages}
+        meId={meId}
+      />
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(next) => {
