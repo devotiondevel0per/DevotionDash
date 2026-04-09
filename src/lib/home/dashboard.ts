@@ -260,7 +260,9 @@ export async function getHomeDashboardData(userId: string): Promise<HomeDashboar
       include: {
         creator: { select: { name: true, surname: true, fullname: true } },
         assignees: {
-          include: {
+          select: {
+            id: true,
+            userId: true,
             user: { select: { name: true, surname: true, fullname: true } },
           },
           take: 1,
@@ -278,7 +280,9 @@ export async function getHomeDashboardData(userId: string): Promise<HomeDashboar
       include: {
         creator: { select: { name: true, surname: true, fullname: true } },
         assignees: {
-          include: {
+          select: {
+            id: true,
+            userId: true,
             user: { select: { name: true, surname: true, fullname: true } },
           },
           take: 1,
@@ -425,4 +429,3 @@ export async function getHomeDashboardData(userId: string): Promise<HomeDashboar
     },
   };
 }
-

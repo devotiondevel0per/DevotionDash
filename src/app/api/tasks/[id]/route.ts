@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
+import { normalizeTaskAssigneePermissions } from "@/lib/task-assignees";
 import { notifyTaskChange } from "@/lib/task-notifications";
-import { canCurrentUserCommentOnTask } from "@/lib/task-access";
+import {
+  canCurrentUserCommentOnTask,
+  isMissingTaskAssigneeCanCommentColumn,
+} from "@/lib/task-access";
 import { isClosedStage, loadTaskStages } from "@/lib/workflow-config";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -30,72 +34,121 @@ function isMissingTaskCommentColumn(error: unknown) {
   return /taskcommentid/i.test(message) && /(unknown column|doesn't exist|p2022|not found)/i.test(message);
 }
 
-function modernTaskInclude(userId: string) {
+function taskAssigneeSelect(includeCanComment: boolean) {
+  return includeCanComment
+    ? {
+        id: true,
+        userId: true,
+        canComment: true,
+        user: { select: { id: true, name: true, fullname: true } },
+      }
+    : {
+        id: true,
+        userId: true,
+        user: { select: { id: true, name: true, fullname: true } },
+      };
+}
+
+function taskInclude(options: {
+  userId: string;
+  includeCanComment: boolean;
+  includeTaskCommentAttachments: boolean;
+}) {
+  const { userId, includeCanComment, includeTaskCommentAttachments } = options;
   return {
     creator: { select: { id: true, name: true, fullname: true } },
     assignees: {
-      include: { user: { select: { id: true, name: true, fullname: true } } },
+      select: taskAssigneeSelect(includeCanComment),
     },
     comments: {
       orderBy: { createdAt: "asc" as const },
       include: {
         user: { select: { id: true, name: true, fullname: true } },
-        attachments: {
+        ...(includeTaskCommentAttachments
+          ? {
+              attachments: {
+                orderBy: { createdAt: "asc" as const },
+                select: attachmentSelect,
+              },
+            }
+          : {}),
+      },
+    },
+    favorites: {
+      where: { userId },
+      select: { id: true },
+    },
+    _count: { select: { comments: true, favorites: true } },
+    attachments: includeTaskCommentAttachments
+      ? {
+          where: { taskCommentId: null },
+          orderBy: { createdAt: "asc" as const },
+          select: attachmentSelect,
+        }
+      : {
           orderBy: { createdAt: "asc" as const },
           select: attachmentSelect,
         },
-      },
-    },
-    favorites: {
-      where: { userId },
-      select: { id: true },
-    },
-    _count: { select: { comments: true, favorites: true } },
-    attachments: {
-      where: { taskCommentId: null },
-      orderBy: { createdAt: "asc" as const },
-      select: attachmentSelect,
-    },
-  };
-}
-
-function legacyTaskInclude(userId: string) {
-  return {
-    creator: { select: { id: true, name: true, fullname: true } },
-    assignees: {
-      include: { user: { select: { id: true, name: true, fullname: true } } },
-    },
-    comments: {
-      orderBy: { createdAt: "asc" as const },
-      include: {
-        user: { select: { id: true, name: true, fullname: true } },
-      },
-    },
-    favorites: {
-      where: { userId },
-      select: { id: true },
-    },
-    _count: { select: { comments: true, favorites: true } },
-    attachments: {
-      orderBy: { createdAt: "asc" as const },
-      select: attachmentSelect,
-    },
   };
 }
 
 async function findTaskWithCompat(id: string, userId: string) {
-  try {
-    return await prisma.task.findUnique({
-      where: { id },
-      include: modernTaskInclude(userId),
-    });
-  } catch (error) {
-    if (!isMissingTaskCommentColumn(error)) throw error;
-    return prisma.task.findUnique({
-      where: { id },
-      include: legacyTaskInclude(userId),
-    });
+  const attempts = [
+    { includeCanComment: true, includeTaskCommentAttachments: true },
+    { includeCanComment: false, includeTaskCommentAttachments: true },
+    { includeCanComment: true, includeTaskCommentAttachments: false },
+    { includeCanComment: false, includeTaskCommentAttachments: false },
+  ] as const;
+
+  let lastError: unknown = null;
+  for (const attempt of attempts) {
+    try {
+      return await prisma.task.findUnique({
+        where: { id },
+        include: taskInclude({
+          userId,
+          includeCanComment: attempt.includeCanComment,
+          includeTaskCommentAttachments: attempt.includeTaskCommentAttachments,
+        }),
+      });
+    } catch (error) {
+      const missingCanComment =
+        attempt.includeCanComment && isMissingTaskAssigneeCanCommentColumn(error);
+      const missingTaskCommentAttachment =
+        attempt.includeTaskCommentAttachments && isMissingTaskCommentColumn(error);
+      if (!missingCanComment && !missingTaskCommentAttachment) throw error;
+      lastError = error;
+    }
   }
+
+  throw lastError;
+}
+
+type NormalizedTaskAssignee = {
+  id: string;
+  userId: string;
+  canComment: boolean;
+  user: { id: string; name: string; fullname: string };
+};
+
+function normalizeTaskAssigneesForResponse(
+  assignees: Array<{
+    id?: string;
+    userId?: string;
+    canComment?: boolean;
+    user?: { id?: string; name?: string; fullname?: string };
+  }>
+): NormalizedTaskAssignee[] {
+  return assignees.map((entry) => ({
+    id: String(entry.id ?? ""),
+    userId: String(entry.userId ?? ""),
+    canComment: typeof entry.canComment === "boolean" ? entry.canComment : true,
+    user: {
+      id: String(entry.user?.id ?? ""),
+      name: String(entry.user?.name ?? ""),
+      fullname: String(entry.user?.fullname ?? ""),
+    },
+  }));
 }
 
 export async function GET(_req: NextRequest, { params }: RouteContext) {
@@ -111,13 +164,23 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
+    const normalizedAssignees = normalizeTaskAssigneesForResponse(
+      task.assignees as Array<{
+        id?: string;
+        userId?: string;
+        canComment?: boolean;
+        user?: { id?: string; name?: string; fullname?: string };
+      }>
+    );
 
     const canComment = canCurrentUserCommentOnTask(
       {
         id: task.id,
         creatorId: task.creatorId,
-        allowAssigneeComments: task.allowAssigneeComments,
-        assignees: task.assignees.map((entry) => ({ userId: entry.user.id })),
+        assignees: normalizedAssignees.map((entry) => ({
+          userId: String(entry.userId ?? ""),
+          canComment: Boolean(entry.canComment),
+        })),
       },
       userId,
       accessResult.ctx.access
@@ -126,6 +189,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
     return NextResponse.json({
       ...task,
+      assignees: normalizedAssignees,
       canComment,
       canDelete,
       isFavorite: task.favorites.length > 0,
@@ -161,7 +225,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       priority,
       dueDate,
       isPrivate,
-      allowAssigneeComments,
+      assignees,
       assigneeIds,
     } = body as {
       title?: string;
@@ -171,9 +235,14 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       priority?: string;
       dueDate?: string | null;
       isPrivate?: boolean;
-      allowAssigneeComments?: boolean;
+      assignees?: Array<{ userId?: string; canComment?: boolean }>;
       assigneeIds?: string[];
     };
+    const hasAssigneeUpdate = assignees !== undefined || assigneeIds !== undefined;
+    const normalizedAssignees = normalizeTaskAssigneePermissions({
+      assignees,
+      assigneeIds,
+    });
 
     const statusToUse = status !== undefined
       ? (stages.some((stage) => stage.key === status) ? status : existing.status)
@@ -190,40 +259,63 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       }
     }
 
-    await prisma.$transaction(async (tx) => {
-      if (assigneeIds !== undefined) {
-        await tx.taskAssignee.deleteMany({ where: { taskId: id } });
-      }
+    const runUpdate = async (includeCanComment: boolean) => {
+      await prisma.$transaction(async (tx) => {
+        if (hasAssigneeUpdate) {
+          await tx.taskAssignee.deleteMany({ where: { taskId: id } });
+        }
 
-      await tx.task.update({
-        where: { id },
-        data: {
-          ...(title !== undefined && { title: title.trim() }),
-          ...(description !== undefined && { description }),
-          ...(type !== undefined && { type }),
-          ...(statusToUse !== undefined && { status: statusToUse }),
-          ...(completedAt !== undefined && { completedAt }),
-          ...(priority !== undefined && { priority }),
-          ...(isPrivate !== undefined && { isPrivate }),
-          ...(allowAssigneeComments !== undefined && { allowAssigneeComments }),
-          ...(dueDate !== undefined && {
-            dueDate: dueDate ? new Date(dueDate) : null,
-          }),
-          ...(assigneeIds !== undefined && {
-            assignees: {
-              create: assigneeIds.map((userId: string) => ({ userId })),
-            },
-          }),
-        },
+        await tx.task.update({
+          where: { id },
+          data: {
+            ...(title !== undefined && { title: title.trim() }),
+            ...(description !== undefined && { description }),
+            ...(type !== undefined && { type }),
+            ...(statusToUse !== undefined && { status: statusToUse }),
+            ...(completedAt !== undefined && { completedAt }),
+            ...(priority !== undefined && { priority }),
+            ...(isPrivate !== undefined && { isPrivate }),
+            ...(dueDate !== undefined && {
+              dueDate: dueDate ? new Date(dueDate) : null,
+            }),
+            ...(hasAssigneeUpdate && normalizedAssignees.length > 0 && {
+              assignees: {
+                create: normalizedAssignees.map((entry) =>
+                  includeCanComment
+                    ? { userId: entry.userId, canComment: entry.canComment }
+                    : { userId: entry.userId }
+                ),
+              },
+            }),
+          },
+        });
       });
-    });
+    };
+
+    try {
+      await runUpdate(true);
+    } catch (error) {
+      if (!(hasAssigneeUpdate && isMissingTaskAssigneeCanCommentColumn(error))) {
+        throw error;
+      }
+      await runUpdate(false);
+    }
 
     const task = await findTaskWithCompat(id, userId);
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
-
-    const assigneeUserIds = task.assignees.map((entry) => entry.user.id);
+    const normalizedTaskAssignees = normalizeTaskAssigneesForResponse(
+      task.assignees as Array<{
+        id?: string;
+        userId?: string;
+        canComment?: boolean;
+        user?: { id?: string; name?: string; fullname?: string };
+      }>
+    );
+    const assigneeUserIds = normalizedTaskAssignees
+      .map((entry) => entry.user.id)
+      .filter((idValue) => idValue.length > 0);
     const summaryParts: string[] = [];
     if (statusToUse !== undefined && statusToUse !== existing.status) summaryParts.push(`status ${existing.status} -> ${task.status}`);
     if (priority !== undefined && priority !== existing.priority) summaryParts.push(`priority ${existing.priority} -> ${task.priority}`);
@@ -231,19 +323,19 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       const nextDue = task.dueDate ? task.dueDate.toISOString().slice(0, 10) : "none";
       summaryParts.push(`due ${nextDue}`);
     }
-    if (assigneeUserIds.length > 0) {
-      summaryParts.push(`assignees ${assigneeUserIds.length}`);
-    }
-    if (allowAssigneeComments !== undefined && allowAssigneeComments !== existing.allowAssigneeComments) {
-      summaryParts.push(`comments for assignees ${allowAssigneeComments ? "enabled" : "disabled"}`);
+    if (hasAssigneeUpdate) {
+      const commentersCount = normalizedTaskAssignees.filter((entry) => Boolean(entry.canComment)).length;
+      summaryParts.push(`assignees ${normalizedTaskAssignees.length} (${commentersCount} can comment)`);
     }
 
     const canComment = canCurrentUserCommentOnTask(
       {
         id: task.id,
         creatorId: task.creatorId,
-        allowAssigneeComments: task.allowAssigneeComments,
-        assignees: task.assignees.map((entry) => ({ userId: entry.user.id })),
+        assignees: normalizedTaskAssignees.map((entry) => ({
+          userId: String(entry.userId ?? ""),
+          canComment: Boolean(entry.canComment),
+        })),
       },
       userId,
       accessResult.ctx.access
@@ -265,6 +357,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
 
     return NextResponse.json({
       ...task,
+      assignees: normalizedTaskAssignees,
       canComment,
       canDelete,
       isFavorite: task.favorites.length > 0,

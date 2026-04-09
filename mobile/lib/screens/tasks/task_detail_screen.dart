@@ -186,7 +186,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     if (!_canComment) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Comments are disabled for this task')),
+          const SnackBar(content: Text('You can view this task, but commenting is disabled for your assignment')),
         );
       }
       return;
@@ -859,7 +859,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Text(
-                  'Comments are disabled for assignees on this task.',
+                  'You can view this task, but commenting is disabled for your assignment.',
                   style: TextStyle(fontSize: 12, color: Color(0xFF8A651E)),
                 ),
               ),

@@ -4,21 +4,20 @@ import type { UserAccess } from "@/lib/rbac";
 export type TaskCommentAccessInfo = {
   id: string;
   creatorId: string;
-  allowAssigneeComments: boolean;
-  assignees: Array<{ userId: string }>;
+  assignees: Array<{ userId: string; canComment: boolean }>;
 };
 
-export function isMissingAllowAssigneeCommentsColumn(error: unknown) {
+export function isMissingTaskAssigneeCanCommentColumn(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
     const meta = (error.meta ?? {}) as Record<string, unknown>;
     const column = String(meta.column ?? meta.field_name ?? "");
-    if (column.toLowerCase().includes("allowassigneecomments")) {
+    if (column.toLowerCase().includes("cancomment")) {
       return true;
     }
   }
 
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return /allowassigneecomments/i.test(message) && /(unknown column|doesn't exist|p2022|not found)/i.test(message);
+  return /cancomment/i.test(message) && /(unknown column|doesn't exist|p2022|not found)/i.test(message);
 }
 
 export async function loadTaskCommentAccessInfo(
@@ -32,15 +31,14 @@ export async function loadTaskCommentAccessInfo(
       select: {
         id: true,
         creatorId: true,
-        allowAssigneeComments: true,
         assignees: {
           where: { userId: currentUserId },
-          select: { userId: true },
+          select: { userId: true, canComment: true },
         },
       },
     });
   } catch (error) {
-    if (!isMissingAllowAssigneeCommentsColumn(error)) throw error;
+    if (!isMissingTaskAssigneeCanCommentColumn(error)) throw error;
     const legacyTask = await db.task.findUnique({
       where: { id: taskId },
       select: {
@@ -53,7 +51,13 @@ export async function loadTaskCommentAccessInfo(
       },
     });
     if (!legacyTask) return null;
-    return { ...legacyTask, allowAssigneeComments: true };
+    return {
+      ...legacyTask,
+      assignees: legacyTask.assignees.map((assignee) => ({
+        ...assignee,
+        canComment: true,
+      })),
+    };
   }
 }
 
@@ -64,7 +68,7 @@ export function canCurrentUserCommentOnTask(
 ) {
   if (access.isAdmin || access.permissions.tasks.manage) return true;
   if (task.creatorId === currentUserId) return true;
-  const isAssignee = task.assignees.some((entry) => entry.userId === currentUserId);
-  if (!isAssignee) return false;
-  return task.allowAssigneeComments;
+  const assignee = task.assignees.find((entry) => entry.userId === currentUserId);
+  if (!assignee) return false;
+  return assignee.canComment;
 }

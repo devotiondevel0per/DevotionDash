@@ -74,14 +74,13 @@ type TaskDetail = {
   status: string;
   priority: string;
   isPrivate: boolean;
-  allowAssigneeComments?: boolean;
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
   creatorId: string;
   creator: TaskUser;
-  assignees: Array<{ id: string; user: TaskUser }>;
+  assignees: Array<{ id: string; userId?: string; canComment?: boolean; user: TaskUser }>;
   comments: TaskComment[];
   attachments: TaskAttachment[];
   canComment?: boolean;
@@ -323,7 +322,7 @@ export default function TaskDetailPage() {
     const hasFiles = pendingFiles.length > 0;
     if (!hasText && !hasFiles) return;
     if (!canComment) {
-      toast.error("Comments are disabled for your role on this task");
+      toast.error("You can view this task, but commenting is disabled for your assignment");
       return;
     }
     const content = replyToComment
@@ -449,8 +448,13 @@ export default function TaskDetailPage() {
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
   const timeline = buildTimeline(task);
   const canEditConversation = task.type === "note" && canWrite;
-  const isAssignee = task.assignees.some((entry) => entry.user.id === meId);
-  const canComment = task.canComment ?? (canManage || task.creatorId === meId || ((task.allowAssigneeComments ?? true) && isAssignee));
+  const canComment =
+    task.canComment ??
+    (canManage ||
+      task.creatorId === meId ||
+      task.assignees.some(
+        (entry) => entry.user.id === meId && (entry.canComment ?? true)
+      ));
   const commentAttachmentCount = task.comments.reduce(
     (count, comment) => count + comment.attachments.length,
     0
@@ -788,7 +792,7 @@ export default function TaskDetailPage() {
               ) : null}
               {!canComment ? (
                 <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Comments are disabled for assignees on this task.
+                  You can view this task, but commenting is disabled for your assignment.
                 </div>
               ) : null}
 
@@ -960,8 +964,8 @@ export default function TaskDetailPage() {
                   <dd className="mt-0.5 font-medium text-slate-800">{task.isPrivate ? "Yes" : "No"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Assignee Comments</dt>
-                  <dd className="mt-0.5 font-medium text-slate-800">{(task.allowAssigneeComments ?? true) ? "Enabled" : "Disabled"}</dd>
+                  <dt className="text-xs text-slate-400">Your Comment Access</dt>
+                  <dd className="mt-0.5 font-medium text-slate-800">{canComment ? "Can Comment" : "View Only"}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-slate-400">Comments</dt>

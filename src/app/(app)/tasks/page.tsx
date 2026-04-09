@@ -84,12 +84,16 @@ type TaskItem = {
   status: TaskStatus;
   priority: TaskPriority;
   isPrivate: boolean;
-  allowAssigneeComments?: boolean;
   dueDate: string | null;
   createdAt: string;
   creatorId: string;
   creator: { id: string; name: string; fullname: string };
-  assignees: Array<{ id: string; user: { id: string; name: string; fullname: string } }>;
+  assignees: Array<{
+    id: string;
+    userId?: string;
+    canComment?: boolean;
+    user: { id: string; name: string; fullname: string };
+  }>;
   isFavorite?: boolean;
 };
 
@@ -129,13 +133,12 @@ type FilterState = {
 type TaskFormState = {
   id?: string;
   title: string;
-  assigneeIds: string[];
+  assignees: Array<{ userId: string; canComment: boolean }>;
   type: TaskType;
   status: TaskStatus;
   priority: TaskPriority;
   dueDate: string;
   isPrivate: boolean;
-  allowAssigneeComments: boolean;
   descriptionHtml: string;
 };
 
@@ -211,13 +214,12 @@ const EMPTY_FILTERS: FilterState = {
 
 const EMPTY_FORM: TaskFormState = {
   title: "",
-  assigneeIds: [],
+  assignees: [],
   type: "task",
   status: "opened",
   priority: "normal",
   dueDate: "",
   isPrivate: false,
-  allowAssigneeComments: true,
   descriptionHtml: "",
 };
 
@@ -405,8 +407,7 @@ function TaskModal({
         priority: form.priority,
         dueDate: form.dueDate || null,
         isPrivate: form.isPrivate,
-        allowAssigneeComments: form.allowAssigneeComments,
-        assigneeIds: form.assigneeIds,
+        assignees: form.assignees,
       };
 
       const response = await fetch(form.id ? `/api/tasks/${form.id}` : "/api/tasks", {
@@ -429,7 +430,11 @@ function TaskModal({
     }
   }
 
-  const selected = useMemo(() => new Set(form.assigneeIds), [form.assigneeIds]);
+  const selected = useMemo(() => new Set(form.assignees.map((entry) => entry.userId)), [form.assignees]);
+  const assigneeCanCommentMap = useMemo(
+    () => new Map(form.assignees.map((entry) => [entry.userId, entry.canComment])),
+    [form.assignees]
+  );
   const groupedUsers = useMemo(() => {
     const sections = new Map<string, { group: TaskGroup; users: TaskUser[] }>();
     for (const group of groups) {
@@ -458,19 +463,45 @@ function TaskModal({
   const titleIcon = form.id ? <Pencil className="h-5 w-5 text-[#AA8038]" /> : <FilePlus2 className="h-5 w-5 text-[#AA8038]" />;
 
   function toggleAssignee(userId: string, checked: boolean) {
-    const next = checked
-      ? Array.from(new Set([...form.assigneeIds, userId]))
-      : form.assigneeIds.filter((id) => id !== userId);
-    setForm((prev) => ({ ...prev, assigneeIds: next }));
+    setForm((prev) => {
+      if (checked) {
+        if (prev.assignees.some((entry) => entry.userId === userId)) return prev;
+        return {
+          ...prev,
+          assignees: [...prev.assignees, { userId, canComment: true }],
+        };
+      }
+      return {
+        ...prev,
+        assignees: prev.assignees.filter((entry) => entry.userId !== userId),
+      };
+    });
   }
 
   function toggleAssigneeGroup(userIds: string[], checked: boolean) {
-    const nextSet = new Set(form.assigneeIds);
-    for (const userId of userIds) {
-      if (checked) nextSet.add(userId);
-      else nextSet.delete(userId);
-    }
-    setForm((prev) => ({ ...prev, assigneeIds: Array.from(nextSet) }));
+    setForm((prev) => {
+      if (checked) {
+        const next = [...prev.assignees];
+        const existing = new Set(prev.assignees.map((entry) => entry.userId));
+        for (const userId of userIds) {
+          if (!existing.has(userId)) next.push({ userId, canComment: true });
+        }
+        return { ...prev, assignees: next };
+      }
+      return {
+        ...prev,
+        assignees: prev.assignees.filter((entry) => !userIds.includes(entry.userId)),
+      };
+    });
+  }
+
+  function setAssigneeCommentAccess(userId: string, canComment: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      assignees: prev.assignees.map((entry) =>
+        entry.userId === userId ? { ...entry, canComment } : entry
+      ),
+    }));
   }
 
   function setDuePreset(daysFromToday: number) {
@@ -602,34 +633,43 @@ function TaskModal({
                     </div>
                     <div className="space-y-1">
                       {section.users.map((u) => (
-                        <label key={u.id} className="flex cursor-pointer gap-2 rounded px-2 py-1.5 hover:bg-white">
+                        <div key={u.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-white">
                           <input
                             type="checkbox"
                             checked={selected.has(u.id)}
                             onChange={(event) => toggleAssignee(u.id, event.target.checked)}
                           />
-                          <span className="min-w-0 text-sm">
+                          <span className="min-w-0 flex-1 text-sm">
                             <span className="block truncate font-medium text-slate-800">{u.fullname}</span>
                             {u.email ? <span className="block truncate text-xs text-slate-500">{u.email}</span> : null}
                           </span>
-                        </label>
+                          {selected.has(u.id) ? (
+                            <Select
+                              value={assigneeCanCommentMap.get(u.id) === false ? "view" : "comment"}
+                              onValueChange={(value) => setAssigneeCommentAccess(u.id, value !== "view")}
+                            >
+                              <SelectTrigger className="h-8 w-[132px] text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="comment">Can Comment</SelectItem>
+                                <SelectItem value="view">View Only</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : null}
+                        </div>
                       ))}
                     </div>
                   </div>
                 );
               })}
             </div>
+            <p className="rounded border bg-white px-3 py-2 text-xs text-slate-600">
+              Assignee comment access is controlled per person.
+            </p>
             <label className="flex items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
               <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm((p) => ({ ...p, isPrivate: e.target.checked }))} />
               Private task
-            </label>
-            <label className="flex items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.allowAssigneeComments}
-                onChange={(e) => setForm((p) => ({ ...p, allowAssigneeComments: e.target.checked }))}
-              />
-              Allow assignees to comment
             </label>
           </div>
           </div>
@@ -745,7 +785,7 @@ function TaskDetailDialog({
     const hasFiles = pendingFiles.length > 0;
     if (!task || (!hasText && !hasFiles)) return;
     if (!canComment) {
-      toast.error("Comments are disabled for your role on this task");
+      toast.error("You can view this task, but commenting is disabled for your assignment");
       return;
     }
     const content = replyToComment
@@ -827,8 +867,12 @@ function TaskDetailDialog({
   const canWriteTask = can("tasks", "write");
   const canEditConversation = task.type === "note" && canWriteTask;
   const canManage = can("tasks", "manage");
-  const isAssignee = task.assignees.some((entry) => entry.user.id === meId);
-  const canComment = canManage || task.creatorId === meId || ((task.allowAssigneeComments ?? true) && isAssignee);
+  const canComment =
+    canManage ||
+    task.creatorId === meId ||
+    task.assignees.some(
+      (entry) => entry.user.id === meId && (entry.canComment ?? true)
+    );
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
@@ -1030,7 +1074,7 @@ function TaskDetailDialog({
               ) : null}
               {!canComment ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Comments are disabled for assignees on this task.
+                  You can view this task, but commenting is disabled for your assignment.
                 </div>
               ) : null}
               {pendingFiles.length > 0 ? (
@@ -1245,21 +1289,33 @@ export default function TasksPage() {
     setFormOpen(true);
   }
 
-  function openEdit(task: TaskItem) {
+  async function openEdit(task: TaskItem) {
     if (!canWrite) return;
-    setFormInitial({
-      id: task.id,
-      title: task.title,
-      assigneeIds: task.assignees.map((entry) => entry.user.id),
-      type: task.type,
-      status: task.status,
-      priority: task.priority,
-      dueDate: toDateInput(task.dueDate),
-      isPrivate: task.isPrivate,
-      allowAssigneeComments: task.allowAssigneeComments ?? true,
-      descriptionHtml: toHtml(task.description),
-    });
-    setFormOpen(true);
+    try {
+      const response = await fetch(`/api/tasks/${task.id}`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as TaskItem | { error?: string } | null;
+      if (!response.ok || !payload || "error" in payload) {
+        throw new Error((payload as { error?: string } | null)?.error ?? "Failed to load task details");
+      }
+      const detailedTask = payload as TaskItem;
+      setFormInitial({
+        id: detailedTask.id,
+        title: detailedTask.title,
+        assignees: detailedTask.assignees.map((entry) => ({
+          userId: entry.user.id,
+          canComment: entry.canComment ?? true,
+        })),
+        type: detailedTask.type,
+        status: detailedTask.status,
+        priority: detailedTask.priority,
+        dueDate: toDateInput(detailedTask.dueDate),
+        isPrivate: detailedTask.isPrivate,
+        descriptionHtml: toHtml(detailedTask.description),
+      });
+      setFormOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open task editor");
+    }
   }
 
   function openDetail(task: TaskItem) {
@@ -1615,7 +1671,7 @@ export default function TasksPage() {
                       </button>
                       <button
                         className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
-                        onClick={() => openEdit(task)}
+                        onClick={() => void openEdit(task)}
                         title="Edit"
                         disabled={!canWrite}
                       >
@@ -1686,7 +1742,7 @@ export default function TasksPage() {
                     </button>
                     <button
                       className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
-                      onClick={() => openEdit(task)}
+                      onClick={() => void openEdit(task)}
                       title="Edit"
                       disabled={!canWrite}
                     >
@@ -1790,7 +1846,7 @@ export default function TasksPage() {
                                   </button>
                                   <button
                                     className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
-                                    onClick={() => openEdit(task)}
+                                    onClick={() => void openEdit(task)}
                                     title="Edit"
                                     disabled={!canWrite}
                                   >

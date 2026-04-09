@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
+import { normalizeTaskAssigneePermissions } from "@/lib/task-assignees";
 import { notifyTaskChange } from "@/lib/task-notifications";
+import { isMissingTaskAssigneeCanCommentColumn } from "@/lib/task-access";
 import { loadTaskStages, getDefaultStage, isClosedStage } from "@/lib/workflow-config";
 
 export async function GET(req: NextRequest) {
@@ -151,7 +153,11 @@ export async function GET(req: NextRequest) {
       include: {
         creator: { select: { id: true, name: true, fullname: true } },
         assignees: {
-          include: { user: { select: { id: true, name: true, fullname: true } } },
+          select: {
+            id: true,
+            userId: true,
+            user: { select: { id: true, name: true, fullname: true } },
+          },
         },
         favorites: {
           where: { userId },
@@ -188,8 +194,8 @@ export async function POST(req: NextRequest) {
       status,
       priority,
       isPrivate,
-      allowAssigneeComments,
       dueDate,
+      assignees,
       assigneeIds,
     } = body as {
       title: string;
@@ -198,8 +204,8 @@ export async function POST(req: NextRequest) {
       status?: string;
       priority?: string;
       isPrivate?: boolean;
-      allowAssigneeComments?: boolean;
       dueDate?: string;
+      assignees?: Array<{ userId?: string; canComment?: boolean }>;
       assigneeIds?: string[];
     };
 
@@ -214,36 +220,66 @@ export async function POST(req: NextRequest) {
       ? status
       : defaultStage.key;
 
-    const task = await prisma.task.create({
-      data: {
-        title: title.trim(),
-        description,
-        type: type ?? "task",
-        status: statusToUse,
-        priority: priority ?? "normal",
-        isPrivate: isPrivate ?? false,
-        allowAssigneeComments: allowAssigneeComments ?? true,
-        dueDate: dueDate ? new Date(dueDate) : undefined,
-        completedAt: isClosedStage(stages, statusToUse) ? new Date() : null,
-        creatorId: accessResult.ctx.userId,
-        assignees: assigneeIds?.length
-          ? {
-              create: assigneeIds.map((userId: string) => ({ userId })),
-            }
-          : undefined,
-      },
-      include: {
-        creator: { select: { id: true, name: true, fullname: true } },
-        assignees: {
-          include: { user: { select: { id: true, name: true, fullname: true } } },
-        },
-        favorites: {
-          where: { userId: accessResult.ctx.userId },
-          select: { id: true },
-        },
-        _count: { select: { comments: true, favorites: true } },
-      },
+    const normalizedAssignees = normalizeTaskAssigneePermissions({
+      assignees,
+      assigneeIds,
     });
+
+    const buildAssigneeCreate = (includeCanComment: boolean) =>
+      normalizedAssignees.map((entry) =>
+        includeCanComment
+          ? { userId: entry.userId, canComment: entry.canComment }
+          : { userId: entry.userId }
+      );
+
+    const createPayload = (includeCanComment: boolean) => ({
+      title: title.trim(),
+      description,
+      type: type ?? "task",
+      status: statusToUse,
+      priority: priority ?? "normal",
+      isPrivate: isPrivate ?? false,
+      dueDate: dueDate ? new Date(dueDate) : undefined,
+      completedAt: isClosedStage(stages, statusToUse) ? new Date() : null,
+      creatorId: accessResult.ctx.userId,
+      assignees: normalizedAssignees.length > 0
+        ? {
+            create: buildAssigneeCreate(includeCanComment),
+          }
+        : undefined,
+    });
+
+    const responseInclude = {
+      creator: { select: { id: true, name: true, fullname: true } },
+      assignees: {
+        select: {
+          id: true,
+          userId: true,
+          user: { select: { id: true, name: true, fullname: true } },
+        },
+      },
+      favorites: {
+        where: { userId: accessResult.ctx.userId },
+        select: { id: true },
+      },
+      _count: { select: { comments: true, favorites: true } },
+    } as const;
+
+    let task;
+    try {
+      task = await prisma.task.create({
+        data: createPayload(true),
+        include: responseInclude,
+      });
+    } catch (error) {
+      if (!(normalizedAssignees.length > 0 && isMissingTaskAssigneeCanCommentColumn(error))) {
+        throw error;
+      }
+      task = await prisma.task.create({
+        data: createPayload(false),
+        include: responseInclude,
+      });
+    }
     const assigneeUserIds = task.assignees.map((entry) => entry.user.id);
     const summaryParts = [`status ${task.status}`, `priority ${task.priority}`];
     if (task.dueDate) summaryParts.push(`due ${task.dueDate.toISOString().slice(0, 10)}`);

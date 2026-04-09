@@ -170,6 +170,7 @@ model TaskAssignee {
   id     String @id @default(cuid())
   taskId String
   userId String
+  canComment Boolean @default(true)
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -603,9 +603,8 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
   String _status = 'opened';   // opened | completed | closed
   String _priority = 'normal'; // high | normal | low
   bool _isPrivate = false;
-  bool _allowAssigneeComments = true;
   DateTime? _dueDate;
-  List<String> _assigneeIds = [];
+  List<Map<String, dynamic>> _assignees = [];
 
   List<dynamic> _teamUsers = [];
   List<Map<String, dynamic>> _stages = const [];
@@ -684,9 +683,8 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
         'status': _status,
         'priority': _priority,
         'isPrivate': _isPrivate,
-        'allowAssigneeComments': _allowAssigneeComments,
         if (_dueDate != null) 'dueDate': _dueDate!.toIso8601String(),
-        if (_assigneeIds.isNotEmpty) 'assigneeIds': _assigneeIds,
+        if (_assignees.isNotEmpty) 'assignees': _assignees,
       });
       if (mounted) {
         Navigator.of(context).pop();
@@ -928,34 +926,30 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
               _AssigneeSelector(
                 users: _teamUsers,
                 loading: _loadingUsers,
-                selectedIds: _assigneeIds,
+                assignees: _assignees,
                 onToggle: (id, checked) => setState(() {
+                  final index = _assignees.indexWhere((item) => item['userId'] == id);
                   if (checked) {
-                    _assigneeIds = [..._assigneeIds, id];
-                  } else {
-                    _assigneeIds =
-                        _assigneeIds.where((x) => x != id).toList();
+                    if (index < 0) {
+                      _assignees = [..._assignees, {'userId': id, 'canComment': true}];
+                    }
+                  } else if (index >= 0) {
+                    _assignees = [..._assignees]..removeAt(index);
                   }
+                }),
+                onSetCanComment: (id, canComment) => setState(() {
+                  _assignees = _assignees
+                      .map((item) => item['userId'] == id
+                          ? {...item, 'canComment': canComment}
+                          : item)
+                      .toList();
                 }),
               ),
               const SizedBox(height: 14),
-              Container(
-                decoration: BoxDecoration(
-                  border:
-                      Border.all(color: cs.outline.withValues(alpha: 0.4)),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: CheckboxListTile(
-                  title: const Text('Allow assignees to comment',
-                      style: TextStyle(fontWeight: FontWeight.w500)),
-                  subtitle: const Text('Assigned users can add task comments',
-                      style: TextStyle(fontSize: 12)),
-                  value: _allowAssigneeComments,
-                  activeColor: _kRed,
-                  checkColor: Colors.white,
-                  onChanged: (v) =>
-                      setState(() => _allowAssigneeComments = v ?? true),
-                ),
+              Text(
+                'Comment access is controlled per selected assignee.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: cs.onSurface.withValues(alpha: 0.6)),
               ),
               const SizedBox(height: 10),
 
@@ -1094,14 +1088,16 @@ class _ClearChip extends StatelessWidget {
 class _AssigneeSelector extends StatelessWidget {
   final List<dynamic> users;
   final bool loading;
-  final List<String> selectedIds;
+  final List<Map<String, dynamic>> assignees;
   final void Function(String id, bool checked) onToggle;
+  final void Function(String id, bool canComment) onSetCanComment;
 
   const _AssigneeSelector({
     required this.users,
     required this.loading,
-    required this.selectedIds,
+    required this.assignees,
     required this.onToggle,
+    required this.onSetCanComment,
   });
 
   @override
@@ -1147,35 +1143,75 @@ class _AssigneeSelector extends StatelessWidget {
                 ? fullname
                 : '${user['name'] ?? ''} ${user['surname'] ?? ''}'.trim();
             final email = user['email']?.toString() ?? '';
-            final isSelected = selectedIds.contains(id);
+            Map<String, dynamic>? assigneeEntry;
+            for (final item in assignees) {
+              if (item['userId'] == id) {
+                assigneeEntry = item;
+                break;
+              }
+            }
+            final isSelected = assigneeEntry != null;
+            final canComment = (assigneeEntry?['canComment'] as bool?) ?? true;
 
-            return CheckboxListTile(
-              dense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-              secondary: CircleAvatar(
-                radius: 16,
-                backgroundColor: _kRed.withValues(alpha: 0.12),
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: _kRed,
-                      fontWeight: FontWeight.bold),
-                ),
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Column(
+                children: [
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                    secondary: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: _kRed.withValues(alpha: 0.12),
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: _kRed,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    title: Text(name.isEmpty ? email : name,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500)),
+                    subtitle: email.isNotEmpty
+                        ? Text(email,
+                            style: const TextStyle(fontSize: 11),
+                            overflow: TextOverflow.ellipsis)
+                        : null,
+                    value: isSelected,
+                    activeColor: _kRed,
+                    checkColor: Colors.white,
+                    onChanged: (v) => onToggle(id, v ?? false),
+                  ),
+                  if (isSelected)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 56, right: 8, bottom: 6),
+                      child: Row(
+                        children: [
+                          const Text('Comment access:', style: TextStyle(fontSize: 12)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              key: ValueKey('comment-access-$id-$canComment'),
+                              initialValue: canComment ? 'comment' : 'view',
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: 'comment', child: Text('Can Comment')),
+                                DropdownMenuItem(value: 'view', child: Text('View Only')),
+                              ],
+                              onChanged: (value) => onSetCanComment(id, value != 'view'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
-              title: Text(name.isEmpty ? email : name,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w500)),
-              subtitle: email.isNotEmpty
-                  ? Text(email,
-                      style: const TextStyle(fontSize: 11),
-                      overflow: TextOverflow.ellipsis)
-                  : null,
-              value: isSelected,
-              activeColor: _kRed,
-              checkColor: Colors.white,
-              onChanged: (v) => onToggle(id, v ?? false),
             );
           },
         ),

@@ -91,7 +91,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     );
     if (!canComment) {
       return NextResponse.json(
-        { error: "Comments are disabled for assignees on this task" },
+        { error: "You can view this task, but commenting is disabled for your assignment" },
         { status: 403 }
       );
     }
