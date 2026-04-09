@@ -26,6 +26,8 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   FileText,
   Image,
@@ -202,6 +204,7 @@ export default function TaskDetailPage() {
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
+  const [collapsedReplies, setCollapsedReplies] = useState<Record<string, boolean>>({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -397,6 +400,34 @@ export default function TaskDetailPage() {
     () => buildThreadTree(task?.comments ?? []),
     [task?.comments]
   );
+  const threadMeta = useMemo(() => {
+    const meta: Record<string, { descendants: number; depth: number }> = {};
+    const walk = (node: ThreadNode<TaskComment>) => {
+      let descendants = 0;
+      let depth = 1;
+      for (const child of node.replies) {
+        walk(child);
+        const childMeta = meta[child.id] ?? { descendants: 0, depth: 1 };
+        descendants += 1 + childMeta.descendants;
+        depth = Math.max(depth, 1 + childMeta.depth);
+      }
+      meta[node.id] = { descendants, depth };
+    };
+    for (const root of commentTree) walk(root);
+    return meta;
+  }, [commentTree]);
+  const autoCollapsedReplies = useMemo(() => {
+    const initial: Record<string, boolean> = {};
+    for (const [id, meta] of Object.entries(threadMeta)) {
+      if (meta.descendants >= 4 || meta.depth >= 4) {
+        initial[id] = true;
+      }
+    }
+    return initial;
+  }, [threadMeta]);
+  useEffect(() => {
+    setCollapsedReplies(autoCollapsedReplies);
+  }, [autoCollapsedReplies]);
 
   if (loading) {
     return (
@@ -442,56 +473,65 @@ export default function TaskDetailPage() {
     const canEditComment = canEditConversation && isMe;
     const isEditing = editingCommentId === comment.id;
     const depthOffset = Math.min(depth, 6) * 14;
+    const replyMeta = threadMeta[comment.id] ?? { descendants: 0, depth: 1 };
+    const hasReplies = comment.replies.length > 0;
+    const isRepliesCollapsed = collapsedReplies[comment.id] ?? false;
 
     return (
       <div key={comment.id} className="space-y-2" style={{ marginLeft: `${depthOffset}px` }}>
         <div
           className={cn(
-            "rounded-xl border px-3 py-3 shadow-sm",
+            "rounded-2xl border px-3 py-3 shadow-sm",
             isMe
-              ? "border-[#AA8038]/25 bg-[#AA8038]/[0.03]"
-              : "border-slate-200 bg-white"
+              ? "border-[#AA8038]/35 bg-gradient-to-br from-[#AA8038]/[0.08] to-white"
+              : "border-slate-200/90 bg-white"
           )}
         >
           <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-400 text-xs font-semibold text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-400 text-xs font-semibold text-white shadow-sm">
               {initials(nameOf(comment.user))}
             </div>
             <div className="min-w-0 flex-1 space-y-2">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                <span className="font-medium text-slate-700">{nameOf(comment.user)}</span>
-                {isMe ? (
-                  <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
-                    You
+              <div className="flex flex-wrap items-start justify-between gap-2 text-[11px] text-slate-500">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-800">{nameOf(comment.user)}</span>
+                  {isMe ? (
+                    <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
+                      You
+                    </span>
+                  ) : null}
+                  <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500">
+                    {formatDateTime(comment.createdAt)}
                   </span>
-                ) : null}
-                <span>{formatDateTime(comment.createdAt)}</span>
-                {canComment && !isEditing ? (
-                  <button
-                    type="button"
-                    className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
-                    onClick={() => {
-                      setReplyToComment(comment);
-                      setEditingCommentId(null);
-                      setEditingCommentHtml("");
-                    }}
-                  >
-                    <Reply className="mr-1 inline h-3 w-3" />
-                    Reply
-                  </button>
-                ) : null}
-                {canEditComment && !isEditing ? (
-                  <button
-                    type="button"
-                    className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
-                    onClick={() => {
-                      setEditingCommentId(comment.id);
-                      setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
-                    }}
-                  >
-                    Edit
-                  </button>
-                ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {canComment && !isEditing ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-transparent px-2 py-0.5 text-[11px] font-medium text-[#C78100] hover:border-[#AA8038]/20 hover:bg-[#AA8038]/10"
+                      onClick={() => {
+                        setReplyToComment(comment);
+                        setEditingCommentId(null);
+                        setEditingCommentHtml("");
+                      }}
+                    >
+                      <Reply className="mr-1 inline h-3 w-3" />
+                      Reply
+                    </button>
+                  ) : null}
+                  {canEditComment && !isEditing ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-transparent px-2 py-0.5 text-[11px] font-medium text-[#C78100] hover:border-[#AA8038]/20 hover:bg-[#AA8038]/10"
+                      onClick={() => {
+                        setEditingCommentId(comment.id);
+                        setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
+                      }}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                </div>
               </div>
               {isEditing ? (
                 <div className="space-y-2 rounded-lg border bg-white p-2">
@@ -560,11 +600,35 @@ export default function TaskDetailPage() {
                   ) : null}
                 </>
               )}
+              {hasReplies ? (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-full border border-[#AA8038]/25 bg-white px-2.5 py-1 text-[11px] font-medium text-[#8A651E] hover:bg-[#AA8038]/10"
+                    onClick={() =>
+                      setCollapsedReplies((prev) => ({
+                        ...prev,
+                        [comment.id]: !(prev[comment.id] ?? false),
+                      }))
+                    }
+                  >
+                    {isRepliesCollapsed ? (
+                      <ChevronRight className="mr-1 h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    {isRepliesCollapsed ? "Expand" : "Collapse"} thread
+                  </button>
+                  <span className="text-[11px] text-slate-500">
+                    {replyMeta.descendants} repl{replyMeta.descendants === 1 ? "y" : "ies"} in this branch
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
-        {comment.replies.length > 0 ? (
-          <div className="ml-3 space-y-2 border-l border-[#AA8038]/25 pl-3">
+        {hasReplies && !isRepliesCollapsed ? (
+          <div className="ml-4 space-y-2 border-l-2 border-[#AA8038]/25 pl-4">
             {comment.replies.map((child) => renderCommentNode(child, depth + 1))}
           </div>
         ) : null}
