@@ -1958,8 +1958,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     adjustHeightForKeyboard: true,
                   ),
                   htmlToolbarOptions: const HtmlToolbarOptions(
-                    toolbarType: ToolbarType.nativeExpandable,
-                    initiallyExpanded: true,
+                    toolbarType: ToolbarType.nativeScrollable,
+                    initiallyExpanded: false,
+                    toolbarItemHeight: 30,
+                    renderSeparatorWidget: false,
                     defaultToolbarButtons: [
                       StyleButtons(),
                       FontSettingButtons(fontSizeUnit: false),

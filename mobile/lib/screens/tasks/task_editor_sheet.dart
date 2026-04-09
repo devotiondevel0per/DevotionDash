@@ -741,8 +741,10 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
                     adjustHeightForKeyboard: true,
                   ),
                   htmlToolbarOptions: const HtmlToolbarOptions(
-                    toolbarType: ToolbarType.nativeExpandable,
-                    initiallyExpanded: true,
+                    toolbarType: ToolbarType.nativeScrollable,
+                    initiallyExpanded: false,
+                    toolbarItemHeight: 30,
+                    renderSeparatorWidget: false,
                     defaultToolbarButtons: [
                       StyleButtons(),
                       FontSettingButtons(fontSizeUnit: false),
