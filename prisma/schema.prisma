@@ -123,6 +123,7 @@ model Group {
   createdAt   DateTime      @default(now())
   members     GroupMember[]
   boardTopics BoardTopic[]
+  taskAssignments TaskGroupAssignment[]
 
   @@map("groups")
 }
@@ -159,6 +160,7 @@ model Task {
   creatorId   String
   creator     User           @relation("TaskCreator", fields: [creatorId], references: [id])
   assignees   TaskAssignee[]
+  assignedGroups TaskGroupAssignment[]
   comments    TaskComment[]
   favorites   TaskFavorite[]
   attachments Attachment[]
@@ -176,6 +178,19 @@ model TaskAssignee {
 
   @@unique([taskId, userId])
   @@map("task_assignees")
+}
+
+model TaskGroupAssignment {
+  id        String   @id @default(cuid())
+  taskId    String
+  groupId   String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, groupId])
+  @@index([groupId])
+  @@map("task_group_assignments")
 }
 
 model TaskComment {

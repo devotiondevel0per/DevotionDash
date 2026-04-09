@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
-import { normalizeTaskAssigneePermissions } from "@/lib/task-assignees";
+import {
+  normalizeTaskAssigneePermissions,
+  normalizeTaskGroupIds,
+  type TaskAssigneePermission,
+} from "@/lib/task-assignees";
 import { notifyTaskChange } from "@/lib/task-notifications";
 import {
   canCurrentUserCommentOnTask,
@@ -31,7 +35,10 @@ function isMissingColumn(error: unknown, columnName: string) {
   }
 
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return new RegExp(columnName, "i").test(message) && /(unknown column|doesn't exist|p2022|not found)/i.test(message);
+  return (
+    new RegExp(columnName, "i").test(message) &&
+    /(unknown column|doesn't exist|p2022|not found)/i.test(message)
+  );
 }
 
 function isMissingTaskCommentAttachmentColumn(error: unknown) {
@@ -40,6 +47,19 @@ function isMissingTaskCommentAttachmentColumn(error: unknown) {
 
 function isMissingTaskCommentParentColumn(error: unknown) {
   return isMissingColumn(error, "parentcommentid");
+}
+
+function isMissingTaskGroupAssignmentsTable(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    const meta = (error.meta ?? {}) as Record<string, unknown>;
+    const target = String(meta.table ?? meta.modelName ?? meta.cause ?? "");
+    if (/task_group_assignments/i.test(target)) return true;
+    if (error.code === "P2021" && /task_group_assignments/i.test(String(meta.table ?? ""))) {
+      return true;
+    }
+  }
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /task_group_assignments/i.test(message) && /(doesn't exist|unknown table|p2021)/i.test(message);
 }
 
 function taskAssigneeSelect(includeCanComment: boolean) {
@@ -62,13 +82,30 @@ function taskInclude(options: {
   includeCanComment: boolean;
   includeTaskCommentAttachments: boolean;
   includeTaskCommentParent: boolean;
+  includeTaskGroups: boolean;
 }) {
-  const { userId, includeCanComment, includeTaskCommentAttachments, includeTaskCommentParent } = options;
+  const {
+    userId,
+    includeCanComment,
+    includeTaskCommentAttachments,
+    includeTaskCommentParent,
+    includeTaskGroups,
+  } = options;
   return {
     creator: { select: { id: true, name: true, fullname: true } },
     assignees: {
       select: taskAssigneeSelect(includeCanComment),
     },
+    ...(includeTaskGroups
+      ? {
+          assignedGroups: {
+            select: {
+              groupId: true,
+              group: { select: { id: true, name: true, color: true } },
+            },
+          },
+        }
+      : {}),
     comments: {
       orderBy: { createdAt: "asc" as const },
       select: {
@@ -81,7 +118,7 @@ function taskInclude(options: {
         user: { select: { id: true, name: true, fullname: true } },
         ...(includeTaskCommentAttachments
           ? {
-            attachments: {
+              attachments: {
                 orderBy: { createdAt: "asc" as const },
                 select: attachmentSelect,
               },
@@ -108,29 +145,42 @@ function taskInclude(options: {
 }
 
 async function findTaskWithCompat(id: string, userId: string) {
-  const attempts = [
-    { includeCanComment: true, includeTaskCommentAttachments: true, includeTaskCommentParent: true },
-    { includeCanComment: false, includeTaskCommentAttachments: true, includeTaskCommentParent: true },
-    { includeCanComment: true, includeTaskCommentAttachments: false, includeTaskCommentParent: true },
-    { includeCanComment: false, includeTaskCommentAttachments: false, includeTaskCommentParent: true },
-    { includeCanComment: true, includeTaskCommentAttachments: true, includeTaskCommentParent: false },
-    { includeCanComment: false, includeTaskCommentAttachments: true, includeTaskCommentParent: false },
-    { includeCanComment: true, includeTaskCommentAttachments: false, includeTaskCommentParent: false },
-    { includeCanComment: false, includeTaskCommentAttachments: false, includeTaskCommentParent: false },
-  ] as const;
+  const bools = [true, false] as const;
+  const attempts: Array<{
+    includeCanComment: boolean;
+    includeTaskCommentAttachments: boolean;
+    includeTaskCommentParent: boolean;
+    includeTaskGroups: boolean;
+  }> = [];
+  for (const includeCanComment of bools) {
+    for (const includeTaskCommentAttachments of bools) {
+      for (const includeTaskCommentParent of bools) {
+        for (const includeTaskGroups of bools) {
+          attempts.push({
+            includeCanComment,
+            includeTaskCommentAttachments,
+            includeTaskCommentParent,
+            includeTaskGroups,
+          });
+        }
+      }
+    }
+  }
 
   let lastError: unknown = null;
   for (const attempt of attempts) {
     try {
-      return await prisma.task.findUnique({
+      const task = await prisma.task.findUnique({
         where: { id },
         include: taskInclude({
           userId,
           includeCanComment: attempt.includeCanComment,
           includeTaskCommentAttachments: attempt.includeTaskCommentAttachments,
           includeTaskCommentParent: attempt.includeTaskCommentParent,
+          includeTaskGroups: attempt.includeTaskGroups,
         }),
       });
+      return { task, usedAttempt: attempt };
     } catch (error) {
       const missingCanComment =
         attempt.includeCanComment && isMissingTaskAssigneeCanCommentColumn(error);
@@ -138,7 +188,16 @@ async function findTaskWithCompat(id: string, userId: string) {
         attempt.includeTaskCommentAttachments && isMissingTaskCommentAttachmentColumn(error);
       const missingTaskCommentParent =
         attempt.includeTaskCommentParent && isMissingTaskCommentParentColumn(error);
-      if (!missingCanComment && !missingTaskCommentAttachment && !missingTaskCommentParent) throw error;
+      const missingTaskGroups =
+        attempt.includeTaskGroups && isMissingTaskGroupAssignmentsTable(error);
+      if (
+        !missingCanComment &&
+        !missingTaskCommentAttachment &&
+        !missingTaskCommentParent &&
+        !missingTaskGroups
+      ) {
+        throw error;
+      }
       lastError = error;
     }
   }
@@ -151,6 +210,12 @@ type NormalizedTaskAssignee = {
   userId: string;
   canComment: boolean;
   user: { id: string; name: string; fullname: string };
+};
+
+type NormalizedTaskGroup = {
+  id: string;
+  name: string;
+  color: string;
 };
 
 type NormalizedTaskComment = {
@@ -189,6 +254,21 @@ function normalizeTaskAssigneesForResponse(
       fullname: String(entry.user?.fullname ?? ""),
     },
   }));
+}
+
+function normalizeTaskGroupsForResponse(
+  groups: Array<{
+    groupId?: string;
+    group?: { id?: string; name?: string; color?: string };
+  }>
+): NormalizedTaskGroup[] {
+  return groups
+    .map((entry) => ({
+      id: String(entry.group?.id ?? entry.groupId ?? ""),
+      name: String(entry.group?.name ?? ""),
+      color: String(entry.group?.color ?? "#94a3b8"),
+    }))
+    .filter((entry) => entry.id.length > 0);
 }
 
 function normalizeTaskCommentsForResponse(
@@ -238,19 +318,122 @@ function normalizeTaskCommentsForResponse(
   }));
 }
 
+async function resolveTaskGroupAssignments(
+  requestedGroupIds: string[],
+  access: {
+    isAdmin: boolean;
+    permissions: { tasks: { manage: boolean } };
+    roles: Array<{ groupId: string }>;
+  }
+) {
+  const normalized = normalizeTaskGroupIds(requestedGroupIds);
+  if (normalized.length === 0) {
+    return {
+      groupIds: [] as string[],
+      members: [] as string[],
+    };
+  }
+
+  const existingGroups = await prisma.group.findMany({
+    where: { id: { in: normalized } },
+    select: { id: true },
+  });
+  const existingGroupIds = Array.from(new Set(existingGroups.map((group) => group.id)));
+  const missing = normalized.filter((groupId) => !existingGroupIds.includes(groupId));
+  if (missing.length > 0) {
+    throw new Error(`Invalid groupIds: ${missing.join(", ")}`);
+  }
+
+  if (!access.isAdmin && !access.permissions.tasks.manage) {
+    const ownRoleGroupIds = new Set(access.roles.map((role) => role.groupId));
+    const forbidden = existingGroupIds.filter((groupId) => !ownRoleGroupIds.has(groupId));
+    if (forbidden.length > 0) {
+      throw new Error("You can assign only groups that are in your role scope");
+    }
+  }
+
+  const groupMembers = await prisma.groupMember.findMany({
+    where: { groupId: { in: existingGroupIds } },
+    select: { userId: true },
+  });
+  const members = Array.from(new Set(groupMembers.map((entry) => entry.userId)));
+
+  return {
+    groupIds: existingGroupIds,
+    members,
+  };
+}
+
+function mergeAssigneesWithGroupMembers(
+  assignees: TaskAssigneePermission[],
+  groupMembers: string[]
+) {
+  const map = new Map<string, boolean>();
+  for (const entry of assignees) {
+    map.set(entry.userId, entry.canComment);
+  }
+  for (const userId of groupMembers) {
+    if (!map.has(userId)) {
+      map.set(userId, true);
+    }
+  }
+  return Array.from(map.entries()).map(([userId, canComment]) => ({ userId, canComment }));
+}
+
+async function loadExistingAssigneesForUpdate(taskId: string): Promise<TaskAssigneePermission[]> {
+  try {
+    const result = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        assignees: {
+          select: {
+            userId: true,
+            canComment: true,
+          },
+        },
+      },
+    });
+    if (!result) return [];
+    return result.assignees.map((entry) => ({
+      userId: entry.userId,
+      canComment: entry.canComment,
+    }));
+  } catch (error) {
+    if (!isMissingTaskAssigneeCanCommentColumn(error)) throw error;
+    const legacy = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        assignees: {
+          select: {
+            userId: true,
+          },
+        },
+      },
+    });
+    if (!legacy) return [];
+    return legacy.assignees.map((entry) => ({
+      userId: entry.userId,
+      canComment: true,
+    }));
+  }
+}
+
 export async function GET(_req: NextRequest, { params }: RouteContext) {
   const accessResult = await requireModuleAccess("tasks", "read");
   if (!accessResult.ok) return accessResult.response;
 
   try {
     const userId = accessResult.ctx.userId;
+    const canManageTasks =
+      accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage;
+    const canWriteTasks = canManageTasks || accessResult.ctx.access.permissions.tasks.write;
     const { id } = await params;
 
-    const task = await findTaskWithCompat(id, userId);
-
+    const { task, usedAttempt } = await findTaskWithCompat(id, userId);
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
+
     const normalizedAssignees = normalizeTaskAssigneesForResponse(
       task.assignees as Array<{
         id?: string;
@@ -259,6 +442,12 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
         user?: { id?: string; name?: string; fullname?: string };
       }>
     );
+    const normalizedAssignedGroups = usedAttempt.includeTaskGroups
+      ? normalizeTaskGroupsForResponse(
+          (task as { assignedGroups?: Array<{ groupId?: string; group?: { id?: string; name?: string; color?: string } }> })
+            .assignedGroups ?? []
+        )
+      : [];
     const normalizedComments = normalizeTaskCommentsForResponse(
       task.comments as Array<{
         id?: string;
@@ -291,13 +480,16 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       userId,
       accessResult.ctx.access
     );
-    const canDelete = accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage;
+    const canDelete = canManageTasks;
 
     return NextResponse.json({
       ...task,
       assignees: normalizedAssignees,
+      assignedGroups: normalizedAssignedGroups,
       comments: normalizedComments,
       canComment,
+      canEditTask: canWriteTasks,
+      canChangeStatus: canWriteTasks,
       canDelete,
       isFavorite: task.favorites.length > 0,
       favoriteCount: task._count.favorites,
@@ -315,9 +507,19 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
 
   try {
     const userId = accessResult.ctx.userId;
+    const canManageTasks =
+      accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage;
     const { id } = await params;
 
-    const existing = await prisma.task.findUnique({ where: { id } });
+    const existing = await prisma.task.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        priority: true,
+        completedAt: true,
+      },
+    });
     if (!existing) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
@@ -334,6 +536,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       isPrivate,
       assignees,
       assigneeIds,
+      groupIds: rawGroupIds,
     } = body as {
       title?: string;
       description?: string;
@@ -344,16 +547,51 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       isPrivate?: boolean;
       assignees?: Array<{ userId?: string; canComment?: boolean }>;
       assigneeIds?: string[];
+      groupIds?: string[];
     };
-    const hasAssigneeUpdate = assignees !== undefined || assigneeIds !== undefined;
-    const normalizedAssignees = normalizeTaskAssigneePermissions({
-      assignees,
-      assigneeIds,
-    });
 
-    const statusToUse = status !== undefined
-      ? (stages.some((stage) => stage.key === status) ? status : existing.status)
-      : undefined;
+    const hasAssigneePayload = assignees !== undefined || assigneeIds !== undefined;
+    const hasGroupUpdate = rawGroupIds !== undefined;
+    const hasAssigneeUpdate = hasAssigneePayload || hasGroupUpdate;
+
+    const directAssignees = hasAssigneePayload
+      ? normalizeTaskAssigneePermissions({
+          assignees,
+          assigneeIds,
+        })
+      : hasGroupUpdate
+        ? await loadExistingAssigneesForUpdate(id)
+        : [];
+
+    const requestedGroupIds = normalizeTaskGroupIds(rawGroupIds);
+    let resolvedGroupIds: string[] = [];
+    let groupMembers: string[] = [];
+    if (hasGroupUpdate && requestedGroupIds.length > 0) {
+      try {
+        const resolved = await resolveTaskGroupAssignments(
+          requestedGroupIds,
+          accessResult.ctx.access
+        );
+        resolvedGroupIds = resolved.groupIds;
+        groupMembers = resolved.members;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Invalid group assignment";
+        if (/Invalid groupIds/i.test(message)) {
+          return NextResponse.json({ error: message }, { status: 400 });
+        }
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
+    }
+    const normalizedAssignees = hasAssigneeUpdate
+      ? mergeAssigneesWithGroupMembers(directAssignees, groupMembers)
+      : [];
+
+    const statusToUse =
+      status !== undefined
+        ? stages.some((stage) => stage.key === status)
+          ? status
+          : existing.status
+        : undefined;
 
     let completedAt: Date | null | undefined;
     if (statusToUse !== undefined) {
@@ -366,10 +604,14 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       }
     }
 
-    const runUpdate = async (includeCanComment: boolean) => {
+    const runUpdate = async (options: { includeCanComment: boolean; includeTaskGroups: boolean }) => {
+      const { includeCanComment, includeTaskGroups } = options;
       await prisma.$transaction(async (tx) => {
         if (hasAssigneeUpdate) {
           await tx.taskAssignee.deleteMany({ where: { taskId: id } });
+        }
+        if (hasGroupUpdate && includeTaskGroups) {
+          await tx.taskGroupAssignment.deleteMany({ where: { taskId: id } });
         }
 
         await tx.task.update({
@@ -385,33 +627,60 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
             ...(dueDate !== undefined && {
               dueDate: dueDate ? new Date(dueDate) : null,
             }),
-            ...(hasAssigneeUpdate && normalizedAssignees.length > 0 && {
-              assignees: {
-                create: normalizedAssignees.map((entry) =>
-                  includeCanComment
-                    ? { userId: entry.userId, canComment: entry.canComment }
-                    : { userId: entry.userId }
-                ),
-              },
-            }),
+            ...(hasAssigneeUpdate && normalizedAssignees.length > 0
+              ? {
+                  assignees: {
+                    create: normalizedAssignees.map((entry) =>
+                      includeCanComment
+                        ? { userId: entry.userId, canComment: entry.canComment }
+                        : { userId: entry.userId }
+                    ),
+                  },
+                }
+              : {}),
+            ...(hasGroupUpdate && includeTaskGroups && resolvedGroupIds.length > 0
+              ? {
+                  assignedGroups: {
+                    create: resolvedGroupIds.map((groupId) => ({ groupId })),
+                  },
+                }
+              : {}),
           },
         });
       });
     };
 
-    try {
-      await runUpdate(true);
-    } catch (error) {
-      if (!(hasAssigneeUpdate && isMissingTaskAssigneeCanCommentColumn(error))) {
-        throw error;
-      }
-      await runUpdate(false);
-    }
+    const attempts = [
+      { includeCanComment: true, includeTaskGroups: true },
+      { includeCanComment: false, includeTaskGroups: true },
+      { includeCanComment: true, includeTaskGroups: false },
+      { includeCanComment: false, includeTaskGroups: false },
+    ] as const;
 
-    const task = await findTaskWithCompat(id, userId);
-    if (!task) {
+    let lastError: unknown = null;
+    for (const attempt of attempts) {
+      try {
+        await runUpdate(attempt);
+        lastError = null;
+        break;
+      } catch (error) {
+        const missingCanComment =
+          attempt.includeCanComment && hasAssigneeUpdate && isMissingTaskAssigneeCanCommentColumn(error);
+        const missingTaskGroups =
+          attempt.includeTaskGroups && hasGroupUpdate && isMissingTaskGroupAssignmentsTable(error);
+        if (!missingCanComment && !missingTaskGroups) {
+          throw error;
+        }
+        lastError = error;
+      }
+    }
+    if (lastError) throw lastError;
+
+    const fetched = await findTaskWithCompat(id, userId);
+    if (!fetched.task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
+    const task = fetched.task;
     const normalizedTaskAssignees = normalizeTaskAssigneesForResponse(
       task.assignees as Array<{
         id?: string;
@@ -420,19 +689,35 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
         user?: { id?: string; name?: string; fullname?: string };
       }>
     );
+    const normalizedAssignedGroups = fetched.usedAttempt.includeTaskGroups
+      ? normalizeTaskGroupsForResponse(
+          (task as { assignedGroups?: Array<{ groupId?: string; group?: { id?: string; name?: string; color?: string } }> })
+            .assignedGroups ?? []
+        )
+      : [];
+
     const assigneeUserIds = normalizedTaskAssignees
       .map((entry) => entry.user.id)
       .filter((idValue) => idValue.length > 0);
     const summaryParts: string[] = [];
-    if (statusToUse !== undefined && statusToUse !== existing.status) summaryParts.push(`status ${existing.status} -> ${task.status}`);
-    if (priority !== undefined && priority !== existing.priority) summaryParts.push(`priority ${existing.priority} -> ${task.priority}`);
+    if (statusToUse !== undefined && statusToUse !== existing.status) {
+      summaryParts.push(`status ${existing.status} -> ${task.status}`);
+    }
+    if (priority !== undefined && priority !== existing.priority) {
+      summaryParts.push(`priority ${existing.priority} -> ${task.priority}`);
+    }
     if (dueDate !== undefined) {
       const nextDue = task.dueDate ? task.dueDate.toISOString().slice(0, 10) : "none";
       summaryParts.push(`due ${nextDue}`);
     }
     if (hasAssigneeUpdate) {
       const commentersCount = normalizedTaskAssignees.filter((entry) => Boolean(entry.canComment)).length;
-      summaryParts.push(`assignees ${normalizedTaskAssignees.length} (${commentersCount} can comment)`);
+      summaryParts.push(
+        `assignees ${normalizedTaskAssignees.length} (${commentersCount} can comment)`
+      );
+    }
+    if (hasGroupUpdate) {
+      summaryParts.push(`groups ${normalizedAssignedGroups.length}`);
     }
 
     const canComment = canCurrentUserCommentOnTask(
@@ -447,7 +732,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       userId,
       accessResult.ctx.access
     );
-    const canDelete = accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage;
+    const canDelete = canManageTasks;
 
     await notifyTaskChange({
       action: "updated",
@@ -465,7 +750,10 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({
       ...task,
       assignees: normalizedTaskAssignees,
+      assignedGroups: normalizedAssignedGroups,
       canComment,
+      canEditTask: true,
+      canChangeStatus: true,
       canDelete,
       isFavorite: task.favorites.length > 0,
       favoriteCount: task._count.favorites,

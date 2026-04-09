@@ -97,6 +97,11 @@ type TaskItem = {
     canComment?: boolean;
     user: { id: string; name: string; fullname: string };
   }>;
+  assignedGroups?: TaskGroup[];
+  canComment?: boolean;
+  canEditTask?: boolean;
+  canChangeStatus?: boolean;
+  canDelete?: boolean;
   isFavorite?: boolean;
 };
 
@@ -138,6 +143,7 @@ type TaskFormState = {
   id?: string;
   title: string;
   assignees: Array<{ userId: string; canComment: boolean }>;
+  groupIds: string[];
   type: TaskType;
   status: TaskStatus;
   priority: TaskPriority;
@@ -219,6 +225,7 @@ const EMPTY_FILTERS: FilterState = {
 const EMPTY_FORM: TaskFormState = {
   title: "",
   assignees: [],
+  groupIds: [],
   type: "task",
   status: "opened",
   priority: "normal",
@@ -397,6 +404,7 @@ function TaskModal({
         dueDate: form.dueDate || null,
         isPrivate: form.isPrivate,
         assignees: form.assignees,
+        groupIds: form.groupIds,
       };
 
       const response = await fetch(form.id ? `/api/tasks/${form.id}` : "/api/tasks", {
@@ -420,6 +428,7 @@ function TaskModal({
   }
 
   const selected = useMemo(() => new Set(form.assignees.map((entry) => entry.userId)), [form.assignees]);
+  const selectedGroups = useMemo(() => new Set(form.groupIds), [form.groupIds]);
   const assigneeCanCommentMap = useMemo(
     () => new Map(form.assignees.map((entry) => [entry.userId, entry.canComment])),
     [form.assignees]
@@ -490,6 +499,15 @@ function TaskModal({
       assignees: prev.assignees.map((entry) =>
         entry.userId === userId ? { ...entry, canComment } : entry
       ),
+    }));
+  }
+
+  function toggleGroup(groupId: string, checked: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      groupIds: checked
+        ? Array.from(new Set([...prev.groupIds, groupId]))
+        : prev.groupIds.filter((id) => id !== groupId),
     }));
   }
 
@@ -592,8 +610,39 @@ function TaskModal({
             </div>
           </div>
 
-            <div className="space-y-3 overflow-auto rounded border bg-slate-50 p-3">
+          <div className="space-y-3 overflow-auto rounded border bg-slate-50 p-3">
             <Label>Assigned to</Label>
+            {groups.length > 0 ? (
+              <div className="rounded border bg-white p-2">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Assign Groups
+                </p>
+                <div className="space-y-1.5">
+                  {groups.map((group) => (
+                    <label
+                      key={`group-${group.id}`}
+                      className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 hover:bg-slate-50"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 text-xs text-slate-700">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: group.color ?? "#94a3b8" }}
+                        />
+                        <span className="truncate">{group.name}</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={selectedGroups.has(group.id)}
+                        onChange={(event) => toggleGroup(group.id, event.target.checked)}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Group members are auto-added as assignees when saved.
+                </p>
+              </div>
+            ) : null}
             <div className="max-h-72 space-y-1 overflow-y-auto rounded border bg-white p-2">
               {groupedUsers.length === 0 ? <p className="text-xs text-slate-500">No users available</p> : groupedUsers.map((section) => {
                 const userIds = section.users.map((user) => user.id);
@@ -886,15 +935,16 @@ function TaskDetailDialog({
   if (!task) return null;
   const stageMeta = getStageMeta(stages, task.status);
   const isClosed = stages.find((s) => s.key === task.status)?.isClosed ?? false;
-  const canWriteTask = can("tasks", "write");
+  const canWriteTask = task.canEditTask ?? can("tasks", "write");
   const canEditConversation = task.type === "note" && canWriteTask;
   const canManage = can("tasks", "manage");
   const canComment =
-    canManage ||
-    task.creatorId === meId ||
-    task.assignees.some(
-      (entry) => entry.user.id === meId && (entry.canComment ?? true)
-    );
+    task.canComment ??
+    (canManage ||
+      task.creatorId === meId ||
+      task.assignees.some(
+        (entry) => entry.user.id === meId && (entry.canComment ?? true)
+      ));
 
   const renderCommentNode = (comment: ThreadNode<TaskComment>, depth: number): ReactNode => {
     const isMe = comment.user.id === meId;
@@ -1090,6 +1140,14 @@ function TaskDetailDialog({
             <div className="flex flex-wrap gap-4 text-xs text-slate-600">
               <span className="flex items-center gap-1"><User className="h-3.5 w-3.5 text-slate-400" />Author: <span className="font-medium text-slate-800">{nameOf(task.creator)}</span></span>
               <span className="flex items-center gap-1">Assigned: <span className="font-medium text-slate-800">{task.assignees.length > 0 ? task.assignees.map((e) => nameOf(e.user)).join(", ") : "—"}</span></span>
+              {Array.isArray(task.assignedGroups) && task.assignedGroups.length > 0 ? (
+                <span className="flex items-center gap-1">
+                  Groups:
+                  <span className="font-medium text-slate-800">
+                    {task.assignedGroups.map((group) => group.name).join(", ")}
+                  </span>
+                </span>
+              ) : null}
               <span>Created: <span className="font-medium text-slate-800">{formatDate(task.createdAt)}</span></span>
             </div>
             {task.description ? (
@@ -1355,7 +1413,7 @@ export default function TasksPage() {
   }
 
   async function openEdit(task: TaskItem) {
-    if (!canWrite) return;
+    if (!(task.canEditTask ?? canWrite)) return;
     try {
       const response = await fetch(`/api/tasks/${task.id}`, { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as TaskItem | { error?: string } | null;
@@ -1370,6 +1428,9 @@ export default function TasksPage() {
           userId: entry.user.id,
           canComment: entry.canComment ?? true,
         })),
+        groupIds: Array.isArray(detailedTask.assignedGroups)
+          ? detailedTask.assignedGroups.map((group) => group.id).filter(Boolean)
+          : [],
         type: detailedTask.type,
         status: detailedTask.status,
         priority: detailedTask.priority,
@@ -1406,6 +1467,11 @@ export default function TasksPage() {
   }
 
   async function toggleComplete(task: TaskItem) {
+    const canChangeStatus = task.canChangeStatus ?? (task.canEditTask ?? canWrite);
+    if (!canChangeStatus) {
+      toast.error("You do not have permission to change task status");
+      return;
+    }
     try {
       const openStage = stages.find((s) => !s.isClosed);
       const closedStage = stages.find((s) => s.isClosed);
@@ -1420,6 +1486,11 @@ export default function TasksPage() {
 
   async function moveTaskToStatus(task: TaskItem, status: string) {
     if (task.status === status) return;
+    const canChangeStatus = task.canChangeStatus ?? (task.canEditTask ?? canWrite);
+    if (!canChangeStatus) {
+      toast.error("You do not have permission to change task status");
+      return;
+    }
     try {
       const stageMeta = getStageMeta(stages, status);
       await patchTask(task.id, { status });
@@ -1677,6 +1748,9 @@ export default function TasksPage() {
               </div>
               {tasks.map((task) => {
                 const done = stages.find((s) => s.key === task.status)?.isClosed ?? false;
+                const canEditTaskItem = task.canEditTask ?? canWrite;
+                const canChangeStatus = task.canChangeStatus ?? canEditTaskItem;
+                const canDeleteTaskItem = task.canDelete ?? canManage;
                 return (
                   <div
                     key={task.id}
@@ -1689,7 +1763,7 @@ export default function TasksPage() {
                       className="mx-auto flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-500 hover:border-[#AA8038] hover:text-[#AA8038]"
                       onClick={() => void toggleComplete(task)}
                       title={done ? "Reopen" : "Complete"}
-                      disabled={!canWrite}
+                      disabled={!canChangeStatus}
                     >
                       {done ? <Check className="h-3.5 w-3.5" /> : null}
                     </button>
@@ -1738,7 +1812,7 @@ export default function TasksPage() {
                         className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
                         onClick={() => void openEdit(task)}
                         title="Edit"
-                        disabled={!canWrite}
+                        disabled={!canEditTaskItem}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -1746,7 +1820,7 @@ export default function TasksPage() {
                         className="rounded border border-transparent p-1 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                         onClick={() => setDeleteTarget(task)}
                         title="Delete"
-                        disabled={!canManage || deletingTaskId === task.id}
+                        disabled={!canDeleteTaskItem || deletingTaskId === task.id}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -1757,7 +1831,11 @@ export default function TasksPage() {
             </div>
           ) : layout === "grid" ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {tasks.map((task) => (
+              {tasks.map((task) => {
+                const canEditTaskItem = task.canEditTask ?? canWrite;
+                const canChangeStatus = task.canChangeStatus ?? canEditTaskItem;
+                const canDeleteTaskItem = task.canDelete ?? canManage;
+                return (
                 <article key={task.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
                   <div className="flex items-start justify-between gap-2">
                     <button
@@ -1770,7 +1848,7 @@ export default function TasksPage() {
                     <button
                       className="rounded border border-slate-200 p-1 text-slate-500 hover:border-[#AA8038] hover:text-[#AA8038]"
                       onClick={() => void toggleComplete(task)}
-                      disabled={!canWrite}
+                      disabled={!canChangeStatus}
                       title={(stages.find((s) => s.key === task.status)?.isClosed ?? false) ? "Reopen" : "Mark complete"}
                     >
                       {(stages.find((s) => s.key === task.status)?.isClosed ?? false) ? <Eye className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -1791,6 +1869,9 @@ export default function TasksPage() {
                       Due: {formatDate(task.dueDate)}
                     </div>
                     <div className="truncate">Assigned: {task.assignees.length > 0 ? task.assignees.map((entry) => nameOf(entry.user)).join(", ") : "-"}</div>
+                    {Array.isArray(task.assignedGroups) && task.assignedGroups.length > 0 ? (
+                      <div className="truncate">Groups: {task.assignedGroups.map((group) => group.name).join(", ")}</div>
+                    ) : null}
                     <div className="truncate text-[#0066c2]">Author: {nameOf(task.creator)}</div>
                   </div>
 
@@ -1809,7 +1890,7 @@ export default function TasksPage() {
                       className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
                       onClick={() => void openEdit(task)}
                       title="Edit"
-                      disabled={!canWrite}
+                      disabled={!canEditTaskItem}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
@@ -1817,13 +1898,13 @@ export default function TasksPage() {
                       className="rounded border border-transparent p-1 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                       onClick={() => setDeleteTarget(task)}
                       title="Delete"
-                      disabled={!canManage || deletingTaskId === task.id}
+                      disabled={!canDeleteTaskItem || deletingTaskId === task.id}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </article>
-              ))}
+              );})}
             </div>
           ) : (
             <div className="min-w-[1024px]">
@@ -1837,11 +1918,12 @@ export default function TasksPage() {
                       style={meta.columnStyle}
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={() => {
-                        if (!canWrite) return;
                         if (!dragTaskId) return;
                         const draggedTask = tasks.find((entry) => entry.id === dragTaskId);
                         setDragTaskId(null);
                         if (!draggedTask) return;
+                        const canChangeStatus = draggedTask.canChangeStatus ?? (draggedTask.canEditTask ?? canWrite);
+                        if (!canChangeStatus) return;
                         void moveTaskToStatus(draggedTask, stage.key);
                       }}
                     >
@@ -1860,7 +1942,7 @@ export default function TasksPage() {
                           (tasksByStatus[stage.key] ?? []).map((task) => (
                             <article
                               key={task.id}
-                              draggable={canWrite}
+                              draggable={task.canChangeStatus ?? (task.canEditTask ?? canWrite)}
                               onDragStart={(event) => handleKanbanDragStart(event, task.id)}
                               onDragEnd={handleKanbanDragEnd}
                               className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
@@ -1883,10 +1965,10 @@ export default function TasksPage() {
                                 <Select
                                   value={task.status}
                                   onValueChange={(value) => {
-                                    if (!canWrite) return;
+                                    if (!(task.canChangeStatus ?? (task.canEditTask ?? canWrite))) return;
                                     if (value) void moveTaskToStatus(task, value);
                                   }}
-                                  disabled={!canWrite}
+                                  disabled={!(task.canChangeStatus ?? (task.canEditTask ?? canWrite))}
                                 >
                                   <SelectTrigger className="h-7 w-[112px] text-xs">
                                     <SelectValue />
@@ -1913,7 +1995,7 @@ export default function TasksPage() {
                                     className="rounded border border-transparent p-1 text-slate-400 hover:border-slate-200 hover:text-slate-600"
                                     onClick={() => void openEdit(task)}
                                     title="Edit"
-                                    disabled={!canWrite}
+                                    disabled={!(task.canEditTask ?? canWrite)}
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </button>
@@ -1921,7 +2003,7 @@ export default function TasksPage() {
                                     className="rounded border border-transparent p-1 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                                     onClick={() => setDeleteTarget(task)}
                                     title="Delete"
-                                    disabled={!canManage || deletingTaskId === task.id}
+                                    disabled={!(task.canDelete ?? canManage) || deletingTaskId === task.id}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>

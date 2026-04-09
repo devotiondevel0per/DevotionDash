@@ -7,8 +7,10 @@ import {
   useRef,
   useState,
   type ClipboardEvent,
+  type DragEvent,
 } from "react";
 import {
+  BarChart3,
   Bold,
   Eraser,
   Italic,
@@ -242,6 +244,71 @@ export function normalizeRichText(input: string) {
   return normalized;
 }
 
+function encodeSvgDataUri(svg: string) {
+  const encoded = typeof window !== "undefined"
+    ? window.btoa(unescape(encodeURIComponent(svg)))
+    : "";
+  return `data:image/svg+xml;base64,${encoded}`;
+}
+
+function buildChartSvg(
+  labels: string[],
+  values: number[],
+  chartType: "bar" | "line"
+) {
+  const width = 780;
+  const height = 420;
+  const margin = { top: 36, right: 24, bottom: 96, left: 56 };
+  const chartWidth = width - margin.left - margin.right;
+  const chartHeight = height - margin.top - margin.bottom;
+  const max = Math.max(...values, 1);
+  const pointGap = labels.length > 1 ? chartWidth / (labels.length - 1) : chartWidth;
+  const barWidth = Math.max(24, Math.min(86, chartWidth / Math.max(values.length * 1.8, 1)));
+
+  const toY = (value: number) => margin.top + chartHeight - (value / max) * chartHeight;
+  const xFor = (index: number) =>
+    labels.length <= 1 ? margin.left + chartWidth / 2 : margin.left + index * pointGap;
+  const grid = Array.from({ length: 5 }).map((_, idx) => {
+    const ratio = idx / 4;
+    const y = margin.top + ratio * chartHeight;
+    const value = Math.round(max - ratio * max);
+    return `<line x1="${margin.left}" y1="${y}" x2="${margin.left + chartWidth}" y2="${y}" stroke="#e2e8f0" stroke-width="1" />
+<text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" font-size="12" fill="#64748b">${value}</text>`;
+  }).join("");
+
+  const bars = values.map((value, idx) => {
+    const x = xFor(idx) - barWidth / 2;
+    const y = toY(value);
+    const h = margin.top + chartHeight - y;
+    return `<rect x="${x}" y="${y}" width="${barWidth}" height="${h}" rx="6" fill="#AA8038" opacity="0.9" />`;
+  }).join("");
+
+  const linePath = values.map((value, idx) => {
+    const cmd = idx === 0 ? "M" : "L";
+    return `${cmd}${xFor(idx)},${toY(value)}`;
+  }).join(" ");
+  const linePoints = values.map((value, idx) => `<circle cx="${xFor(idx)}" cy="${toY(value)}" r="4" fill="#AA8038" />`).join("");
+
+  const labelsSvg = labels.map((label, idx) => {
+    const x = xFor(idx);
+    const y = margin.top + chartHeight + 18;
+    const safe = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<text x="${x}" y="${y}" text-anchor="middle" font-size="12" fill="#475569">${safe}</text>`;
+  }).join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+<rect width="${width}" height="${height}" fill="#ffffff" />
+<text x="${margin.left}" y="22" font-size="16" font-weight="700" fill="#1e293b">Chart</text>
+${grid}
+<line x1="${margin.left}" y1="${margin.top + chartHeight}" x2="${margin.left + chartWidth}" y2="${margin.top + chartHeight}" stroke="#cbd5e1" stroke-width="1.5" />
+<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + chartHeight}" stroke="#cbd5e1" stroke-width="1.5" />
+${chartType === "bar"
+    ? bars
+    : `<path d="${linePath}" fill="none" stroke="#AA8038" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />${linePoints}`}
+${labelsSvg}
+</svg>`;
+}
+
 type RichTextEditorProps = {
   value: string;
   onChange: (next: string) => void;
@@ -249,6 +316,7 @@ type RichTextEditorProps = {
   minHeight?: number;
   disabled?: boolean;
   className?: string;
+  imageUploadEndpoint?: string;
 };
 
 type ToolbarButtonProps = {
@@ -285,12 +353,15 @@ export function RichTextEditor({
   minHeight = 140,
   disabled,
   className,
+  imageUploadEndpoint = "/api/upload",
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const textColorRef = useRef<HTMLInputElement | null>(null);
   const bgColorRef = useRef<HTMLInputElement | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const [isSourceMode, setIsSourceMode] = useState(false);
   const [sourceValue, setSourceValue] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const normalizedValue = useMemo(() => normalizeRichText(value), [value]);
   const showPlaceholder = !isSourceMode && !hasRichTextContent(normalizedValue);
 
@@ -346,6 +417,51 @@ export function RichTextEditor({
     runCommand("createLink", href);
   }, [runCommand]);
 
+  const uploadImageFile = useCallback(
+    async (file: File) => {
+      if (disabled || isSourceMode) return;
+      setUploadingImage(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch(imageUploadEndpoint, {
+          method: "POST",
+          body: formData,
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | { url?: string; fileUrl?: string; error?: string }
+          | null;
+        if (!response.ok) {
+          throw new Error(payload?.error ?? "Image upload failed");
+        }
+        const src = sanitizeMediaSrc(payload?.url ?? payload?.fileUrl ?? "");
+        if (!src) {
+          throw new Error("Image upload returned an invalid URL");
+        }
+        const alt = (file.name ?? "uploaded image").replace(/"/g, "&quot;");
+        insertHtml(`<img src="${src}" alt="${alt}" />`);
+      } finally {
+        setUploadingImage(false);
+      }
+    },
+    [disabled, imageUploadEndpoint, insertHtml, isSourceMode]
+  );
+
+  const uploadImageBatch = useCallback(
+    async (files: File[]) => {
+      const images = files.filter((file) => file.type.startsWith("image/"));
+      if (images.length === 0) return;
+      for (const file of images.slice(0, 4)) {
+        try {
+          await uploadImageFile(file);
+        } catch {
+          // Keep editor responsive even if one image upload fails.
+        }
+      }
+    },
+    [uploadImageFile]
+  );
+
   const insertImage = useCallback(() => {
     const raw = window.prompt("Enter image URL", "https://");
     if (!raw) return;
@@ -354,6 +470,37 @@ export function RichTextEditor({
     const alt = window.prompt("Image alt text (optional)", "") ?? "";
     insertHtml(`<img src="${src}" alt="${alt.replace(/"/g, "&quot;")}" />`);
   }, [insertHtml]);
+
+  const insertGraph = useCallback(() => {
+    if (disabled || isSourceMode) return;
+    const labelsRaw = window.prompt("Graph labels (comma separated)", "Week 1, Week 2, Week 3");
+    if (!labelsRaw) return;
+    const valuesRaw = window.prompt("Graph values (comma separated)", "12, 20, 16");
+    if (!valuesRaw) return;
+    const graphTypeRaw = window.prompt("Graph type: bar or line", "bar");
+    const graphType = graphTypeRaw?.toLowerCase() === "line" ? "line" : "bar";
+
+    const labels = labelsRaw
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+    const values = valuesRaw
+      .split(",")
+      .map((part) => Number.parseFloat(part.trim()))
+      .filter((value) => Number.isFinite(value))
+      .slice(0, 12);
+
+    if (labels.length === 0 || values.length === 0) return;
+    if (labels.length !== values.length) {
+      window.alert("Labels and values must have the same count.");
+      return;
+    }
+    const svg = buildChartSvg(labels, values, graphType);
+    const uri = sanitizeMediaSrc(encodeSvgDataUri(svg));
+    if (!uri) return;
+    insertHtml(`<img src="${uri}" alt="Chart graph" />`);
+  }, [disabled, insertHtml, isSourceMode]);
 
   const insertTable = useCallback(() => {
     const rowsRaw = window.prompt("Number of rows", "2");
@@ -392,6 +539,16 @@ export function RichTextEditor({
   const onPaste = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
       if (disabled || isSourceMode) return;
+      const fileItems = Array.from(event.clipboardData.items)
+        .filter((item) => item.kind === "file")
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => Boolean(file))
+        .filter((file) => file.type.startsWith("image/"));
+      if (fileItems.length > 0) {
+        event.preventDefault();
+        void uploadImageBatch(fileItems);
+        return;
+      }
       event.preventDefault();
       const html = event.clipboardData.getData("text/html");
       const text = event.clipboardData.getData("text/plain");
@@ -406,8 +563,28 @@ export function RichTextEditor({
       document.execCommand("insertHTML", false, payload);
       emitChange();
     },
-    [disabled, emitChange, isSourceMode]
+    [disabled, emitChange, isSourceMode, uploadImageBatch]
   );
+
+  const onDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (disabled || isSourceMode) return;
+      const droppedFiles = Array.from(event.dataTransfer.files ?? []).filter((file) =>
+        file.type.startsWith("image/")
+      );
+      if (droppedFiles.length === 0) return;
+      event.preventDefault();
+      void uploadImageBatch(droppedFiles);
+    },
+    [disabled, isSourceMode, uploadImageBatch]
+  );
+
+  const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (disabled || isSourceMode) return;
+    if (event.dataTransfer.types.includes("Files")) {
+      event.preventDefault();
+    }
+  }, [disabled, isSourceMode]);
 
   return (
     <div className={cn("overflow-hidden rounded-lg border border-slate-200 bg-white", className)}>
@@ -454,7 +631,15 @@ export function RichTextEditor({
         <ToolbarButton onClick={insertLink} disabled={disabled || isSourceMode} title="Insert link"><Link2 className="h-4 w-4" /></ToolbarButton>
         <ToolbarButton onClick={() => runCommand("unlink")} disabled={disabled || isSourceMode} title="Remove link"><span className="text-[10px] font-semibold">Un</span></ToolbarButton>
         <ToolbarButton onClick={insertImage} disabled={disabled || isSourceMode} title="Insert image"><span className="text-[10px] font-semibold">Img</span></ToolbarButton>
+        <ToolbarButton
+          onClick={() => imageFileInputRef.current?.click()}
+          disabled={disabled || isSourceMode || uploadingImage}
+          title="Upload image"
+        >
+          <span className="text-[10px] font-semibold">Up</span>
+        </ToolbarButton>
         <ToolbarButton onClick={insertTable} disabled={disabled || isSourceMode} title="Insert table"><span className="text-[10px] font-semibold">Tbl</span></ToolbarButton>
+        <ToolbarButton onClick={insertGraph} disabled={disabled || isSourceMode} title="Insert graph"><BarChart3 className="h-4 w-4" /></ToolbarButton>
         <ToolbarButton onClick={() => runCommand("insertHorizontalRule")} disabled={disabled || isSourceMode} title="Insert horizontal line"><span className="text-[11px] font-semibold">―</span></ToolbarButton>
         <ToolbarButton onClick={insertEmoji} disabled={disabled || isSourceMode} title="Insert emoji"><span className="text-sm leading-none">🙂</span></ToolbarButton>
         <span className="mx-0.5 h-5 w-px bg-slate-200" />
@@ -478,11 +663,25 @@ export function RichTextEditor({
           className="hidden"
           onChange={(event) => runCommand("hiliteColor", event.currentTarget.value)}
         />
+        <input
+          ref={imageFileInputRef}
+          type="file"
+          className="hidden"
+          accept="image/*"
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []);
+            void uploadImageBatch(files);
+            event.currentTarget.value = "";
+          }}
+        />
         <ToolbarButton onClick={() => bgColorRef.current?.click()} disabled={disabled || isSourceMode} title="Highlight color"><span className="rounded-sm bg-yellow-300 px-1 text-[10px] font-semibold text-slate-800">ab</span></ToolbarButton>
 
         <ToolbarButton onClick={() => runCommand("removeFormat")} disabled={disabled || isSourceMode} title="Clear formatting"><Eraser className="h-4 w-4" /></ToolbarButton>
 
         <div className="ml-auto flex items-center gap-1">
+          {uploadingImage ? (
+            <span className="text-[10px] font-medium text-[#AA8038]">Uploading image...</span>
+          ) : null}
           <ToolbarButton onClick={() => runCommand("undo")} disabled={disabled || isSourceMode} title="Undo" className="text-slate-500 hover:bg-slate-200 hover:text-slate-700"><Undo2 className="h-4 w-4" /></ToolbarButton>
           <ToolbarButton onClick={() => runCommand("redo")} disabled={disabled || isSourceMode} title="Redo" className="text-slate-500 hover:bg-slate-200 hover:text-slate-700"><Redo2 className="h-4 w-4" /></ToolbarButton>
         </div>
@@ -516,6 +715,8 @@ export function RichTextEditor({
             onInput={emitChange}
             onBlur={emitChange}
             onPaste={onPaste}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
             className={cn(
               "prose prose-sm max-w-none px-3 py-2 text-slate-800 outline-none",
               disabled ? "cursor-not-allowed bg-slate-100 text-slate-500" : "bg-white"
@@ -527,4 +728,3 @@ export function RichTextEditor({
     </div>
   );
 }
-

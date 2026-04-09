@@ -1,10 +1,165 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
-import { normalizeTaskAssigneePermissions } from "@/lib/task-assignees";
+import {
+  normalizeTaskAssigneePermissions,
+  normalizeTaskGroupIds,
+  type TaskAssigneePermission,
+} from "@/lib/task-assignees";
 import { notifyTaskChange } from "@/lib/task-notifications";
 import { isMissingTaskAssigneeCanCommentColumn } from "@/lib/task-access";
 import { loadTaskStages, getDefaultStage, isClosedStage } from "@/lib/workflow-config";
+
+function isMissingTaskGroupAssignmentsTable(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    const meta = (error.meta ?? {}) as Record<string, unknown>;
+    const target = String(meta.table ?? meta.modelName ?? meta.cause ?? "");
+    if (/task_group_assignments/i.test(target)) return true;
+    if (error.code === "P2021" && /task_group_assignments/i.test(String(meta.table ?? ""))) {
+      return true;
+    }
+  }
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /task_group_assignments/i.test(message) && /(doesn't exist|unknown table|p2021)/i.test(message);
+}
+
+function normalizeAssigneesForResponse(
+  assignees: Array<{
+    id?: string;
+    userId?: string;
+    canComment?: boolean;
+    user?: { id?: string; name?: string; fullname?: string };
+  }>
+) {
+  return assignees.map((entry) => ({
+    id: String(entry.id ?? ""),
+    userId: String(entry.userId ?? ""),
+    canComment: typeof entry.canComment === "boolean" ? entry.canComment : true,
+    user: {
+      id: String(entry.user?.id ?? ""),
+      name: String(entry.user?.name ?? ""),
+      fullname: String(entry.user?.fullname ?? ""),
+    },
+  }));
+}
+
+function normalizeAssignedGroupsForResponse(
+  groups: Array<{
+    groupId?: string;
+    group?: { id?: string; name?: string; color?: string };
+  }>
+) {
+  return groups
+    .map((entry) => ({
+      id: String(entry.group?.id ?? entry.groupId ?? ""),
+      name: String(entry.group?.name ?? ""),
+      color: String(entry.group?.color ?? "#94a3b8"),
+    }))
+    .filter((entry) => entry.id.length > 0);
+}
+
+function listInclude(options: {
+  userId: string;
+  includeCanComment: boolean;
+  includeTaskGroups: boolean;
+}) {
+  const { userId, includeCanComment, includeTaskGroups } = options;
+  return {
+    creator: { select: { id: true, name: true, fullname: true } },
+    assignees: {
+      select: includeCanComment
+        ? {
+            id: true,
+            userId: true,
+            canComment: true,
+            user: { select: { id: true, name: true, fullname: true } },
+          }
+        : {
+            id: true,
+            userId: true,
+            user: { select: { id: true, name: true, fullname: true } },
+          },
+    },
+    ...(includeTaskGroups
+      ? {
+          assignedGroups: {
+            select: {
+              groupId: true,
+              group: { select: { id: true, name: true, color: true } },
+            },
+          },
+        }
+      : {}),
+    favorites: {
+      where: { userId },
+      select: { id: true },
+    },
+    _count: { select: { comments: true, favorites: true } },
+  } as const;
+}
+
+async function resolveTaskGroupAssignments(
+  requestedGroupIds: string[],
+  access: {
+    isAdmin: boolean;
+    permissions: { tasks: { manage: boolean } };
+    roles: Array<{ groupId: string }>;
+  }
+) {
+  const normalized = normalizeTaskGroupIds(requestedGroupIds);
+  if (normalized.length === 0) {
+    return {
+      groupIds: [] as string[],
+      members: [] as string[],
+    };
+  }
+
+  const existingGroups = await prisma.group.findMany({
+    where: { id: { in: normalized } },
+    select: { id: true },
+  });
+  const existingGroupIds = Array.from(new Set(existingGroups.map((group) => group.id)));
+  const missing = normalized.filter((groupId) => !existingGroupIds.includes(groupId));
+  if (missing.length > 0) {
+    throw new Error(`Invalid groupIds: ${missing.join(", ")}`);
+  }
+
+  if (!access.isAdmin && !access.permissions.tasks.manage) {
+    const ownRoleGroupIds = new Set(access.roles.map((role) => role.groupId));
+    const forbidden = existingGroupIds.filter((groupId) => !ownRoleGroupIds.has(groupId));
+    if (forbidden.length > 0) {
+      throw new Error("You can assign only groups that are in your role scope");
+    }
+  }
+
+  const groupMembers = await prisma.groupMember.findMany({
+    where: { groupId: { in: existingGroupIds } },
+    select: { userId: true },
+  });
+  const members = Array.from(new Set(groupMembers.map((entry) => entry.userId)));
+
+  return {
+    groupIds: existingGroupIds,
+    members,
+  };
+}
+
+function mergeAssigneesWithGroupMembers(
+  assignees: TaskAssigneePermission[],
+  groupMembers: string[]
+) {
+  const map = new Map<string, boolean>();
+  for (const entry of assignees) {
+    map.set(entry.userId, entry.canComment);
+  }
+  for (const userId of groupMembers) {
+    if (!map.has(userId)) {
+      map.set(userId, true);
+    }
+  }
+  return Array.from(map.entries()).map(([userId, canComment]) => ({ userId, canComment }));
+}
 
 export async function GET(req: NextRequest) {
   const accessResult = await requireModuleAccess("tasks", "read");
@@ -12,6 +167,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const userId = accessResult.ctx.userId;
+    const canManageTasks =
+      accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage;
+    const canWriteTasks = canManageTasks || accessResult.ctx.access.permissions.tasks.write;
     const stages = await loadTaskStages();
     const { searchParams } = new URL(req.url);
     const view = (searchParams.get("view") ?? "overview").toLowerCase();
@@ -80,10 +238,7 @@ export async function GET(req: NextRequest) {
     if (search) {
       const and = (where.AND as Record<string, unknown>[] | undefined) ?? [];
       and.push({
-        OR: [
-          { title: { contains: search } },
-          { description: { contains: search } },
-        ],
+        OR: [{ title: { contains: search } }, { description: { contains: search } }],
       });
       where.AND = and;
     }
@@ -138,7 +293,6 @@ export async function GET(req: NextRequest) {
         if (subordinateIds.length > 0) {
           and.push({ creatorId: { in: subordinateIds } });
         } else {
-          // Fallback for setups without group hierarchy: show tasks created by other users.
           and.push({ creatorId: { not: userId } });
         }
       }
@@ -146,33 +300,84 @@ export async function GET(req: NextRequest) {
       where.AND = and;
     }
 
-    const tasks = await prisma.task.findMany({
-      where,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      include: {
-        creator: { select: { id: true, name: true, fullname: true } },
-        assignees: {
-          select: {
-            id: true,
-            userId: true,
-            user: { select: { id: true, name: true, fullname: true } },
-          },
-        },
-        favorites: {
-          where: { userId },
-          select: { id: true },
-        },
-        _count: { select: { comments: true, favorites: true } },
-      },
-    });
+    const attempts = [
+      { includeCanComment: true, includeTaskGroups: true },
+      { includeCanComment: false, includeTaskGroups: true },
+      { includeCanComment: true, includeTaskGroups: false },
+      { includeCanComment: false, includeTaskGroups: false },
+    ] as const;
 
-    const enriched = tasks.map((task) => ({
-      ...task,
-      isFavorite: task.favorites.length > 0,
-      favoriteCount: task._count.favorites,
-      favorites: undefined,
-    }));
+    let tasks: Array<Record<string, unknown>> = [];
+    let usedAttempt: (typeof attempts)[number] = attempts[attempts.length - 1];
+    let loaded = false;
+    let lastError: unknown = null;
+    for (const attempt of attempts) {
+      try {
+        tasks = (await prisma.task.findMany({
+          where,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+          include: listInclude({
+            userId,
+            includeCanComment: attempt.includeCanComment,
+            includeTaskGroups: attempt.includeTaskGroups,
+          }),
+        })) as Array<Record<string, unknown>>;
+        usedAttempt = attempt;
+        loaded = true;
+        break;
+      } catch (error) {
+        const missingCanComment =
+          attempt.includeCanComment && isMissingTaskAssigneeCanCommentColumn(error);
+        const missingTaskGroups =
+          attempt.includeTaskGroups && isMissingTaskGroupAssignmentsTable(error);
+        if (!missingCanComment && !missingTaskGroups) throw error;
+        lastError = error;
+      }
+    }
+    if (!loaded && lastError) throw lastError;
+
+    const enriched = tasks.map((rawTask) => {
+      const task = rawTask as {
+        id: string;
+        creatorId: string;
+        assignees?: Array<{
+          id?: string;
+          userId?: string;
+          canComment?: boolean;
+          user?: { id?: string; name?: string; fullname?: string };
+        }>;
+        assignedGroups?: Array<{
+          groupId?: string;
+          group?: { id?: string; name?: string; color?: string };
+        }>;
+        favorites?: Array<{ id: string }>;
+        _count?: { favorites?: number };
+      };
+      const normalizedAssignees = normalizeAssigneesForResponse(task.assignees ?? []);
+      const normalizedGroups = usedAttempt.includeTaskGroups
+        ? normalizeAssignedGroupsForResponse(task.assignedGroups ?? [])
+        : [];
+      const canComment =
+        canManageTasks ||
+        task.creatorId === userId ||
+        normalizedAssignees.some(
+          (entry) => entry.userId === userId && Boolean(entry.canComment)
+        );
+
+      return {
+        ...rawTask,
+        assignees: normalizedAssignees,
+        assignedGroups: normalizedGroups,
+        canComment,
+        canEditTask: canWriteTasks,
+        canChangeStatus: canWriteTasks,
+        canDelete: canManageTasks,
+        isFavorite: (task.favorites ?? []).length > 0,
+        favoriteCount: Number(task._count?.favorites ?? 0),
+        favorites: undefined,
+      };
+    });
 
     return NextResponse.json({ items: enriched, stages });
   } catch (error) {
@@ -197,6 +402,7 @@ export async function POST(req: NextRequest) {
       dueDate,
       assignees,
       assigneeIds,
+      groupIds: rawGroupIds,
     } = body as {
       title: string;
       description?: string;
@@ -207,6 +413,7 @@ export async function POST(req: NextRequest) {
       dueDate?: string;
       assignees?: Array<{ userId?: string; canComment?: boolean }>;
       assigneeIds?: string[];
+      groupIds?: string[];
     };
 
     if (!title || typeof title !== "string" || title.trim() === "") {
@@ -215,16 +422,37 @@ export async function POST(req: NextRequest) {
 
     const stages = await loadTaskStages();
     const defaultStage = getDefaultStage(stages);
+    const statusToUse =
+      typeof status === "string" && stages.some((stage) => stage.key === status)
+        ? status
+        : defaultStage.key;
 
-    const statusToUse = typeof status === "string" && stages.some((stage) => stage.key === status)
-      ? status
-      : defaultStage.key;
-
-    const normalizedAssignees = normalizeTaskAssigneePermissions({
+    const directAssignees = normalizeTaskAssigneePermissions({
       assignees,
       assigneeIds,
     });
+    const requestedGroupIds = normalizeTaskGroupIds(rawGroupIds);
 
+    let resolvedGroupIds: string[] = [];
+    let groupMembers: string[] = [];
+    if (requestedGroupIds.length > 0) {
+      try {
+        const resolved = await resolveTaskGroupAssignments(
+          requestedGroupIds,
+          accessResult.ctx.access
+        );
+        resolvedGroupIds = resolved.groupIds;
+        groupMembers = resolved.members;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Invalid group assignment";
+        if (/Invalid groupIds/i.test(message)) {
+          return NextResponse.json({ error: message }, { status: 400 });
+        }
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
+    }
+
+    const normalizedAssignees = mergeAssigneesWithGroupMembers(directAssignees, groupMembers);
     const buildAssigneeCreate = (includeCanComment: boolean) =>
       normalizedAssignees.map((entry) =>
         includeCanComment
@@ -232,7 +460,7 @@ export async function POST(req: NextRequest) {
           : { userId: entry.userId }
       );
 
-    const createPayload = (includeCanComment: boolean) => ({
+    const createPayload = (includeCanComment: boolean, includeTaskGroups: boolean) => ({
       title: title.trim(),
       description,
       type: type ?? "task",
@@ -242,56 +470,123 @@ export async function POST(req: NextRequest) {
       dueDate: dueDate ? new Date(dueDate) : undefined,
       completedAt: isClosedStage(stages, statusToUse) ? new Date() : null,
       creatorId: accessResult.ctx.userId,
-      assignees: normalizedAssignees.length > 0
+      assignees:
+        normalizedAssignees.length > 0
+          ? {
+              create: buildAssigneeCreate(includeCanComment),
+            }
+          : undefined,
+      ...(includeTaskGroups && resolvedGroupIds.length > 0
         ? {
-            create: buildAssigneeCreate(includeCanComment),
+            assignedGroups: {
+              create: resolvedGroupIds.map((groupId) => ({ groupId })),
+            },
           }
-        : undefined,
+        : {}),
     });
 
-    const responseInclude = {
-      creator: { select: { id: true, name: true, fullname: true } },
-      assignees: {
-        select: {
-          id: true,
-          userId: true,
-          user: { select: { id: true, name: true, fullname: true } },
+    const responseInclude = (includeCanComment: boolean, includeTaskGroups: boolean) =>
+      ({
+        creator: { select: { id: true, name: true, fullname: true } },
+        assignees: {
+          select: includeCanComment
+            ? {
+                id: true,
+                userId: true,
+                canComment: true,
+                user: { select: { id: true, name: true, fullname: true } },
+              }
+            : {
+                id: true,
+                userId: true,
+                user: { select: { id: true, name: true, fullname: true } },
+              },
         },
-      },
-      favorites: {
-        where: { userId: accessResult.ctx.userId },
-        select: { id: true },
-      },
-      _count: { select: { comments: true, favorites: true } },
-    } as const;
+        ...(includeTaskGroups
+          ? {
+              assignedGroups: {
+                select: {
+                  groupId: true,
+                  group: { select: { id: true, name: true, color: true } },
+                },
+              },
+            }
+          : {}),
+        favorites: {
+          where: { userId: accessResult.ctx.userId },
+          select: { id: true },
+        },
+        _count: { select: { comments: true, favorites: true } },
+      }) as const;
 
-    let task;
-    try {
-      task = await prisma.task.create({
-        data: createPayload(true),
-        include: responseInclude,
-      });
-    } catch (error) {
-      if (!(normalizedAssignees.length > 0 && isMissingTaskAssigneeCanCommentColumn(error))) {
-        throw error;
+    const attempts = [
+      { includeCanComment: true, includeTaskGroups: true },
+      { includeCanComment: false, includeTaskGroups: true },
+      { includeCanComment: true, includeTaskGroups: false },
+      { includeCanComment: false, includeTaskGroups: false },
+    ] as const;
+
+    let task: Record<string, unknown> | null = null;
+    let usedAttempt: (typeof attempts)[number] = attempts[attempts.length - 1];
+    let lastError: unknown = null;
+    for (const attempt of attempts) {
+      try {
+        task = (await prisma.task.create({
+          data: createPayload(attempt.includeCanComment, attempt.includeTaskGroups),
+          include: responseInclude(attempt.includeCanComment, attempt.includeTaskGroups),
+        })) as Record<string, unknown>;
+        usedAttempt = attempt;
+        break;
+      } catch (error) {
+        const missingCanComment =
+          attempt.includeCanComment && isMissingTaskAssigneeCanCommentColumn(error);
+        const missingTaskGroups =
+          attempt.includeTaskGroups && isMissingTaskGroupAssignmentsTable(error);
+        if (!missingCanComment && !missingTaskGroups) throw error;
+        lastError = error;
       }
-      task = await prisma.task.create({
-        data: createPayload(false),
-        include: responseInclude,
-      });
     }
-    const assigneeUserIds = task.assignees.map((entry) => entry.user.id);
-    const summaryParts = [`status ${task.status}`, `priority ${task.priority}`];
-    if (task.dueDate) summaryParts.push(`due ${task.dueDate.toISOString().slice(0, 10)}`);
+
+    if (!task) throw lastError;
+    const typedTask = task as {
+      id: string;
+      title: string;
+      status: string;
+      priority: string;
+      dueDate: Date | null;
+      creatorId: string;
+      isPrivate: boolean;
+      assignees: Array<{
+        id?: string;
+        userId?: string;
+        canComment?: boolean;
+        user?: { id?: string; name?: string; fullname?: string };
+      }>;
+      assignedGroups?: Array<{
+        groupId?: string;
+        group?: { id?: string; name?: string; color?: string };
+      }>;
+      favorites?: Array<{ id: string }>;
+      _count?: { favorites?: number };
+    };
+
+    const normalizedTaskAssignees = normalizeAssigneesForResponse(typedTask.assignees ?? []);
+    const normalizedGroups = usedAttempt.includeTaskGroups
+      ? normalizeAssignedGroupsForResponse(typedTask.assignedGroups ?? [])
+      : [];
+    const assigneeUserIds = normalizedTaskAssignees.map((entry) => entry.user.id).filter(Boolean);
+    const summaryParts = [`status ${typedTask.status}`, `priority ${typedTask.priority}`];
+    if (typedTask.dueDate) summaryParts.push(`due ${typedTask.dueDate.toISOString().slice(0, 10)}`);
+    if (normalizedGroups.length > 0) summaryParts.push(`groups ${normalizedGroups.length}`);
 
     await notifyTaskChange({
       action: "created",
-      taskId: task.id,
-      taskTitle: task.title,
-      creatorId: task.creatorId,
+      taskId: typedTask.id,
+      taskTitle: typedTask.title,
+      creatorId: typedTask.creatorId,
       assigneeIds: assigneeUserIds,
       actorUserId: accessResult.ctx.userId,
-      isPrivate: task.isPrivate,
+      isPrivate: typedTask.isPrivate,
       summary: summaryParts.join(", "),
     }).catch((error) => {
       console.error("[tasks notify create]", error);
@@ -300,8 +595,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ...task,
-        isFavorite: task.favorites.length > 0,
-        favoriteCount: task._count.favorites,
+        assignees: normalizedTaskAssignees,
+        assignedGroups: normalizedGroups,
+        canEditTask: true,
+        canChangeStatus: true,
+        canDelete: accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage,
+        canComment: true,
+        isFavorite: (typedTask.favorites ?? []).length > 0,
+        favoriteCount: Number(typedTask._count?.favorites ?? 0),
         favorites: undefined,
       },
       { status: 201 }

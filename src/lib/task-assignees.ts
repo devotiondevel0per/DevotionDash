@@ -15,6 +15,11 @@ function normalizeUserId(value: unknown) {
   return value.trim();
 }
 
+function normalizeGroupId(value: unknown) {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
 export function normalizeTaskAssigneePermissions(input: {
   assignees?: unknown;
   assigneeIds?: unknown;
@@ -50,3 +55,13 @@ export function normalizeTaskAssigneePermissions(input: {
   }));
 }
 
+export function normalizeTaskGroupIds(rawGroupIds: unknown): string[] {
+  if (!Array.isArray(rawGroupIds)) return [];
+  const unique = new Set<string>();
+  for (const entry of rawGroupIds) {
+    const groupId = normalizeGroupId(entry);
+    if (!groupId) continue;
+    unique.add(groupId);
+  }
+  return Array.from(unique);
+}

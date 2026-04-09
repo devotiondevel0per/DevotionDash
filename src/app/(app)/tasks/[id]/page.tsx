@@ -85,11 +85,26 @@ type TaskDetail = {
   creatorId: string;
   creator: TaskUser;
   assignees: Array<{ id: string; userId?: string; canComment?: boolean; user: TaskUser }>;
+  assignedGroups?: Array<{ id: string; name: string; color?: string }>;
   comments: TaskComment[];
   attachments: TaskAttachment[];
   canComment?: boolean;
+  canEditTask?: boolean;
+  canChangeStatus?: boolean;
+  canDelete?: boolean;
   isFavorite: boolean;
   favoriteCount: number;
+};
+
+type TaskConversationSummary = {
+  summary: string;
+  highlights: string[];
+  decisions: string[];
+  actionItems: string[];
+  risks: string[];
+  participants: string[];
+  generatedAt: string;
+  fallback: boolean;
 };
 
 const PRIORITY_META: Record<string, { cls: string; label: string }> = {
@@ -205,6 +220,8 @@ export default function TaskDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
   const [collapsedReplies, setCollapsedReplies] = useState<Record<string, boolean>>({});
+  const [conversationSummary, setConversationSummary] = useState<TaskConversationSummary | null>(null);
+  const [analyzingConversation, setAnalyzingConversation] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -241,6 +258,7 @@ export default function TaskDetailPage() {
     setEditingCommentId(null);
     setEditingCommentHtml("");
     setReplyToComment(null);
+    setConversationSummary(null);
   }, [id]);
 
   useEffect(() => {
@@ -376,6 +394,11 @@ export default function TaskDetailPage() {
 
   async function updateTaskStatus(nextStatus: string) {
     if (!task || !nextStatus || nextStatus === task.status || changingStatus) return;
+    const canChangeStatus = task.canChangeStatus ?? (task.canEditTask ?? canWrite);
+    if (!canChangeStatus) {
+      toast.error("You do not have permission to change task status");
+      return;
+    }
     setChangingStatus(true);
     try {
       const res = await fetch(`/api/tasks/${id}`, {
@@ -393,6 +416,29 @@ export default function TaskDetailPage() {
       toast.error(err instanceof Error ? err.message : "Failed to update stage");
     } finally {
       setChangingStatus(false);
+    }
+  }
+
+  async function analyzeConversation() {
+    if (!task || analyzingConversation) return;
+    setAnalyzingConversation(true);
+    try {
+      const response = await fetch(`/api/tasks/${id}/summary`, {
+        method: "POST",
+      });
+      const data = (await response.json().catch(() => null)) as
+        | TaskConversationSummary
+        | { error?: string }
+        | null;
+      if (!response.ok || !data || "error" in data) {
+        throw new Error((data as { error?: string } | null)?.error ?? "Failed to analyze conversation");
+      }
+      setConversationSummary(data as TaskConversationSummary);
+      toast.success("Conversation analysis updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to analyze conversation");
+    } finally {
+      setAnalyzingConversation(false);
     }
   }
 
@@ -454,7 +500,9 @@ export default function TaskDetailPage() {
   const isClosed = stages.find((s) => s.key === task.status)?.isClosed ?? false;
   const priorityMeta = PRIORITY_META[task.priority] ?? PRIORITY_META.normal;
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
-  const canEditConversation = task.type === "note" && canWrite;
+  const canEditTask = task.canEditTask ?? canWrite;
+  const canChangeStatus = task.canChangeStatus ?? canEditTask;
+  const canEditConversation = task.type === "note" && canEditTask;
   const canComment =
     task.canComment ??
     (canManage ||
@@ -668,7 +716,7 @@ export default function TaskDetailPage() {
             <Badge variant="outline" style={stageMeta.badgeStyle} className="h-6 px-2 text-xs">
               {stageMeta.label}
             </Badge>
-            {canWrite ? (
+            {canChangeStatus ? (
               <Select
                 value={task.status}
                 onValueChange={(value) => {
@@ -710,6 +758,14 @@ export default function TaskDetailPage() {
                 Assigned:&nbsp;
                 <span className="font-medium text-slate-700">
                   {task.assignees.map((a) => nameOf(a.user)).join(", ")}
+                </span>
+              </span>
+            )}
+            {Array.isArray(task.assignedGroups) && task.assignedGroups.length > 0 && (
+              <span className="flex items-center gap-1">
+                Groups:&nbsp;
+                <span className="font-medium text-slate-700">
+                  {task.assignedGroups.map((group) => group.name).join(", ")}
                 </span>
               </span>
             )}
@@ -767,6 +823,77 @@ export default function TaskDetailPage() {
                 />
               ) : (
                 <p className="text-sm italic text-slate-400">No description provided.</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border bg-white p-4 shadow-sm">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Conversation Analyzer
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void analyzeConversation()}
+                  disabled={analyzingConversation}
+                >
+                  {analyzingConversation ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                  {analyzingConversation ? "Analyzing..." : "Analyze Conversation"}
+                </Button>
+              </div>
+              {!conversationSummary ? (
+                <p className="text-sm text-slate-500">
+                  Run AI analyzer to get summary, key decisions, action points, and risks from the full thread.
+                </p>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <p className="text-slate-700">{conversationSummary.summary}</p>
+                  {conversationSummary.highlights.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Highlights</p>
+                      <ul className="mt-1 space-y-1 text-slate-700">
+                        {conversationSummary.highlights.map((item, idx) => (
+                          <li key={`summary-highlight-${idx}`}>- {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {conversationSummary.decisions.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Decisions</p>
+                      <ul className="mt-1 space-y-1 text-slate-700">
+                        {conversationSummary.decisions.map((item, idx) => (
+                          <li key={`summary-decision-${idx}`}>- {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {conversationSummary.actionItems.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Action Items</p>
+                      <ul className="mt-1 space-y-1 text-slate-700">
+                        {conversationSummary.actionItems.map((item, idx) => (
+                          <li key={`summary-action-${idx}`}>- {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {conversationSummary.risks.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Risks</p>
+                      <ul className="mt-1 space-y-1 text-slate-700">
+                        {conversationSummary.risks.map((item, idx) => (
+                          <li key={`summary-risk-${idx}`}>- {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  <p className="text-xs text-slate-400">
+                    Generated {formatDateTime(conversationSummary.generatedAt)}
+                    {conversationSummary.fallback ? " (fallback mode)" : ""}
+                  </p>
+                </div>
               )}
             </div>
 
@@ -944,7 +1071,7 @@ export default function TaskDetailPage() {
                       <Badge variant="outline" style={stageMeta.badgeStyle} className="h-5 px-1.5 text-[11px]">
                         {stageMeta.label}
                       </Badge>
-                      {canWrite ? (
+                      {canChangeStatus ? (
                         <Select
                           value={task.status}
                           onValueChange={(value) => {
@@ -992,6 +1119,14 @@ export default function TaskDetailPage() {
                   <dd className="mt-0.5 font-medium text-slate-800">
                     {task.assignees.length > 0
                       ? task.assignees.map((a) => nameOf(a.user)).join(", ")
+                      : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Assigned Groups</dt>
+                  <dd className="mt-0.5 font-medium text-slate-800">
+                    {Array.isArray(task.assignedGroups) && task.assignedGroups.length > 0
+                      ? task.assignedGroups.map((group) => group.name).join(", ")
                       : "—"}
                   </dd>
                 </div>
