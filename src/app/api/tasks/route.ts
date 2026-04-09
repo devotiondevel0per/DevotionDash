@@ -56,16 +56,40 @@ function normalizeAssignedGroupsForResponse(
       id: String(entry.group?.id ?? entry.groupId ?? ""),
       name: String(entry.group?.name ?? ""),
       color: String(entry.group?.color ?? "#94a3b8"),
-    }))
+  }))
     .filter((entry) => entry.id.length > 0);
+}
+
+function toPlainText(value: string | null | undefined) {
+  if (!value) return "";
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildSearchSnippet(content: string, searchTerm: string, radius = 70) {
+  const source = toPlainText(content);
+  if (!source) return "";
+  const lowerSource = source.toLowerCase();
+  const lowerSearch = searchTerm.toLowerCase();
+  const idx = lowerSource.indexOf(lowerSearch);
+  if (idx < 0) return "";
+  const start = Math.max(0, idx - radius);
+  const end = Math.min(source.length, idx + searchTerm.length + radius);
+  const prefix = start > 0 ? "..." : "";
+  const suffix = end < source.length ? "..." : "";
+  return `${prefix}${source.slice(start, end)}${suffix}`.trim();
 }
 
 function listInclude(options: {
   userId: string;
   includeCanComment: boolean;
   includeTaskGroups: boolean;
+  searchTerm?: string;
 }) {
-  const { userId, includeCanComment, includeTaskGroups } = options;
+  const { userId, includeCanComment, includeTaskGroups, searchTerm } = options;
   return {
     creator: { select: { id: true, name: true, fullname: true } },
     assignees: {
@@ -96,6 +120,16 @@ function listInclude(options: {
       where: { userId },
       select: { id: true },
     },
+    ...(searchTerm
+      ? {
+          comments: {
+            where: { content: { contains: searchTerm } },
+            orderBy: { createdAt: "desc" as const },
+            take: 1,
+            select: { content: true },
+          },
+        }
+      : {}),
     _count: { select: { comments: true, favorites: true } },
   } as const;
 }
@@ -235,7 +269,11 @@ export async function GET(req: NextRequest) {
     if (search) {
       const and = (where.AND as Record<string, unknown>[] | undefined) ?? [];
       and.push({
-        OR: [{ title: { contains: search } }, { description: { contains: search } }],
+        OR: [
+          { title: { contains: search } },
+          { description: { contains: search } },
+          { comments: { some: { content: { contains: search } } } },
+        ],
       });
       where.AND = and;
     }
@@ -318,6 +356,7 @@ export async function GET(req: NextRequest) {
             userId,
             includeCanComment: attempt.includeCanComment,
             includeTaskGroups: attempt.includeTaskGroups,
+            searchTerm: search?.trim() ? search.trim() : undefined,
           }),
         })) as Array<Record<string, unknown>>;
         usedAttempt = attempt;
@@ -340,6 +379,8 @@ export async function GET(req: NextRequest) {
     const enriched = tasks.map((rawTask) => {
       const task = rawTask as {
         id: string;
+        title?: string;
+        description?: string | null;
         creatorId: string;
         assignees?: Array<{
           id?: string;
@@ -351,6 +392,7 @@ export async function GET(req: NextRequest) {
           groupId?: string;
           group?: { id?: string; name?: string; color?: string };
         }>;
+        comments?: Array<{ content?: string }>;
         favorites?: Array<{ id: string }>;
         _count?: { favorites?: number };
       };
@@ -363,11 +405,23 @@ export async function GET(req: NextRequest) {
         normalizedAssignees.some(
           (entry) => entry.userId === userId && Boolean(entry.canComment)
         );
+      const searchSnippet =
+        search && search.trim()
+          ? buildSearchSnippet(
+              String(task.description ?? task.title ?? ""),
+              search.trim()
+            ) ||
+            buildSearchSnippet(
+              String(task.comments?.[0]?.content ?? ""),
+              search.trim()
+            )
+          : "";
 
       return {
         ...rawTask,
         assignees: normalizedAssignees,
         assignedGroups: normalizedGroups,
+        searchMatchText: searchSnippet || null,
         canComment,
         canEditTask: canWriteTasks,
         canChangeStatus: canWriteTasks,

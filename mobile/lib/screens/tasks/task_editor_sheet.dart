@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:html_editor_enhanced/html_editor.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/api_client.dart';
@@ -10,10 +11,12 @@ class TaskEditorSheet extends ConsumerStatefulWidget {
   const TaskEditorSheet({
     super.key,
     this.initialTask,
+    this.currentUserId,
     this.onSaved,
   });
 
   final Map<String, dynamic>? initialTask;
+  final String? currentUserId;
   final VoidCallback? onSaved;
 
   @override
@@ -24,6 +27,8 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  final HtmlEditorController _descHtmlCtrl = HtmlEditorController();
+  String _initialDescriptionHtml = '';
 
   String _type = 'task';
   String _status = 'opened';
@@ -44,6 +49,7 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
   }
 
   String get _taskId => (widget.initialTask?['id'] ?? '').toString().trim();
+  String get _currentUserId => (widget.currentUserId ?? '').trim();
 
   @override
   void initState() {
@@ -66,6 +72,7 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
 
     _titleCtrl.text = _asTaskString(task['title'] ?? task['subject']);
     _descCtrl.text = _asTaskString(task['content'] ?? task['description']);
+    _initialDescriptionHtml = _descCtrl.text;
 
     final type = _asTaskString(task['type']);
     if (type.isNotEmpty) _type = type;
@@ -99,6 +106,20 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
           .whereType<Map<String, dynamic>>()
           .toList();
     }
+    _ensureCreatorAssignee();
+  }
+
+  void _ensureCreatorAssignee() {
+    if (_isEdit) return;
+    if (_currentUserId.isEmpty) return;
+    final hasCreator = _assignees.any(
+      (item) => _asTaskString(item['userId']) == _currentUserId,
+    );
+    if (hasCreator) return;
+    _assignees = <Map<String, dynamic>>[
+      {'userId': _currentUserId, 'canComment': true},
+      ..._assignees,
+    ];
   }
 
   String _asTaskString(dynamic value) {
@@ -153,11 +174,23 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    _ensureCreatorAssignee();
     setState(() => _saving = true);
     try {
+      var descriptionHtml = await _descHtmlCtrl.getText();
+      if (descriptionHtml.trim().toLowerCase() == 'null') {
+        descriptionHtml = '';
+      }
+      if (RegExp(r'^\s*<p>(<br>|&nbsp;|\s)*</p>\s*$', caseSensitive: false)
+          .hasMatch(descriptionHtml)) {
+        descriptionHtml = '';
+      }
+      if (descriptionHtml.trim().isEmpty) {
+        descriptionHtml = _descCtrl.text.trim();
+      }
       final payload = <String, dynamic>{
         'title': _titleCtrl.text.trim(),
-        'description': _descCtrl.text.trim(),
+        'description': descriptionHtml.trim(),
         'type': _type,
         'status': _status,
         'priority': _priority,
@@ -585,21 +618,22 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
                 ),
               ),
               const SizedBox(height: 6),
-              _buildEditorToolbar(),
-              TextFormField(
-                controller: _descCtrl,
-                minLines: 6,
-                maxLines: 12,
-                enabled: !_saving,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: 'Write description...',
-                  alignLabelWithHint: true,
-                  filled: true,
-                  fillColor: cs.surfaceContainerLow,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.4)),
+              IgnorePointer(
+                ignoring: _saving,
+                child: HtmlEditor(
+                  controller: _descHtmlCtrl,
+                  htmlEditorOptions: HtmlEditorOptions(
+                    hint: 'Write description...',
+                    initialText: _initialDescriptionHtml,
+                    shouldEnsureVisible: true,
+                    adjustHeightForKeyboard: true,
+                  ),
+                  htmlToolbarOptions: const HtmlToolbarOptions(
+                    toolbarType: ToolbarType.nativeScrollable,
+                  ),
+                  otherOptions: OtherOptions(
+                    height: 300,
+                    decoration: BoxDecoration(),
                   ),
                 ),
               ),
@@ -613,8 +647,13 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
                 users: _teamUsers,
                 loading: _loadingUsers,
                 assignees: _assignees,
+                currentUserId: _currentUserId,
+                isCreate: !_isEdit,
                 disabled: _saving,
                 onToggle: (id, checked) => setState(() {
+                  if (!_isEdit && id == _currentUserId && !checked) {
+                    return;
+                  }
                   final index = _assignees.indexWhere((item) => item['userId'] == id);
                   if (checked) {
                     if (index < 0) {
@@ -771,6 +810,8 @@ class _AssigneeSelector extends StatelessWidget {
     required this.users,
     required this.loading,
     required this.assignees,
+    required this.currentUserId,
+    required this.isCreate,
     required this.onToggle,
     required this.onSetCanComment,
     required this.disabled,
@@ -779,6 +820,8 @@ class _AssigneeSelector extends StatelessWidget {
   final List<dynamic> users;
   final bool loading;
   final List<Map<String, dynamic>> assignees;
+  final String currentUserId;
+  final bool isCreate;
   final bool disabled;
   final void Function(String id, bool checked) onToggle;
   final void Function(String id, bool canComment) onSetCanComment;
@@ -841,7 +884,9 @@ class _AssigneeSelector extends StatelessWidget {
                 break;
               }
             }
-            final isSelected = assigneeEntry != null;
+            final isCreatorLocked =
+                isCreate && currentUserId.isNotEmpty && id == currentUserId;
+            final isSelected = assigneeEntry != null || isCreatorLocked;
             final canComment = (assigneeEntry?['canComment'] as bool?) ?? true;
 
             return Padding(
@@ -869,14 +914,18 @@ class _AssigneeSelector extends StatelessWidget {
                     ),
                     subtitle: email.isNotEmpty
                         ? Text(
-                            email,
+                            isCreatorLocked
+                                ? '$email • Creator (locked while creating)'
+                                : email,
                             style: const TextStyle(fontSize: 11),
                             overflow: TextOverflow.ellipsis,
                           )
                         : null,
                     value: isSelected,
                     activeColor: _kTaskEditorPrimary,
-                    onChanged: disabled ? null : (value) => onToggle(id, value ?? false),
+                    onChanged: (disabled || isCreatorLocked)
+                        ? null
+                        : (value) => onToggle(id, value ?? false),
                   ),
                   if (isSelected)
                     Padding(

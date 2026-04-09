@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:html_editor_enhanced/html_editor.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -182,6 +183,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   final Set<String> _collapsedThreadIds = <String>{};
 
   final _commentCtrl = TextEditingController();
+  final HtmlEditorController _commentHtmlCtrl = HtmlEditorController();
+  int _commentEditorResetKey = 0;
   final _commentFocus = FocusNode();
   final _scrollCtrl = ScrollController();
 
@@ -285,7 +288,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       return;
     }
 
-    final draftText = _commentCtrl.text.trim();
+    var draftText = await _commentHtmlCtrl.getText();
+    if (draftText.trim().toLowerCase() == 'null') {
+      draftText = '';
+    }
+    if (RegExp(r'^\s*<p>(<br>|&nbsp;|\s)*</p>\s*$', caseSensitive: false)
+        .hasMatch(draftText)) {
+      draftText = '';
+    }
+    draftText = draftText.trim();
     final filePaths = _pendingFiles
         .map((file) => file.path)
         .whereType<String>()
@@ -316,15 +327,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             );
       }
 
-      _commentCtrl.clear();
       if (mounted) {
         setState(() {
           _pendingFiles = [];
           _replyTarget = null;
+          _commentEditorResetKey += 1;
         });
       } else {
         _pendingFiles = [];
         _replyTarget = null;
+        _commentEditorResetKey += 1;
       }
       await _loadComments();
       ref.invalidate(_taskDetailProvider(widget.taskId));
@@ -719,7 +731,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
   void _setReplyTarget(Map<String, dynamic> comment) {
     setState(() => _replyTarget = Map<String, dynamic>.from(comment));
-    _commentFocus.requestFocus();
   }
 
   Future<void> _openAttachmentUrl(String? rawUrl) async {
@@ -841,6 +852,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       }
       return;
     }
+    final currentUserId =
+        (ref.read(authStateProvider).asData?.value?['id'] ?? '').toString();
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -850,6 +863,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       ),
       builder: (_) => TaskEditorSheet(
         initialTask: task,
+        currentUserId: currentUserId,
         onSaved: () {
           ref.invalidate(_taskDetailProvider(widget.taskId));
           _loadComments();
@@ -1675,7 +1689,32 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               ),
               const SizedBox(height: 8),
             ],
-            _buildComposerToolbar(),
+            IgnorePointer(
+              ignoring: _sending || !_canComment,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: HtmlEditor(
+                  key: ValueKey('task-comment-editor-$_commentEditorResetKey'),
+                  controller: _commentHtmlCtrl,
+                  htmlEditorOptions: HtmlEditorOptions(
+                    hint: 'Add a comment or attach files...',
+                    shouldEnsureVisible: true,
+                    adjustHeightForKeyboard: true,
+                  ),
+                  htmlToolbarOptions: const HtmlToolbarOptions(
+                    toolbarType: ToolbarType.nativeScrollable,
+                  ),
+                  otherOptions: OtherOptions(
+                    height: 220,
+                    decoration: BoxDecoration(),
+                  ),
+                ),
+              ),
+            ),
             Row(
               children: [
                 IconButton(
@@ -1683,28 +1722,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   onPressed: _sending || !_canComment ? null : _pickCommentAttachments,
                   icon: const Icon(Icons.attach_file_rounded, color: _kPrimary),
                 ),
-                Expanded(
-                  child: TextField(
-                    controller: _commentCtrl,
-                    focusNode: _commentFocus,
-                    minLines: 1,
-                    maxLines: 8,
-                    textInputAction: TextInputAction.newline,
-                    decoration: InputDecoration(
-                      hintText: 'Add a comment or attach files...',
-                      filled: true,
-                      fillColor: cs.surfaceContainerLow,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    enabled: !_sending && _canComment,
-                  ),
-                ),
-                const SizedBox(width: 6),
+                const Spacer(),
                 _sending
                     ? const Padding(
                         padding: EdgeInsets.all(12),

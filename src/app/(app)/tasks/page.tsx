@@ -98,6 +98,7 @@ type TaskItem = {
     user: { id: string; name: string; fullname: string };
   }>;
   assignedGroups?: TaskGroup[];
+  searchMatchText?: string | null;
   canComment?: boolean;
   canEditTask?: boolean;
   canChangeStatus?: boolean;
@@ -1889,7 +1890,13 @@ export default function TasksPage() {
                         <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority])}>{task.priority}</Badge>
                         <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type])}>{task.type}</Badge>
                       </div>
-                      {task.description ? <p className="truncate text-xs text-slate-500">{toText(task.description)}</p> : null}
+                      {task.searchMatchText || task.description ? (
+                        <p className="truncate text-xs text-slate-500">
+                          {task.searchMatchText
+                            ? `Match: ${toText(task.searchMatchText)}`
+                            : toText(task.description)}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div>
@@ -1972,7 +1979,11 @@ export default function TasksPage() {
                     <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type])}>{task.type}</Badge>
                   </div>
 
-                  <p className="mt-2 line-clamp-3 min-h-[3.5rem] text-xs text-slate-600">{toText(task.description) || "No description"}</p>
+                  <p className="mt-2 line-clamp-3 min-h-[3.5rem] text-xs text-slate-600">
+                    {task.searchMatchText
+                      ? `Match: ${toText(task.searchMatchText)}`
+                      : toText(task.description) || "No description"}
+                  </p>
 
                   <div className="mt-3 space-y-1 text-xs text-slate-600">
                     <div className="flex items-center gap-1">
@@ -2069,7 +2080,11 @@ export default function TasksPage() {
                                 <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority as TaskPriority])}>{task.priority}</Badge>
                                 <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type as TaskType])}>{task.type}</Badge>
                               </div>
-                              <p className="mt-2 line-clamp-2 text-xs text-slate-600">{toText(task.description) || "No description"}</p>
+                              <p className="mt-2 line-clamp-2 text-xs text-slate-600">
+                                {task.searchMatchText
+                                  ? `Match: ${toText(task.searchMatchText)}`
+                                  : toText(task.description) || "No description"}
+                              </p>
                               <div className="mt-2 text-xs text-slate-500">Due: {formatDate(task.dueDate)}</div>
 
                               <div className="mt-3 flex items-center justify-between gap-2">

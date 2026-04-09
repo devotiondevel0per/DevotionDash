@@ -31,6 +31,8 @@ dependencies:
   cached_network_image: ^3.3.1
   shimmer: ^3.0.0
   badges: ^3.1.2
+  flutter_html: ^3.0.0-beta.2
+  html_editor_enhanced: ^2.7.0
 
   # Chat extras
   emoji_picker_flutter: ^4.4.0
@@ -77,18 +79,18 @@ flutter:
     - assets/images/
 
 flutter_launcher_icons:
-  image_path: "logo.png"
+  image_path: "Devotion Group D.png"
   android: true
   ios: true
   web:
     generate: true
-    image_path: "logo.png"
+    image_path: "Devotion Group D.png"
     background_color: "#ffffff"
     theme_color: "#ffffff"
   windows:
     generate: true
-    image_path: "logo.png"
+    image_path: "Devotion Group D.png"
     icon_size: 256
   macos:
     generate: true
-    image_path: "logo.png"
+    image_path: "Devotion Group D.png"

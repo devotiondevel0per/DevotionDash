@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/api_client.dart';
+import '../../services/auth_service.dart';
 import '../../utils/auto_refresh.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/empty_state.dart';
@@ -13,8 +14,9 @@ import 'task_editor_sheet.dart';
 
 /// Family param: tab key — '', 'personal', 'assigned', 'completed'.
 final tasksProvider =
-    FutureProvider.family<List<dynamic>, String>((ref, key) async {
+    FutureProvider.family<List<dynamic>, ({String key, String search})>((ref, query) async {
   final api = ref.watch(apiClientProvider);
+  final key = query.key;
 
   // Map tab keys to the correct server params:
   //  ''          → view=overview (creator or assignee, all statuses)
@@ -44,7 +46,12 @@ final tasksProvider =
       view = 'overview';
   }
 
-  final res = await api.getTasks(view: view, category: category, limit: 50);
+  final res = await api.getTasks(
+    view: view,
+    category: category,
+    search: query.search.trim().isEmpty ? null : query.search.trim(),
+    limit: 50,
+  );
   if (res is List) return res;
   if (res is Map) {
     final raw = res['items'] ?? res['data'] ?? res['tasks'] ?? [];
@@ -146,6 +153,14 @@ String _formatDate(String? raw) {
 String _taskTitle(Map<String, dynamic> task) =>
     (task['title'] ?? task['subject'] ?? 'Untitled').toString();
 
+String _plainText(String value) {
+  return value
+      .replaceAll(RegExp(r'<[^>]+>'), ' ')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
 String _assigneeName(Map<String, dynamic> task) {
   final assignees = task['assignees'];
   if (assignees is List && assignees.isNotEmpty) {
@@ -192,7 +207,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
     super.initState();
     _tabs = TabController(length: _tabDefs.length, vsync: this);
     startAutoRefresh(const Duration(seconds: 60), () {
-      for (final t in _tabDefs) { ref.invalidate(tasksProvider(t.$2)); }
+      for (final t in _tabDefs) {
+        ref.invalidate(tasksProvider((key: t.$2, search: _searchQuery)));
+      }
       ref.invalidate(taskStagesProvider);
     });
   }
@@ -268,6 +285,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
   }
 
   void _showCreateSheet(BuildContext context) {
+    final currentUserId =
+        (ref.read(authStateProvider).asData?.value?['id'] ?? '').toString();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -276,10 +295,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => TaskEditorSheet(
+        currentUserId: currentUserId,
         onSaved: () {
           // Invalidate all tab providers to refresh
           for (final t in _tabDefs) {
-            ref.invalidate(tasksProvider(t.$2));
+            ref.invalidate(tasksProvider((key: t.$2, search: _searchQuery)));
           }
           ref.invalidate(taskStagesProvider);
         },
@@ -298,14 +318,14 @@ class _TaskList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(tasksProvider(tabKey));
+    final async = ref.watch(tasksProvider((key: tabKey, search: searchQuery)));
     final stages = ref.watch(taskStagesProvider).asData?.value ?? const <Map<String, dynamic>>[];
 
     return async.when(
       loading: () => const ShimmerList(count: 8),
       error: (e, st) => _ErrorView(
         message: e.toString(),
-        onRetry: () => ref.invalidate(tasksProvider(tabKey)),
+        onRetry: () => ref.invalidate(tasksProvider((key: tabKey, search: searchQuery))),
       ),
       data: (list) {
         final filtered = _filter(list, searchQuery, stages);
@@ -320,7 +340,7 @@ class _TaskList extends ConsumerWidget {
         }
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(tasksProvider(tabKey));
+            ref.invalidate(tasksProvider((key: tabKey, search: searchQuery)));
             ref.invalidate(taskStagesProvider);
           },
           child: ListView.separated(
@@ -367,7 +387,14 @@ class _TaskList extends ConsumerWidget {
     return filtered.where((t) {
       final task = t as Map<String, dynamic>;
       final title = _taskTitle(task).toLowerCase();
-      return title.contains(lower);
+      final description =
+          _plainText('${task['description'] ?? task['content'] ?? ''}')
+              .toLowerCase();
+      final searchMatchText =
+          _plainText('${task['searchMatchText'] ?? ''}').toLowerCase();
+      return title.contains(lower) ||
+          description.contains(lower) ||
+          searchMatchText.contains(lower);
     }).toList();
   }
 }
@@ -393,6 +420,7 @@ class _TaskCard extends StatelessWidget {
     final priority = (task['priority'] ?? '').toString();
     final dueDate = _formatDate(task['dueDate']?.toString());
     final assignee = _assigneeName(task);
+    final searchMatchText = _plainText('${task['searchMatchText'] ?? ''}');
     final statusColor = _statusColor(status, stages);
     final priorityColor = _priorityColor(priority);
 
@@ -435,6 +463,18 @@ class _TaskCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
+              if (searchMatchText.isNotEmpty) ...[
+                Text(
+                  'Match: $searchMatchText',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF8A651E),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               // Meta row
               Wrap(
                 spacing: 12,
