@@ -14,7 +14,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  static const _logoAsset = 'assets/images/logo.png';
+  static const _logoAsset = 'assets/images/devotion_group_d_small.png';
   final _formKey = GlobalKey<FormState>();
   final _loginCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -96,7 +96,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Image.asset(_logoAsset, width: 80, height: 80, fit: BoxFit.contain),
+                Image.asset(_logoAsset, width: 92, height: 92, fit: BoxFit.contain),
                 const SizedBox(height: 24),
                 Text(
                   branding.appName,
@@ -145,7 +145,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!constrained) ...[
-          Image.asset(_logoAsset, width: 64, height: 64, fit: BoxFit.contain),
+          Image.asset(_logoAsset, width: 84, height: 84, fit: BoxFit.contain),
           const SizedBox(height: 16),
           Text(
             branding.appName,
