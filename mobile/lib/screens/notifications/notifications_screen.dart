@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/api_client.dart';
 import '../../utils/auto_refresh.dart';
+import '../../utils/navigation.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/empty_state.dart';
 
@@ -36,8 +36,12 @@ String _relativeTime(String? raw) {
 }
 
 IconData _typeIcon(String? type) {
-  switch ((type ?? '').toLowerCase()) {
-    case 'task':
+  final normalized = (type ?? '').toLowerCase();
+  if (normalized.startsWith('task')) return Icons.task_alt_rounded;
+  switch (normalized) {
+    case 'tasks':
+    case 'task_comment':
+    case 'task_reply':
       return Icons.task_alt_rounded;
     case 'chat':
       return Icons.chat_bubble_outline_rounded;
@@ -49,14 +53,17 @@ IconData _typeIcon(String? type) {
       return Icons.description_outlined;
     case 'board':
       return Icons.article_outlined;
-    default:
-      return Icons.notifications_outlined;
   }
+  return Icons.notifications_outlined;
 }
 
 Color _typeColor(String? type) {
-  switch ((type ?? '').toLowerCase()) {
-    case 'task':
+  final normalized = (type ?? '').toLowerCase();
+  if (normalized.startsWith('task')) return const Color(0xFF3B82F6);
+  switch (normalized) {
+    case 'tasks':
+    case 'task_comment':
+    case 'task_reply':
       return const Color(0xFF3B82F6);
     case 'chat':
       return const Color(0xFF10B981);
@@ -66,9 +73,8 @@ Color _typeColor(String? type) {
       return const Color(0xFFF97316);
     case 'document':
       return const Color(0xFF8B5CF6);
-    default:
-      return _kPrimary;
   }
+  return _kPrimary;
 }
 
 List<dynamic> _extractNotifications(Map<String, dynamic> data) {
@@ -257,8 +263,8 @@ class _NotificationList extends StatelessWidget {
                 await onMarkRead(id);
               }
               final link = item['link']?.toString() ?? '';
-              if (link.startsWith('/') && ctx.mounted) {
-                ctx.push(link);
+              if (link.isNotEmpty) {
+                navigateFromNotification(link);
               }
             },
           );

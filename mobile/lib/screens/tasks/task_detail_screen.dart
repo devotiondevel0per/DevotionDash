@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_client.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/user_avatar.dart';
+import 'task_editor_sheet.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
@@ -125,6 +128,23 @@ String _formatDateTime(String? raw) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
+bool _hasHtmlContent(String value) {
+  return RegExp(r'<[^>]+>').hasMatch(value);
+}
+
+DateTime _safeDateTime(String? raw) {
+  if (raw == null || raw.trim().isEmpty) {
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+  return DateTime.tryParse(raw)?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+class _CommentNode {
+  _CommentNode(this.comment);
+  final Map<String, dynamic> comment;
+  final List<_CommentNode> replies = <_CommentNode>[];
+}
+
 String _formatFileSize(dynamic bytes) {
   final value = bytes is num ? bytes.toInt() : int.tryParse('${bytes ?? ''}') ?? 0;
   if (value <= 0) return '0 B';
@@ -144,11 +164,22 @@ class TaskDetailScreen extends ConsumerStatefulWidget {
 
 class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   List<dynamic> _comments = [];
+  List<_CommentNode> _commentTree = [];
   bool _commentsLoading = false;
   bool _sending = false;
   bool _canComment = false;
+  bool _canChangeStatus = false;
+  bool _canManageTask = false;
+  bool _isNoteTask = false;
+  int _authorEditWindowMinutes = 5;
+  String _currentUserId = '';
+  String? _editingCommentId;
+  String? _deletingCommentId;
+  bool _savingCommentEdit = false;
+  final _editingCommentCtrl = TextEditingController();
   List<PlatformFile> _pendingFiles = [];
   Map<String, dynamic>? _replyTarget;
+  final Set<String> _collapsedThreadIds = <String>{};
 
   final _commentCtrl = TextEditingController();
   final _commentFocus = FocusNode();
@@ -163,6 +194,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   @override
   void dispose() {
     _commentCtrl.dispose();
+    _editingCommentCtrl.dispose();
     _commentFocus.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -174,12 +206,73 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       final data = await ref
           .read(apiClientProvider)
           .getTaskComments(widget.taskId);
-      setState(() => _comments = data);
+      final normalized = data
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final commentIds = normalized
+          .map((item) => (item['id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      setState(() {
+        _comments = normalized;
+        _commentTree = _buildCommentTree(normalized);
+        _collapsedThreadIds.removeWhere((id) => !commentIds.contains(id));
+      });
     } catch (_) {
       // Non-fatal — show empty comments
     } finally {
       setState(() => _commentsLoading = false);
     }
+  }
+
+  List<_CommentNode> _buildCommentTree(List<Map<String, dynamic>> comments) {
+    final sorted = [...comments]
+      ..sort((a, b) => _safeDateTime(a['createdAt']?.toString())
+          .compareTo(_safeDateTime(b['createdAt']?.toString())));
+
+    final nodes = <String, _CommentNode>{};
+    for (final comment in sorted) {
+      final id = (comment['id'] ?? '').toString();
+      if (id.isEmpty) continue;
+      nodes[id] = _CommentNode(comment);
+    }
+
+    final roots = <_CommentNode>[];
+    for (final comment in sorted) {
+      final id = (comment['id'] ?? '').toString();
+      final node = nodes[id];
+      if (node == null) continue;
+      final parentId = (comment['parentCommentId'] ?? '').toString().trim();
+      if (parentId.isEmpty) {
+        roots.add(node);
+        continue;
+      }
+      final parent = nodes[parentId];
+      if (parent == null) {
+        roots.add(node);
+        continue;
+      }
+      parent.replies.add(node);
+    }
+    return roots;
+  }
+
+  bool _withinAuthorEditWindow(String? createdAt) {
+    final created = _safeDateTime(createdAt);
+    final now = DateTime.now();
+    final window = Duration(minutes: _authorEditWindowMinutes);
+    return now.difference(created) <= window;
+  }
+
+  bool _canModifyComment(Map<String, dynamic> comment) {
+    if (!_isNoteTask) return false;
+    if (_canManageTask) return true;
+    final author = comment['user'] ?? comment['author'];
+    if (author is! Map) return false;
+    final authorId = (author['id'] ?? '').toString();
+    if (authorId.isEmpty || authorId != _currentUserId) return false;
+    return _withinAuthorEditWindow(comment['createdAt']?.toString());
   }
 
   Future<void> _sendComment() async {
@@ -200,9 +293,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         .toList();
     if (draftText.isEmpty && filePaths.isEmpty) return;
 
-    final text = _replyTarget != null
-        ? '${_replyPrefix(_replyTarget!)}$draftText'.trim()
-        : draftText;
+    final text = draftText;
+    final parentCommentId = (_replyTarget?['id'] ?? '').toString().trim();
 
     setState(() => _sending = true);
     try {
@@ -210,6 +302,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             widget.taskId,
             text,
             allowEmpty: filePaths.isNotEmpty,
+            parentCommentId: parentCommentId.isNotEmpty ? parentCommentId : null,
           );
       final commentId = (created['id'] ?? '').toString();
       if (filePaths.isNotEmpty) {
@@ -257,6 +350,14 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   }
 
   Future<void> _changeStatus(String newStatus) async {
+    if (!_canChangeStatus) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You do not have permission to change task status')),
+        );
+      }
+      return;
+    }
     try {
       await ref.read(apiClientProvider).updateTask(
         widget.taskId,
@@ -268,6 +369,107 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to update status: $e')),
         );
+      }
+    }
+  }
+
+  Future<void> _startEditComment(Map<String, dynamic> comment) async {
+    if (!_canModifyComment(comment)) return;
+    final commentId = (comment['id'] ?? '').toString();
+    if (commentId.isEmpty) return;
+    final existing =
+        (comment['content'] ?? comment['text'] ?? '').toString().trim();
+    _editingCommentCtrl.text = existing;
+    setState(() => _editingCommentId = commentId);
+  }
+
+  Future<void> _saveCommentEdit(String commentId) async {
+    final next = _editingCommentCtrl.text.trim();
+    if (next.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment cannot be empty')),
+        );
+      }
+      return;
+    }
+    setState(() => _savingCommentEdit = true);
+    try {
+      await ref.read(apiClientProvider).updateTaskComment(
+            widget.taskId,
+            commentId,
+            next,
+          );
+      _editingCommentCtrl.clear();
+      setState(() => _editingCommentId = null);
+      await _loadComments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment updated')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update comment: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _savingCommentEdit = false);
+      }
+    }
+  }
+
+  Future<void> _deleteComment(Map<String, dynamic> comment) async {
+    if (!_canModifyComment(comment)) return;
+    final commentId = (comment['id'] ?? '').toString();
+    if (commentId.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Comment'),
+        content: const Text('Are you sure you want to delete this comment?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deletingCommentId = commentId);
+    try {
+      await ref.read(apiClientProvider).deleteTaskComment(widget.taskId, commentId);
+      if (_editingCommentId == commentId) {
+        _editingCommentCtrl.clear();
+        _editingCommentId = null;
+      }
+      if ((_replyTarget?['id'] ?? '').toString() == commentId) {
+        _replyTarget = null;
+      }
+      await _loadComments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment deleted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete comment: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _deletingCommentId = null);
       }
     }
   }
@@ -310,6 +512,184 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     });
   }
 
+  void _wrapSelectionWithTags(
+    TextEditingController controller,
+    String openTag,
+    String closeTag, {
+    String placeholder = 'text',
+  }) {
+    final value = controller.value;
+    final text = value.text;
+    var start = value.selection.start;
+    var end = value.selection.end;
+    if (start < 0 || end < 0) {
+      start = text.length;
+      end = text.length;
+    }
+    if (start > end) {
+      final temp = start;
+      start = end;
+      end = temp;
+    }
+    final selected = start == end ? placeholder : text.substring(start, end);
+    final replacement = '$openTag$selected$closeTag';
+    final updated = text.replaceRange(start, end, replacement);
+    final cursorOffset = start + replacement.length;
+    controller.value = value.copyWith(
+      text: updated,
+      selection: TextSelection.collapsed(offset: cursorOffset),
+      composing: TextRange.empty,
+    );
+  }
+
+  Future<void> _insertLinkTag(TextEditingController controller) async {
+    final labelCtrl = TextEditingController();
+    final urlCtrl = TextEditingController(text: 'https://');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Insert Link'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: labelCtrl,
+              decoration: const InputDecoration(labelText: 'Label'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: urlCtrl,
+              decoration: const InputDecoration(labelText: 'URL'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Insert'),
+          ),
+        ],
+      ),
+    );
+    if (result != true) return;
+
+    final label = labelCtrl.text.trim().isEmpty ? 'link' : labelCtrl.text.trim();
+    final url = urlCtrl.text.trim();
+    if (url.isEmpty) return;
+    _wrapSelectionWithTags(
+      controller,
+      '<a href="$url">',
+      '</a>',
+      placeholder: label,
+    );
+  }
+
+  void _insertBulletList(TextEditingController controller) {
+    _wrapSelectionWithTags(
+      controller,
+      '<ul><li>',
+      '</li></ul>',
+      placeholder: 'List item',
+    );
+  }
+
+  void _insertOrderedList(TextEditingController controller) {
+    _wrapSelectionWithTags(
+      controller,
+      '<ol><li>',
+      '</li></ol>',
+      placeholder: 'Step 1',
+    );
+  }
+
+  void _insertHeadingTag(TextEditingController controller) {
+    _wrapSelectionWithTags(
+      controller,
+      '<h3>',
+      '</h3>',
+      placeholder: 'Heading',
+    );
+  }
+
+  void _insertQuoteTag(TextEditingController controller) {
+    _wrapSelectionWithTags(
+      controller,
+      '<blockquote>',
+      '</blockquote>',
+      placeholder: 'Quote',
+    );
+  }
+
+  void _insertCodeBlock(TextEditingController controller) {
+    _wrapSelectionWithTags(
+      controller,
+      '<pre><code>',
+      '</code></pre>',
+      placeholder: 'code',
+    );
+  }
+
+  Future<void> _insertImageTag(TextEditingController controller) async {
+    final urlCtrl = TextEditingController(text: 'https://');
+    final altCtrl = TextEditingController(text: 'image');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Insert Image'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: urlCtrl,
+              decoration: const InputDecoration(labelText: 'Image URL'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: altCtrl,
+              decoration: const InputDecoration(labelText: 'Alt text'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Insert'),
+          ),
+        ],
+      ),
+    );
+    if (result != true) return;
+
+    final url = urlCtrl.text.trim();
+    if (url.isEmpty) return;
+    final alt = altCtrl.text.trim().isEmpty ? 'image' : altCtrl.text.trim();
+    _wrapSelectionWithTags(
+      controller,
+      '<img src="$url" alt="$alt" />',
+      '',
+      placeholder: '',
+    );
+  }
+
+  void _insertTableTemplate(TextEditingController controller) {
+    const tableTemplate =
+        '<table><thead><tr><th>Column 1</th><th>Column 2</th></tr></thead><tbody><tr><td>Value 1</td><td>Value 2</td></tr></tbody></table>';
+    _wrapSelectionWithTags(
+      controller,
+      '',
+      '',
+      placeholder: tableTemplate,
+    );
+  }
+
   String _stripHtml(String value) {
     return value
         .replaceAll(RegExp(r'<[^>]+>'), ' ')
@@ -335,12 +715,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       if (name.isNotEmpty) return name;
     }
     return 'Unknown';
-  }
-
-  String _replyPrefix(Map<String, dynamic> comment) {
-    final author = _replyAuthor(comment);
-    final preview = _commentPreview(comment);
-    return 'Replying to $author:\n"$preview"\n\n';
   }
 
   void _setReplyTarget(Map<String, dynamic> comment) {
@@ -439,6 +813,51 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
   }
 
+  int _countDescendants(_CommentNode node) {
+    var total = node.replies.length;
+    for (final reply in node.replies) {
+      total += _countDescendants(reply);
+    }
+    return total;
+  }
+
+  void _toggleThread(String commentId) {
+    setState(() {
+      if (_collapsedThreadIds.contains(commentId)) {
+        _collapsedThreadIds.remove(commentId);
+      } else {
+        _collapsedThreadIds.add(commentId);
+      }
+    });
+  }
+
+  Future<void> _openTaskEditor(Map<String, dynamic> task) async {
+    final canEditTask = (task['canEditTask'] as bool?) ?? false;
+    if (!canEditTask) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You do not have permission to edit this task')),
+        );
+      }
+      return;
+    }
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => TaskEditorSheet(
+        initialTask: task,
+        onSaved: () {
+          ref.invalidate(_taskDetailProvider(widget.taskId));
+          _loadComments();
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final taskAsync = ref.watch(_taskDetailProvider(widget.taskId));
@@ -450,41 +869,50 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         actions: [
           // Status change menu
           taskAsync.maybeWhen(
-            data: (task) => PopupMenuButton<String>(
-              tooltip: 'Change Status',
-              icon: const Icon(Icons.swap_horiz_rounded),
-              onSelected: _changeStatus,
-              itemBuilder: (_) {
-                final currentStatus = (task['status'] ?? '').toString();
-                final stages = stagesAsync.asData?.value ?? const <Map<String, dynamic>>[];
-                return stages
-                    .where((stage) => (stage['key'] ?? '').toString().isNotEmpty)
-                    .map((stage) {
-                      final key = (stage['key'] ?? '').toString();
-                      final label = (stage['label'] ?? key).toString();
-                      return PopupMenuItem(
-                        value: key,
-                        enabled: key != currentStatus,
-                        child: Text(label),
-                      );
-                    })
-                    .toList();
-              },
-            ),
+            data: (task) {
+              final canChangeStatus = (task['canChangeStatus'] as bool?) ?? false;
+              if (!canChangeStatus) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                tooltip: 'Change Status',
+                icon: const Icon(Icons.swap_horiz_rounded),
+                onSelected: _changeStatus,
+                itemBuilder: (_) {
+                  final currentStatus = (task['status'] ?? '').toString();
+                  final stages = stagesAsync.asData?.value ?? const <Map<String, dynamic>>[];
+                  return stages
+                      .where((stage) => (stage['key'] ?? '').toString().isNotEmpty)
+                      .map((stage) {
+                        final key = (stage['key'] ?? '').toString();
+                        final label = (stage['label'] ?? key).toString();
+                        return PopupMenuItem(
+                          value: key,
+                          enabled: key != currentStatus,
+                          child: Text(label),
+                        );
+                      })
+                      .toList();
+                },
+              );
+            },
             orElse: () => const SizedBox.shrink(),
           ),
           // More menu
           PopupMenuButton<String>(
             tooltip: 'More',
             onSelected: (action) {
+              final task = taskAsync.asData?.value;
+              if (task == null) return;
+              if (action == 'edit') _openTaskEditor(task);
               if (action == 'delete') _deleteTask();
             },
             itemBuilder: (_) {
               final task = taskAsync.asData?.value;
+              final canEditTask = (task?['canEditTask'] as bool?) ?? false;
               final canDelete = (task?['canDelete'] as bool?) ?? false;
               final items = <PopupMenuEntry<String>>[
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'edit',
+                  enabled: canEditTask,
                   child: ListTile(
                     leading: Icon(Icons.edit_outlined),
                     title: Text('Edit'),
@@ -516,7 +944,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           onRetry: () => ref.invalidate(_taskDetailProvider(widget.taskId)),
         ),
         data: (task) {
+          final authUser = ref.watch(authStateProvider).asData?.value;
+          _currentUserId = (authUser?['id'] ?? '').toString();
           _canComment = (task['canComment'] as bool?) ?? true;
+          _canChangeStatus = (task['canChangeStatus'] as bool?) ?? false;
+          _canManageTask = (task['canDelete'] as bool?) ?? false;
+          _isNoteTask = ((task['type'] ?? '').toString().toLowerCase() == 'note');
+          final windowRaw = task['conversationAuthorEditDeleteWindowMinutes'];
+          final windowMinutes = windowRaw is num
+              ? windowRaw.toInt()
+              : int.tryParse('${windowRaw ?? ''}') ?? 5;
+          _authorEditWindowMinutes = windowMinutes.clamp(1, 1440);
           return _buildContent(
             context,
             task,
@@ -632,10 +1070,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 );
               }).toList(),
               onChanged: (next) {
-                if (next != null && next != status) {
+                if (_canChangeStatus && next != null && next != status) {
                   _changeStatus(next);
                 }
               },
+              enabled: _canChangeStatus,
             ),
           ],
           const SizedBox(height: 20),
@@ -671,10 +1110,38 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             const _SectionHeader(title: 'Assignees'),
             const SizedBox(height: 10),
             ...assignees.map((a) {
-              final user = (a['user'] ?? a) as Map<String, dynamic>;
+              final entry = a is Map ? Map<String, dynamic>.from(a as Map) : <String, dynamic>{};
+              final user = (entry['user'] is Map)
+                  ? Map<String, dynamic>.from(entry['user'] as Map)
+                  : entry;
+              final assigneeCanComment = (entry['canComment'] as bool?) ?? true;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: _UserRow(user: user),
+                child: Row(
+                  children: [
+                    Expanded(child: _UserRow(user: user)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: assigneeCanComment
+                            ? const Color(0xFF16A34A).withValues(alpha: 0.12)
+                            : const Color(0xFF6B7280).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        assigneeCanComment ? 'Can Comment' : 'View Only',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: assigneeCanComment
+                              ? const Color(0xFF166534)
+                              : const Color(0xFF4B5563),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
             }),
           ],
@@ -691,8 +1158,38 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 color: cs.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(content,
-                  style: tt.bodyMedium?.copyWith(height: 1.55)),
+              child: _hasHtmlContent(content)
+                  ? Html(
+                      data: content,
+                      style: {
+                        'body': Style(
+                          margin: Margins.zero,
+                          padding: HtmlPaddings.zero,
+                          color: cs.onSurface,
+                          fontSize: FontSize((tt.bodyMedium?.fontSize ?? 14)),
+                          lineHeight: LineHeight(1.55),
+                        ),
+                        'table': Style(
+                          border: Border.all(color: cs.outlineVariant),
+                        ),
+                        'th': Style(
+                          backgroundColor: cs.surfaceContainerHighest,
+                          padding: HtmlPaddings.all(8),
+                        ),
+                        'td': Style(
+                          padding: HtmlPaddings.all(8),
+                        ),
+                        'img': Style(
+                          width: Width.auto(),
+                          maxWidth: MaxWidth(100.percent),
+                        ),
+                      },
+                      onLinkTap: (url, _, __) => _openAttachmentUrl(url),
+                    )
+                  : Text(
+                      content,
+                      style: tt.bodyMedium?.copyWith(height: 1.55),
+                    ),
             ),
           ],
 
@@ -734,97 +1231,340 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         ),
       );
     }
-    return Column(
-      children: _comments.map((c) {
-        final comment = c as Map<String, dynamic>;
-        final text =
-            (comment['content'] ?? comment['text'] ?? '') as String;
-        final author = (comment['user'] ?? comment['author'])
-            as Map<String, dynamic>?;
-        final createdAt = comment['createdAt'] as String?;
-        final attachments =
-            (comment['attachments'] as List<dynamic>?) ?? const [];
+    if (_commentTree.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: Row(
+    Widget renderNode(_CommentNode node, int depth) {
+      final comment = node.comment;
+      final text = (comment['content'] ?? comment['text'] ?? '').toString();
+      final author = (comment['user'] ?? comment['author']) as Map<String, dynamic>?;
+      final createdAt = comment['createdAt']?.toString();
+      final attachments = (comment['attachments'] as List<dynamic>?) ?? const [];
+      final canModify = _canModifyComment(comment);
+      final commentId = (comment['id'] ?? '').toString();
+      final isEditing = _editingCommentId == commentId;
+      final isDeleting = _deletingCommentId == commentId;
+      final indent = (depth * 14).toDouble();
+      final hasReplies = node.replies.isNotEmpty;
+      final descendants = hasReplies ? _countDescendants(node) : 0;
+      final collapsed = hasReplies && commentId.isNotEmpty && _collapsedThreadIds.contains(commentId);
+
+      return Padding(
+        padding: EdgeInsets.only(bottom: 14, left: indent),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: depth == 0
+                  ? Theme.of(context).dividerColor.withValues(alpha: 0.35)
+                  : _kPrimary.withValues(alpha: 0.22),
+            ),
+          ),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              UserAvatar(
-                name: author?['fullname'] ?? author?['name'] ?? '?',
-                photoUrl: author?['photoUrl'] as String?,
-                radius: 18,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  UserAvatar(
+                    name: author?['fullname'] ?? author?['name'] ?? '?',
+                    photoUrl: author?['photoUrl'] as String?,
+                    radius: 16,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          author?['fullname'] ?? author?['name'] ?? 'Unknown',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                author?['fullname'] ?? author?['name'] ?? 'Unknown',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelLarge
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            Text(
+                              _formatDateTime(createdAt),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(color: Colors.grey),
+                            ),
+                          ],
                         ),
-                        const Spacer(),
-                        Text(
-                          _formatDateTime(createdAt),
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(color: Colors.grey),
-                        ),
+                        const SizedBox(height: 4),
+                        if (isEditing) ...[
+                          TextField(
+                            controller: _editingCommentCtrl,
+                            minLines: 2,
+                            maxLines: 6,
+                            enabled: !_savingCommentEdit,
+                            decoration: const InputDecoration(
+                              hintText: 'Edit comment...',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              TextButton(
+                                onPressed: _savingCommentEdit
+                                    ? null
+                                    : () {
+                                        _editingCommentCtrl.clear();
+                                        setState(() => _editingCommentId = null);
+                                      },
+                                child: const Text('Cancel'),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton(
+                                onPressed: _savingCommentEdit
+                                    ? null
+                                    : () => _saveCommentEdit(
+                                          (comment['id'] ?? '').toString(),
+                                        ),
+                                child: _savingCommentEdit
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text('Save'),
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          if (text.isNotEmpty)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: _hasHtmlContent(text)
+                                  ? Html(
+                                      data: text,
+                                      style: {
+                                        'body': Style(
+                                          margin: Margins.zero,
+                                          padding: HtmlPaddings.zero,
+                                          color: Theme.of(context).colorScheme.onSurface,
+                                          fontSize: FontSize(
+                                            Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14,
+                                          ),
+                                        ),
+                                        'img': Style(
+                                          width: Width.auto(),
+                                          maxWidth: MaxWidth(100.percent),
+                                        ),
+                                      },
+                                      onLinkTap: (url, _, __) => _openAttachmentUrl(url),
+                                    )
+                                  : Text(
+                                      text,
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                    ),
+                            ),
+                          if (attachments.isNotEmpty)
+                            ...attachments.map((attachment) {
+                              final item = attachment as Map<String, dynamic>;
+                              return _buildAttachmentTile(context, item);
+                            }),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 0,
+                            children: [
+                              if (_canComment)
+                                TextButton.icon(
+                                  onPressed: _sending ? null : () => _setReplyTarget(comment),
+                                  icon: const Icon(Icons.reply_rounded, size: 16),
+                                  label: const Text('Reply'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: _kPrimary,
+                                    visualDensity: VisualDensity.compact,
+                                    minimumSize: const Size(0, 28),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              if (canModify)
+                                TextButton(
+                                  onPressed: _sending || isDeleting
+                                      ? null
+                                      : () => _startEditComment(comment),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: _kPrimary,
+                                    visualDensity: VisualDensity.compact,
+                                    minimumSize: const Size(0, 28),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('Edit'),
+                                ),
+                              if (canModify)
+                                TextButton.icon(
+                                  onPressed: _sending || isDeleting
+                                      ? null
+                                      : () => _deleteComment(comment),
+                                  icon: isDeleting
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.red,
+                                          ),
+                                        )
+                                      : const Icon(Icons.delete_outline_rounded, size: 16),
+                                  label: const Text('Delete'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                    visualDensity: VisualDensity.compact,
+                                    minimumSize: const Size(0, 28),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
-                    if (text.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(text,
-                            style: Theme.of(context).textTheme.bodyMedium),
-                      ),
-                    ],
-                    if (attachments.isNotEmpty)
-                      ...attachments.map((attachment) {
-                        final item = attachment as Map<String, dynamic>;
-                        return _buildAttachmentTile(context, item);
-                      }),
-                    if (_canComment) ...[
-                      const SizedBox(height: 4),
-                      TextButton.icon(
-                        onPressed: _sending ? null : () => _setReplyTarget(comment),
-                        icon: const Icon(Icons.reply_rounded, size: 16),
-                        label: const Text('Reply'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: _kPrimary,
-                          visualDensity: VisualDensity.compact,
-                          minimumSize: const Size(0, 28),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
+              if (hasReplies) ...[
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: commentId.isEmpty ? null : () => _toggleThread(commentId),
+                    icon: Icon(
+                      collapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
+                      size: 16,
+                    ),
+                    label: Text(
+                      collapsed
+                          ? 'Show replies ($descendants)'
+                          : 'Hide replies ($descendants)',
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: _kPrimary,
+                      visualDensity: VisualDensity.compact,
+                      minimumSize: const Size(0, 28),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+              ],
+              if (hasReplies && !collapsed) ...[
+                const SizedBox(height: 8),
+                ...node.replies.map((reply) => renderNode(reply, depth + 1)),
+              ],
             ],
           ),
-        );
-      }).toList(),
+        ),
+      );
+    }
+
+    return Column(
+      children: _commentTree.map((node) => renderNode(node, 0)).toList(),
     );
   }
 
   // ─── Sticky comment input bar ─────────────────────────────────────────────
+
+  Widget _buildComposerToolbar() {
+    final disabled = _sending || !_canComment;
+    final iconColor = disabled ? Colors.grey : _kPrimary;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Heading',
+            onPressed: disabled ? null : () => _insertHeadingTag(_commentCtrl),
+            icon: Icon(Icons.title_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Bold',
+            onPressed: disabled
+                ? null
+                : () => _wrapSelectionWithTags(_commentCtrl, '<b>', '</b>'),
+            icon: Icon(Icons.format_bold_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Italic',
+            onPressed: disabled
+                ? null
+                : () => _wrapSelectionWithTags(_commentCtrl, '<i>', '</i>'),
+            icon: Icon(Icons.format_italic_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Underline',
+            onPressed: disabled
+                ? null
+                : () => _wrapSelectionWithTags(_commentCtrl, '<u>', '</u>'),
+            icon: Icon(Icons.format_underline_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Bullet List',
+            onPressed: disabled ? null : () => _insertBulletList(_commentCtrl),
+            icon: Icon(Icons.format_list_bulleted_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Numbered List',
+            onPressed: disabled ? null : () => _insertOrderedList(_commentCtrl),
+            icon: Icon(Icons.format_list_numbered_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Quote',
+            onPressed: disabled ? null : () => _insertQuoteTag(_commentCtrl),
+            icon: Icon(Icons.format_quote_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Code Block',
+            onPressed: disabled ? null : () => _insertCodeBlock(_commentCtrl),
+            icon: Icon(Icons.code_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Insert Link',
+            onPressed: disabled ? null : () => _insertLinkTag(_commentCtrl),
+            icon: Icon(Icons.link_rounded, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Insert Image',
+            onPressed: disabled ? null : () => _insertImageTag(_commentCtrl),
+            icon: Icon(Icons.image_outlined, color: iconColor),
+          ),
+          IconButton(
+            tooltip: 'Insert Table',
+            onPressed: disabled ? null : () => _insertTableTemplate(_commentCtrl),
+            icon: Icon(Icons.table_chart_rounded, color: iconColor),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildCommentBar() {
     final cs = Theme.of(context).colorScheme;
@@ -940,6 +1680,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               ),
               const SizedBox(height: 8),
             ],
+            _buildComposerToolbar(),
             Row(
               children: [
                 IconButton(
@@ -952,7 +1693,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     controller: _commentCtrl,
                     focusNode: _commentFocus,
                     minLines: 1,
-                    maxLines: 4,
+                    maxLines: 8,
                     textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
                       hintText: 'Add a comment or attach files...',

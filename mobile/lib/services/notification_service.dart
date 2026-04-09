@@ -223,29 +223,31 @@ class NotificationService {
   }
 
   static String _channelIdForType(String? type) {
-    switch (type) {
-      case 'chat':
-        return _chatChannel.id;
-      case 'livechat':
-        return _liveChatChannel.id;
-      case 'task':
+    final normalized = (type ?? '').toLowerCase();
+    if (normalized == 'chat') return _chatChannel.id;
+    if (normalized == 'livechat') return _liveChatChannel.id;
+    if (normalized.startsWith('task')) return _taskChannel.id;
+    switch (normalized) {
+      case 'tasks':
+      case 'task_comment':
+      case 'task_reply':
         return _taskChannel.id;
-      default:
-        return _generalChannel.id;
     }
+    return _generalChannel.id;
   }
 
   static String _channelNameForType(String? type) {
-    switch (type) {
-      case 'chat':
-        return _chatChannel.name;
-      case 'livechat':
-        return _liveChatChannel.name;
-      case 'task':
+    final normalized = (type ?? '').toLowerCase();
+    if (normalized == 'chat') return _chatChannel.name;
+    if (normalized == 'livechat') return _liveChatChannel.name;
+    if (normalized.startsWith('task')) return _taskChannel.name;
+    switch (normalized) {
+      case 'tasks':
+      case 'task_comment':
+      case 'task_reply':
         return _taskChannel.name;
-      default:
-        return _generalChannel.name;
     }
+    return _generalChannel.name;
   }
 
   static void _onTap(NotificationResponse response) {
@@ -383,6 +385,7 @@ class SocketNotificationListener {
   io.Socket? _socket;
   final ApiClient _api = ApiClient();
   final Set<String> _knownNotificationIds = <String>{};
+  final Map<String, DateTime> _recentDispatches = <String, DateTime>{};
   Timer? _pollTimer;
   bool _notificationBaselineReady = false;
   bool _pollingNotifications = false;
@@ -433,26 +436,48 @@ class SocketNotificationListener {
       );
     });
 
-    // Task assigned / updated
-    _socket!.on('task:assigned', (data) {
-      if (data is! Map) return;
-      final d = Map<String, dynamic>.from(data);
-      NotificationService.showTask(
-        title: 'New Task Assigned',
-        body: d['title'] ?? 'You have a new task',
-        taskId: d['id'] ?? '',
-      );
-    });
-
-    _socket!.on('task:updated', (data) {
-      if (data is! Map) return;
-      final d = Map<String, dynamic>.from(data);
-      NotificationService.showTask(
-        title: 'Task Updated',
-        body: d['title'] ?? 'A task was updated',
-        taskId: d['id'] ?? '',
-      );
-    });
+    // Task lifecycle + conversation notifications
+    final taskEvents = <String>[
+      'task:assigned',
+      'task:updated',
+      'task:created',
+      'task:new',
+      'task:changed',
+      'task:status',
+      'task:statusChanged',
+      'task:open',
+      'task:opened',
+      'task:reopen',
+      'task:reopened',
+      'task:close',
+      'task:closed',
+      'task:comment',
+      'task:commented',
+      'task:reply',
+      'task:replied',
+    ];
+    for (final event in taskEvents) {
+      _socket!.on(event, (data) {
+        if (data is! Map) return;
+        final d = Map<String, dynamic>.from(data);
+        final taskId = _taskIdFromPayloadData(d);
+        if (taskId == null || taskId.isEmpty) return;
+        final lowerEvent = event.toLowerCase();
+        final title = _taskNotificationTitle(lowerEvent, d);
+        final body = d['body']?.toString().trim().isNotEmpty == true
+            ? d['body'].toString()
+            : (d['title']?.toString().trim().isNotEmpty == true
+                ? d['title'].toString()
+                : 'Task activity requires your attention');
+        final dedupeKey = 'socket:$lowerEvent:$taskId:$title:$body';
+        if (!_shouldDispatch(dedupeKey, const Duration(seconds: 3))) return;
+        NotificationService.showTask(
+          title: title,
+          body: body,
+          taskId: taskId,
+        );
+      });
+    }
 
     // General notification from server
     _socket!.on('notification', (data) {
@@ -461,13 +486,26 @@ class SocketNotificationListener {
       final payload = d['payload']?.toString() ?? d['link']?.toString();
       final dialogId = _dialogIdFromLink(payload);
       final type = d['type']?.toString() ?? '';
+      final taskId = _taskIdFromAny(type, payload, d);
       if ((type == 'livechat' || (payload?.startsWith('/livechat') ?? false)) &&
           dialogId != null &&
           dialogId.isNotEmpty) {
+        final dedupeKey = 'socket:livechat:$dialogId:${d['title']}:${d['body']}';
+        if (!_shouldDispatch(dedupeKey, const Duration(seconds: 3))) return;
         NotificationService.showLiveChat(
           title: d['title'] ?? 'Live chat',
           body: d['body'] ?? 'New live chat activity',
           dialogId: dialogId,
+        );
+        return;
+      }
+      if (taskId != null && taskId.isNotEmpty) {
+        final dedupeKey = 'socket:task:$taskId:${d['title']}:${d['body']}';
+        if (!_shouldDispatch(dedupeKey, const Duration(seconds: 3))) return;
+        NotificationService.showTask(
+          title: d['title'] ?? 'Task Update',
+          body: d['body'] ?? 'Task activity requires your attention',
+          taskId: taskId,
         );
         return;
       }
@@ -502,6 +540,7 @@ class SocketNotificationListener {
     _socket?.dispose();
     _socket = null;
     _knownNotificationIds.clear();
+    _recentDispatches.clear();
     _notificationBaselineReady = false;
     _pollingNotifications = false;
   }
@@ -564,6 +603,8 @@ class SocketNotificationListener {
         link != null) {
       final dialogId = _dialogIdFromLink(link);
       if (dialogId != null && dialogId.isNotEmpty) {
+        final dedupeKey = 'poll:livechat:$dialogId:$title:$body';
+        if (!_shouldDispatch(dedupeKey, const Duration(seconds: 3))) return;
         await NotificationService.showLiveChat(
           title: title,
           body: body,
@@ -577,6 +618,8 @@ class SocketNotificationListener {
         link != null) {
       final dialogId = _dialogIdFromLink(link);
       if (dialogId != null && dialogId.isNotEmpty) {
+        final dedupeKey = 'poll:chat:$dialogId:$title:$body';
+        if (!_shouldDispatch(dedupeKey, const Duration(seconds: 3))) return;
         await NotificationService.showChat(
           sender: title,
           message: body,
@@ -586,11 +629,35 @@ class SocketNotificationListener {
       }
     }
 
+    final taskId = _taskIdFromAny(type, link, item);
+    if (taskId != null && taskId.isNotEmpty) {
+      final dedupeKey = 'poll:task:$taskId:$title:$body';
+      if (!_shouldDispatch(dedupeKey, const Duration(seconds: 3))) return;
+      await NotificationService.showTask(
+        title: title,
+        body: body.isNotEmpty ? body : 'Task activity requires your attention',
+        taskId: taskId,
+      );
+      return;
+    }
+
     await NotificationService.showGeneral(
       title: title,
       body: body,
       payload: link,
     );
+  }
+
+  bool _shouldDispatch(String key, Duration window) {
+    final now = DateTime.now();
+    final prev = _recentDispatches[key];
+    if (prev != null && now.difference(prev) <= window) {
+      return false;
+    }
+    _recentDispatches[key] = now;
+    final cutoff = now.subtract(const Duration(minutes: 2));
+    _recentDispatches.removeWhere((_, timestamp) => timestamp.isBefore(cutoff));
+    return true;
   }
 
   String? _dialogIdFromLink(String? link) {
@@ -607,6 +674,72 @@ class SocketNotificationListener {
       return uri.pathSegments[1].trim();
     }
     return null;
+  }
+
+  String? _taskIdFromAny(
+    String? type,
+    String? link,
+    Map<String, dynamic> data,
+  ) {
+    final taskId = _taskIdFromPayloadData(data);
+    if (taskId != null && taskId.isNotEmpty) return taskId;
+    if (link == null || link.trim().isEmpty) {
+      final normalized = (type ?? '').trim().toLowerCase();
+      if (normalized.startsWith('task')) return null;
+      return null;
+    }
+    final fromLink = _taskIdFromLink(link);
+    if (fromLink != null && fromLink.isNotEmpty) return fromLink;
+    final normalized = (type ?? '').trim().toLowerCase();
+    if (normalized.startsWith('task')) return null;
+    return null;
+  }
+
+  String? _taskIdFromPayloadData(Map<String, dynamic> data) {
+    final candidates = <dynamic>[
+      data['taskId'],
+      data['task_id'],
+      data['id'],
+      data['entityId'],
+      data['entity_id'],
+    ];
+    for (final raw in candidates) {
+      final value = raw?.toString().trim();
+      if (value != null && value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  String? _taskIdFromLink(String? link) {
+    if (link == null || link.trim().isEmpty) return null;
+    final uri = Uri.tryParse(link);
+    if (uri == null) return null;
+    if (uri.path == '/tasks') {
+      final fromQuery = uri.queryParameters['task']?.trim() ??
+          uri.queryParameters['id']?.trim();
+      if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
+    }
+    if (uri.pathSegments.length >= 2 && uri.pathSegments.first == 'tasks') {
+      final pathId = uri.pathSegments[1].trim();
+      if (pathId.isNotEmpty) return pathId;
+    }
+    return null;
+  }
+
+  String _taskNotificationTitle(String eventName, Map<String, dynamic> data) {
+    final provided = data['title']?.toString().trim();
+    if (provided != null && provided.isNotEmpty) return provided;
+    if (eventName.contains('assign')) return 'New Task Assigned';
+    if (eventName.contains('comment') || eventName.contains('reply')) {
+      return 'Task Conversation';
+    }
+    if (eventName.contains('reopen')) return 'Task Reopened';
+    if (eventName.contains('close')) return 'Task Closed';
+    if (eventName.contains('open')) return 'Task Opened';
+    if (eventName.contains('status')) return 'Task Status Updated';
+    return 'Task Updated';
   }
 }
 

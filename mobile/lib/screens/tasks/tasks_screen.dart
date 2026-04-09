@@ -7,6 +7,7 @@ import '../../services/api_client.dart';
 import '../../utils/auto_refresh.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/empty_state.dart';
+import 'task_editor_sheet.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
@@ -274,8 +275,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _CreateTaskSheet(
-        onCreated: () {
+      builder: (_) => TaskEditorSheet(
+        onSaved: () {
           // Invalidate all tab providers to refresh
           for (final t in _tabDefs) {
             ref.invalidate(tasksProvider(t.$2));
