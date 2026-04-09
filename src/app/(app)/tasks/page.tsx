@@ -800,6 +800,7 @@ function TaskDetailDialog({
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [collapsedReplies, setCollapsedReplies] = useState<Record<string, boolean>>({});
+  const [commentSearch, setCommentSearch] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { can } = usePermissions();
@@ -812,6 +813,7 @@ function TaskDetailDialog({
     setEditingCommentId(null);
     setEditingCommentHtml("");
     setReplyToComment(null);
+    setCommentSearch("");
     setLoadingComments(true);
     fetch(`/api/tasks/${task.id}/comments`, { cache: "no-store" })
       .then((r) => r.json())
@@ -996,6 +998,34 @@ function TaskDetailDialog({
   }
 
   const commentTree = useMemo(() => buildThreadTree(comments), [comments]);
+  const normalizedCommentSearch = commentSearch.trim().toLowerCase();
+  const filteredCommentTree = useMemo(() => {
+    if (!normalizedCommentSearch) return commentTree;
+    const filterNode = (node: ThreadNode<TaskComment>): ThreadNode<TaskComment> | null => {
+      const authorName = nameOf(node.user).toLowerCase();
+      const plainContent = toText(node.content).toLowerCase();
+      const attachmentMatch = node.attachments.some((attachment) =>
+        attachment.fileName.toLowerCase().includes(normalizedCommentSearch)
+      );
+      const selfMatch =
+        authorName.includes(normalizedCommentSearch) ||
+        plainContent.includes(normalizedCommentSearch) ||
+        attachmentMatch;
+      const replies = node.replies
+        .map((child) => filterNode(child))
+        .filter((child): child is ThreadNode<TaskComment> => Boolean(child));
+      if (!selfMatch && replies.length === 0) return null;
+      return { ...node, replies };
+    };
+    return commentTree
+      .map((node) => filterNode(node))
+      .filter((node): node is ThreadNode<TaskComment> => Boolean(node));
+  }, [commentTree, normalizedCommentSearch]);
+  const filteredCommentCount = useMemo(() => {
+    const countNode = (node: ThreadNode<TaskComment>): number =>
+      1 + node.replies.reduce((sum, child) => sum + countNode(child), 0);
+    return filteredCommentTree.reduce((sum, node) => sum + countNode(node), 0);
+  }, [filteredCommentTree]);
   const threadMeta = useMemo(() => {
     const meta: Record<string, { descendants: number; depth: number }> = {};
     const walk = (node: ThreadNode<TaskComment>) => {
@@ -1277,15 +1307,28 @@ function TaskDetailDialog({
 
           {/* Comments */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Comments ({comments.length})</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Comments ({normalizedCommentSearch ? `${filteredCommentCount}/${comments.length}` : comments.length})
+            </p>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={commentSearch}
+                onChange={(event) => setCommentSearch(event.target.value)}
+                placeholder="Search in this conversation..."
+                className="h-8 pl-8 text-xs"
+              />
+            </div>
             {loadingComments ? (
               <div className="flex items-center justify-center py-6 text-slate-400">
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
             ) : commentTree.length === 0 ? (
               <p className="text-sm text-slate-400 italic">No comments yet. Be the first to add one.</p>
+            ) : filteredCommentTree.length === 0 ? (
+              <p className="text-sm text-slate-400 italic">No conversation messages match your search.</p>
             ) : (
-              commentTree.map((comment) => renderCommentNode(comment, 0))
+              filteredCommentTree.map((comment) => renderCommentNode(comment, 0))
             )}
             <div ref={bottomRef} />
           </div>
@@ -1525,7 +1568,22 @@ export default function TasksPage() {
 
   function openCreate() {
     if (!canWrite) return;
-    setFormInitial(EMPTY_FORM);
+    let groupIds: string[] = [];
+    if (view === "groups") {
+      const scopeGroupIds = new Set(groups.map((group) => group.id));
+      const ownGroupIds = (users.find((user) => user.id === meId)?.groupIds ?? []).filter((id) =>
+        scopeGroupIds.has(id)
+      );
+      if (ownGroupIds.length > 0) {
+        groupIds = ownGroupIds;
+      } else if (groups.length > 0) {
+        groupIds = [groups[0].id];
+      }
+    }
+    setFormInitial({
+      ...EMPTY_FORM,
+      groupIds,
+    });
     setFormOpen(true);
   }
 

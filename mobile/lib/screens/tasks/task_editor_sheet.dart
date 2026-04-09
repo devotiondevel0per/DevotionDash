@@ -12,11 +12,13 @@ class TaskEditorSheet extends ConsumerStatefulWidget {
     super.key,
     this.initialTask,
     this.currentUserId,
+    this.openInGroupBucket = false,
     this.onSaved,
   });
 
   final Map<String, dynamic>? initialTask;
   final String? currentUserId;
+  final bool openInGroupBucket;
   final VoidCallback? onSaved;
 
   @override
@@ -37,8 +39,10 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
   DateTime? _dueDate;
   bool _hadInitialDueDate = false;
   List<Map<String, dynamic>> _assignees = <Map<String, dynamic>>[];
+  List<String> _groupIds = <String>[];
 
   List<dynamic> _teamUsers = <dynamic>[];
+  List<Map<String, dynamic>> _groups = const [];
   List<Map<String, dynamic>> _stages = const [];
   bool _loadingUsers = false;
   bool _saving = false;
@@ -55,7 +59,7 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
   void initState() {
     super.initState();
     _seedFromInitialTask();
-    _loadTeamUsers();
+    _loadTaskMeta();
     _loadStages();
   }
 
@@ -106,6 +110,34 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
           .whereType<Map<String, dynamic>>()
           .toList();
     }
+
+    final rawGroupIds = task['groupIds'];
+    if (rawGroupIds is List) {
+      _groupIds = rawGroupIds
+          .map((item) => _asTaskString(item))
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+    } else {
+      final rawAssignedGroups = task['assignedGroups'];
+      if (rawAssignedGroups is List) {
+        _groupIds = rawAssignedGroups
+            .whereType<Map>()
+            .map((entry) {
+              final map = Map<String, dynamic>.from(entry);
+              final nestedGroup = map['group'];
+              if (nestedGroup is Map) {
+                final nested = Map<String, dynamic>.from(nestedGroup);
+                final nestedId = _asTaskString(nested['id']);
+                if (nestedId.isNotEmpty) return nestedId;
+              }
+              return _asTaskString(map['groupId'] ?? map['id']);
+            })
+            .where((id) => id.isNotEmpty)
+            .toSet()
+            .toList();
+      }
+    }
     _ensureCreatorAssignee();
   }
 
@@ -125,6 +157,85 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
   String _asTaskString(dynamic value) {
     if (value == null) return '';
     return value.toString().trim();
+  }
+
+  Color _parseGroupColor(dynamic raw) {
+    final value = _asTaskString(raw).replaceAll('#', '');
+    if (value.length != 6) return const Color(0xFF94A3B8);
+    final parsed = int.tryParse(value, radix: 16);
+    if (parsed == null) return const Color(0xFF94A3B8);
+    return Color(0xFF000000 | parsed);
+  }
+
+  Future<void> _loadTaskMeta() async {
+    setState(() => _loadingUsers = true);
+    try {
+      final meta = await ref.read(apiClientProvider).getTasksMeta();
+      if (!mounted) return;
+      final usersRaw = meta['users'];
+      final groupsRaw = meta['groups'];
+      final users = usersRaw is List ? usersRaw : const <dynamic>[];
+      final groups = groupsRaw is List
+          ? groupsRaw
+              .whereType<Map>()
+              .map((entry) => Map<String, dynamic>.from(entry))
+              .where((entry) => _asTaskString(entry['id']).isNotEmpty)
+              .toList()
+          : const <Map<String, dynamic>>[];
+      setState(() {
+        _teamUsers = users;
+        _groups = groups;
+        _applyDefaultGroupSelection();
+      });
+    } catch (_) {
+      try {
+        final users = await ref.read(apiClientProvider).getTeamUsers();
+        if (!mounted) return;
+        setState(() => _teamUsers = users);
+      } catch (_) {
+        // Non-fatal.
+      }
+    } finally {
+      if (mounted) setState(() => _loadingUsers = false);
+    }
+  }
+
+  void _applyDefaultGroupSelection() {
+    if (_isEdit || !widget.openInGroupBucket || _groupIds.isNotEmpty) return;
+    if (_groups.isEmpty) return;
+    final existingGroupIds = _groups
+        .map((group) => _asTaskString(group['id']))
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final currentUser = _teamUsers
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .firstWhere(
+          (user) => _asTaskString(user['id']) == _currentUserId,
+          orElse: () => <String, dynamic>{},
+        );
+    final ownGroupIdsRaw = currentUser['groupIds'];
+    final ownGroupIds = ownGroupIdsRaw is List
+        ? ownGroupIdsRaw
+            .map((id) => _asTaskString(id))
+            .where((id) => id.isNotEmpty && existingGroupIds.contains(id))
+            .toList()
+        : <String>[];
+    if (ownGroupIds.isNotEmpty) {
+      _groupIds = ownGroupIds.toSet().toList();
+      return;
+    }
+    _groupIds = <String>[_asTaskString(_groups.first['id'])];
+  }
+
+  void _toggleGroup(String groupId, bool selected) {
+    setState(() {
+      if (selected) {
+        _groupIds = <String>{..._groupIds, groupId}.toList();
+      } else {
+        _groupIds = _groupIds.where((id) => id != groupId).toList();
+      }
+    });
   }
 
   Future<void> _loadTeamUsers() async {
@@ -196,6 +307,7 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
         'priority': _priority,
         'isPrivate': _isPrivate,
         'assignees': _assignees,
+        'groupIds': _groupIds,
       };
 
       if (_dueDate != null) {
@@ -667,6 +779,65 @@ class _TaskEditorSheetState extends ConsumerState<TaskEditorSheet> {
                 ),
               ),
               const SizedBox(height: 20),
+              if (_groups.isNotEmpty) ...[
+                Text(
+                  'Group Bucket',
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: cs.outline.withValues(alpha: 0.4)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    children: _groups.map((group) {
+                      final groupId = _asTaskString(group['id']);
+                      if (groupId.isEmpty) return const SizedBox.shrink();
+                      final groupName = _asTaskString(group['name']).isEmpty
+                          ? 'Group'
+                          : _asTaskString(group['name']);
+                      final selected = _groupIds.contains(groupId);
+                      final color = _parseGroupColor(group['color']);
+                      return CheckboxListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                        activeColor: _kTaskEditorPrimary,
+                        value: selected,
+                        onChanged: _saving ? null : (value) => _toggleGroup(groupId, value ?? false),
+                        title: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                groupName,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Tasks created from Group Bucket are pre-selected here. You can move them back to Main later.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               Text(
                 'Assigned to',
                 style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),

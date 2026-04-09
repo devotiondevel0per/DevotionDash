@@ -180,6 +180,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   bool _movingBucket = false;
   List<Map<String, dynamic>> _availableGroups = const [];
   final _editingCommentCtrl = TextEditingController();
+  final _commentSearchCtrl = TextEditingController();
+  String _commentSearch = '';
   List<PlatformFile> _pendingFiles = [];
   Map<String, dynamic>? _replyTarget;
   final Set<String> _collapsedThreadIds = <String>{};
@@ -201,6 +203,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   void dispose() {
     _commentCtrl.dispose();
     _editingCommentCtrl.dispose();
+    _commentSearchCtrl.dispose();
     _commentFocus.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -262,6 +265,44 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       parent.replies.add(node);
     }
     return roots;
+  }
+
+  bool _commentMatchesQuery(Map<String, dynamic> comment, String query) {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return true;
+    final content = _stripHtml((comment['content'] ?? comment['text'] ?? '').toString()).toLowerCase();
+    final author = comment['user'] ?? comment['author'];
+    final authorName = author is Map
+        ? ((author['fullname'] ?? author['name'] ?? '').toString().toLowerCase())
+        : '';
+    final attachments = (comment['attachments'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((item) => (item['fileName'] ?? '').toString().toLowerCase());
+    return content.contains(normalized) ||
+        authorName.contains(normalized) ||
+        attachments.any((name) => name.contains(normalized));
+  }
+
+  _CommentNode? _filterCommentNode(_CommentNode node, String query) {
+    if (query.trim().isEmpty) return node;
+    final filteredReplies = node.replies
+        .map((reply) => _filterCommentNode(reply, query))
+        .whereType<_CommentNode>()
+        .toList();
+    final selfMatch = _commentMatchesQuery(node.comment, query);
+    if (!selfMatch && filteredReplies.isEmpty) return null;
+    final clone = _CommentNode(Map<String, dynamic>.from(node.comment));
+    clone.replies.addAll(filteredReplies);
+    return clone;
+  }
+
+  int _countVisibleComments(List<_CommentNode> nodes) {
+    var total = 0;
+    for (final node in nodes) {
+      total += 1;
+      total += _countVisibleComments(node.replies);
+    }
+    return total;
   }
 
   bool _withinAuthorEditWindow(String? createdAt) {
@@ -1059,10 +1100,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               if (action == 'edit') _openTaskEditor(task);
               if (action == 'delete') _deleteTask();
               if (action == 'move-main') {
-                void _moveTaskToMain(task);
+                _moveTaskToMain(task);
               }
               if (action == 'move-group') {
-                void _moveTaskToGroupBucket(task);
+                _moveTaskToGroupBucket(task);
               }
             },
             itemBuilder: (_) {
@@ -1386,6 +1427,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   }
 
   Widget _buildComments(BuildContext context) {
+    final query = _commentSearch.trim();
+    final filteredTree = query.isEmpty
+        ? _commentTree
+        : _commentTree
+            .map((node) => _filterCommentNode(node, query))
+            .whereType<_CommentNode>()
+            .toList();
+    final visibleCount = _countVisibleComments(filteredTree);
+
     if (_commentsLoading) {
       return const ShimmerList(
         count: 3,
@@ -1654,7 +1704,51 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
 
     return Column(
-      children: _commentTree.map((node) => renderNode(node, 0)).toList(),
+      children: [
+        TextField(
+          controller: _commentSearchCtrl,
+          onChanged: (value) => setState(() => _commentSearch = value),
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search_rounded, size: 18),
+            hintText: 'Search in this conversation...',
+            isDense: true,
+            suffixIcon: query.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    tooltip: 'Clear',
+                    onPressed: () {
+                      _commentSearchCtrl.clear();
+                      setState(() => _commentSearch = '');
+                    },
+                  ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            query.isEmpty
+                ? 'Showing ${_comments.length} messages'
+                : 'Showing $visibleCount of ${_comments.length} messages',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (filteredTree.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No conversation messages match your search.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          )
+        else
+          ...filteredTree.map((node) => renderNode(node, 0)),
+      ],
     );
   }
 

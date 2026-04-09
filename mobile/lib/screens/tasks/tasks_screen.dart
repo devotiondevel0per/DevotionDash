@@ -287,6 +287,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
   void _showCreateSheet(BuildContext context) {
     final currentUserId =
         (ref.read(authStateProvider).asData?.value?['id'] ?? '').toString();
+    final activeTabKey = _tabDefs[_tabs.index].$2;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -296,6 +297,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       ),
       builder: (_) => TaskEditorSheet(
         currentUserId: currentUserId,
+        openInGroupBucket: activeTabKey == 'groups',
         onSaved: () {
           // Invalidate all tab providers to refresh
           for (final t in _tabDefs) {
