@@ -102,6 +102,7 @@ type TaskItem = {
   canEditTask?: boolean;
   canChangeStatus?: boolean;
   canDelete?: boolean;
+  conversationAuthorEditDeleteWindowMinutes?: number;
   isFavorite?: boolean;
 };
 
@@ -275,6 +276,12 @@ function toText(value: string | null) {
     .replace(/&nbsp;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isWithinCommentWindow(createdAt: string, windowMinutes: number) {
+  const createdAtMs = new Date(createdAt).getTime();
+  if (!Number.isFinite(createdAtMs)) return false;
+  return Date.now() - createdAtMs <= windowMinutes * 60 * 1000;
 }
 
 function buildParams(view: TaskView, category: TaskCategory, statusScope: string, search: string, filters: FilterState) {
@@ -746,6 +753,7 @@ function TaskDetailDialog({
   const [editingCommentHtml, setEditingCommentHtml] = useState("");
   const [replyToComment, setReplyToComment] = useState<TaskComment | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [collapsedReplies, setCollapsedReplies] = useState<Record<string, boolean>>({});
@@ -902,6 +910,48 @@ function TaskDetailDialog({
     }
   }
 
+  async function deleteComment(commentId: string) {
+    if (!task || deletingCommentId) return;
+    const confirmed = window.confirm("Delete this conversation message?");
+    if (!confirmed) return;
+    setDeletingCommentId(commentId);
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/comments/${commentId}`, {
+        method: "DELETE",
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Failed to delete comment");
+      }
+
+      const refreshed = await fetch(`/api/tasks/${task.id}/comments`, { cache: "no-store" });
+      const refreshedData = (await refreshed.json().catch(() => null)) as
+        | TaskComment[]
+        | { comments?: TaskComment[] }
+        | null;
+      if (Array.isArray(refreshedData)) {
+        setComments(refreshedData);
+      } else if (refreshedData?.comments && Array.isArray(refreshedData.comments)) {
+        setComments(refreshedData.comments);
+      } else {
+        setComments((prev) => prev.filter((item) => item.id !== commentId));
+      }
+
+      if (editingCommentId === commentId) {
+        setEditingCommentId(null);
+        setEditingCommentHtml("");
+      }
+      if (replyToComment?.id === commentId) {
+        setReplyToComment(null);
+      }
+      toast.success("Conversation message deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete comment");
+    } finally {
+      setDeletingCommentId(null);
+    }
+  }
+
   const commentTree = useMemo(() => buildThreadTree(comments), [comments]);
   const threadMeta = useMemo(() => {
     const meta: Record<string, { descendants: number; depth: number }> = {};
@@ -935,9 +985,10 @@ function TaskDetailDialog({
   if (!task) return null;
   const stageMeta = getStageMeta(stages, task.status);
   const isClosed = stages.find((s) => s.key === task.status)?.isClosed ?? false;
-  const canWriteTask = task.canEditTask ?? can("tasks", "write");
-  const canEditConversation = task.type === "note" && canWriteTask;
+  const canEditConversation = task.type === "note";
   const canManage = can("tasks", "manage");
+  const conversationAuthorEditDeleteWindowMinutes =
+    task.conversationAuthorEditDeleteWindowMinutes ?? 5;
   const canComment =
     task.canComment ??
     (canManage ||
@@ -948,7 +999,13 @@ function TaskDetailDialog({
 
   const renderCommentNode = (comment: ThreadNode<TaskComment>, depth: number): ReactNode => {
     const isMe = comment.user.id === meId;
-    const canEditComment = canEditConversation && isMe;
+    const isWithinAuthorWindow = isWithinCommentWindow(
+      comment.createdAt,
+      conversationAuthorEditDeleteWindowMinutes
+    );
+    const canEditComment =
+      canEditConversation && (canManage || (isMe && isWithinAuthorWindow));
+    const canDeleteComment = canEditComment;
     const isEditing = editingCommentId === comment.id;
     const depthOffset = Math.min(depth, 6) * 14;
     const replyMeta = threadMeta[comment.id] ?? { descendants: 0, depth: 1 };
@@ -1007,6 +1064,21 @@ function TaskDetailDialog({
                       }}
                     >
                       Edit
+                    </button>
+                  ) : null}
+                  {canDeleteComment && !isEditing ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-transparent px-2 py-0.5 text-[11px] font-medium text-red-600 hover:border-red-200 hover:bg-red-50"
+                      onClick={() => void deleteComment(comment.id)}
+                      disabled={deletingCommentId === comment.id}
+                    >
+                      {deletingCommentId === comment.id ? (
+                        <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-1 inline h-3 w-3" />
+                      )}
+                      Delete
                     </button>
                   ) : null}
                 </div>

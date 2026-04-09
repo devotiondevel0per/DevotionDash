@@ -37,6 +37,7 @@ import {
   Reply,
   Send,
   Star,
+  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -92,6 +93,7 @@ type TaskDetail = {
   canEditTask?: boolean;
   canChangeStatus?: boolean;
   canDelete?: boolean;
+  conversationAuthorEditDeleteWindowMinutes?: number;
   isFavorite: boolean;
   favoriteCount: number;
 };
@@ -195,6 +197,12 @@ function toText(value: string | null) {
     .trim();
 }
 
+function isWithinCommentWindow(createdAt: string, windowMinutes: number) {
+  const createdAtMs = new Date(createdAt).getTime();
+  if (!Number.isFinite(createdAtMs)) return false;
+  return Date.now() - createdAtMs <= windowMinutes * 60 * 1000;
+}
+
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -216,6 +224,7 @@ export default function TaskDetailPage() {
   const [editingCommentHtml, setEditingCommentHtml] = useState("");
   const [replyToComment, setReplyToComment] = useState<TaskComment | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
@@ -419,6 +428,36 @@ export default function TaskDetailPage() {
     }
   }
 
+  async function deleteComment(commentId: string) {
+    if (!task || deletingCommentId) return;
+    const confirmed = window.confirm("Delete this conversation message?");
+    if (!confirmed) return;
+
+    setDeletingCommentId(commentId);
+    try {
+      const response = await fetch(`/api/tasks/${id}/comments/${commentId}`, {
+        method: "DELETE",
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Failed to delete comment");
+      }
+      await loadTask();
+      if (editingCommentId === commentId) {
+        setEditingCommentId(null);
+        setEditingCommentHtml("");
+      }
+      if (replyToComment?.id === commentId) {
+        setReplyToComment(null);
+      }
+      toast.success("Conversation message deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete comment");
+    } finally {
+      setDeletingCommentId(null);
+    }
+  }
+
   async function analyzeConversation() {
     if (!task || analyzingConversation) return;
     setAnalyzingConversation(true);
@@ -502,7 +541,9 @@ export default function TaskDetailPage() {
   const typeMeta = TYPE_META[task.type] ?? TYPE_META.task;
   const canEditTask = task.canEditTask ?? canWrite;
   const canChangeStatus = task.canChangeStatus ?? canEditTask;
-  const canEditConversation = task.type === "note" && canEditTask;
+  const canEditConversation = task.type === "note";
+  const conversationAuthorEditDeleteWindowMinutes =
+    task.conversationAuthorEditDeleteWindowMinutes ?? 5;
   const canComment =
     task.canComment ??
     (canManage ||
@@ -518,7 +559,13 @@ export default function TaskDetailPage() {
 
   const renderCommentNode = (comment: ThreadNode<TaskComment>, depth: number): ReactNode => {
     const isMe = comment.user.id === meId;
-    const canEditComment = canEditConversation && isMe;
+    const isWithinAuthorWindow = isWithinCommentWindow(
+      comment.createdAt,
+      conversationAuthorEditDeleteWindowMinutes
+    );
+    const canEditComment =
+      canEditConversation && (canManage || (isMe && isWithinAuthorWindow));
+    const canDeleteComment = canEditComment;
     const isEditing = editingCommentId === comment.id;
     const depthOffset = Math.min(depth, 6) * 14;
     const replyMeta = threadMeta[comment.id] ?? { descendants: 0, depth: 1 };
@@ -577,6 +624,21 @@ export default function TaskDetailPage() {
                       }}
                     >
                       Edit
+                    </button>
+                  ) : null}
+                  {canDeleteComment && !isEditing ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-transparent px-2 py-0.5 text-[11px] font-medium text-red-600 hover:border-red-200 hover:bg-red-50"
+                      onClick={() => void deleteComment(comment.id)}
+                      disabled={deletingCommentId === comment.id}
+                    >
+                      {deletingCommentId === comment.id ? (
+                        <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-1 inline h-3 w-3" />
+                      )}
+                      Delete
                     </button>
                   ) : null}
                 </div>

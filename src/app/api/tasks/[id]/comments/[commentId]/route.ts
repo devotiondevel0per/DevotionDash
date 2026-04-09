@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
+import {
+  getTaskConversationAuthorEditWindowMinutes,
+  isWithinAuthorConversationWindow,
+} from "@/lib/task-conversation-policy";
 
 type RouteContext = { params: Promise<{ id: string; commentId: string }> };
 
@@ -54,8 +58,73 @@ function commentSelect(options: { includeParent: boolean; includeAttachments: bo
   };
 }
 
+async function ensureCommentMutationAllowed(
+  accessResult: Awaited<ReturnType<typeof requireModuleAccess>>,
+  taskId: string,
+  commentId: string,
+  actionLabel: "edit" | "delete"
+) {
+  if (!accessResult.ok) return accessResult.response;
+
+  const existing = await prisma.taskComment.findUnique({
+    where: { id: commentId },
+    select: {
+      id: true,
+      taskId: true,
+      userId: true,
+      createdAt: true,
+      task: {
+        select: {
+          id: true,
+          type: true,
+          creatorId: true,
+        },
+      },
+    },
+  });
+
+  if (!existing || existing.taskId !== taskId) {
+    return NextResponse.json({ error: "Comment not found" }, { status: 404 });
+  }
+
+  if (existing.task.type !== "note") {
+    return NextResponse.json(
+      { error: "Conversation editing is only available for note tasks" },
+      { status: 403 }
+    );
+  }
+
+  const isAdmin = accessResult.ctx.access.isAdmin;
+  const canManageTasks = accessResult.ctx.access.permissions.tasks.manage;
+  const canManageConversation = isAdmin || canManageTasks;
+  if (canManageConversation) {
+    return { existing };
+  }
+
+  const isCommentAuthor = existing.userId === accessResult.ctx.userId;
+  if (!isCommentAuthor) {
+    return NextResponse.json(
+      { error: `You can ${actionLabel} only your own conversation in notes` },
+      { status: 403 }
+    );
+  }
+
+  const windowMinutes = await getTaskConversationAuthorEditWindowMinutes();
+  const withinWindow = isWithinAuthorConversationWindow(existing.createdAt, windowMinutes);
+  if (!withinWindow) {
+    return NextResponse.json(
+      {
+        error: `You can ${actionLabel} your conversation only within ${windowMinutes} minute(s) of posting`,
+      },
+      { status: 403 }
+    );
+  }
+
+  return { existing };
+}
+
 export async function PUT(req: NextRequest, { params }: RouteContext) {
-  const accessResult = await requireModuleAccess("tasks", "write");
+  const accessResult = await requireModuleAccess("tasks", "read");
   if (!accessResult.ok) return accessResult.response;
 
   try {
@@ -67,43 +136,14 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "content is required" }, { status: 400 });
     }
 
-    const existing = await prisma.taskComment.findUnique({
-      where: { id: commentId },
-      select: {
-        id: true,
-        taskId: true,
-        userId: true,
-        task: {
-          select: {
-            id: true,
-            type: true,
-            creatorId: true,
-          },
-        },
-      },
-    });
-
-    if (!existing || existing.taskId !== id) {
-      return NextResponse.json({ error: "Comment not found" }, { status: 404 });
-    }
-
-    if (existing.task.type !== "note") {
-      return NextResponse.json(
-        { error: "Conversation editing is only available for note tasks" },
-        { status: 403 }
-      );
-    }
-
-    const isAdmin = accessResult.ctx.access.isAdmin;
-    const canManageTasks = accessResult.ctx.access.permissions.tasks.manage;
-    if (!isAdmin && !canManageTasks) {
-      const isCommentAuthor = existing.userId === accessResult.ctx.userId;
-      if (!isCommentAuthor) {
-        return NextResponse.json(
-          { error: "You can edit only your own conversation in notes" },
-          { status: 403 }
-        );
-      }
+    const accessCheck = await ensureCommentMutationAllowed(
+      accessResult,
+      id,
+      commentId,
+      "edit"
+    );
+    if (accessCheck instanceof NextResponse) {
+      return accessCheck;
     }
 
     const attempts = [
@@ -151,4 +191,28 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   return PUT(req, ctx);
+}
+
+export async function DELETE(_req: NextRequest, { params }: RouteContext) {
+  const accessResult = await requireModuleAccess("tasks", "read");
+  if (!accessResult.ok) return accessResult.response;
+
+  try {
+    const { id, commentId } = await params;
+    const accessCheck = await ensureCommentMutationAllowed(
+      accessResult,
+      id,
+      commentId,
+      "delete"
+    );
+    if (accessCheck instanceof NextResponse) {
+      return accessCheck;
+    }
+
+    await prisma.taskComment.delete({ where: { id: commentId } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[DELETE /api/tasks/[id]/comments/[commentId]]", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

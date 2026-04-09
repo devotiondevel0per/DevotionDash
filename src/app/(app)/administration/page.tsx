@@ -65,6 +65,7 @@ type SettingsForm = {
   topbarTo: string;
   topbarAccent: string;
   aiModel: string;
+  conversationAuthorEditDeleteWindowMinutes: number;
 };
 type ModuleToggle = { id: ModuleId; enabled: boolean; locked: boolean };
 type AuditLogItem = { id: string; action: string; module: string; details?: string | null; createdAt: string; user: { name: string } | null };
@@ -293,7 +294,7 @@ type TelExtension = { id: string; number: string; userId: string | null; isActiv
 type TelBlacklist = { id: string; number: string; reason: string | null; createdAt: string };
 
 const moduleLabels: Record<ModuleId, string> = { home: "Home", tasks: "Tasks", projects: "Projects", documents: "Documents", email: "E-Mail", board: "Board", leads: "Leads", clients: "Organizations", contacts: "Contacts", team: "Team", calendar: "Calendar", chat: "Chat", livechat: "Live Chat", servicedesk: "Ticket Desk", products: "Products", accounting: "Accounting", ebank: "e-Bank", telephony: "Telephony", search: "Search", help: "Help", administration: "Administration" };
-const DEFAULT_SETTINGS: SettingsForm = { appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, supportEmail: "", defaultTimezone: "UTC", themePrimary: "#AA8038", sidebarFrom: "#6E4C0D", sidebarMid: "#563C0D", sidebarTo: "#453311", topbarFrom: "#67470B", topbarMid: "#8E610C", topbarTo: "#BF8210", topbarAccent: "#AA8038", aiModel: "qwen2.5:7b" };
+const DEFAULT_SETTINGS: SettingsForm = { appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, supportEmail: "", defaultTimezone: "UTC", themePrimary: "#AA8038", sidebarFrom: "#6E4C0D", sidebarMid: "#563C0D", sidebarTo: "#453311", topbarFrom: "#67470B", topbarMid: "#8E610C", topbarTo: "#BF8210", topbarAccent: "#AA8038", aiModel: "qwen2.5:7b", conversationAuthorEditDeleteWindowMinutes: 5 };
 const DEFAULT_LEAD_STAGE_FLOW = ["new", "qualified", "proposal", "negotiation", "won"];
 const DEFAULT_LEAD_SOURCE_OPTIONS = ["Website", "Referral", "Cold Call", "Social Media", "Campaign", "Partner"];
 const DEFAULT_LEAD_FORM_FIELDS: LeadConfigField[] = [
@@ -323,6 +324,14 @@ const EMPTY_NEW_USER_FORM: NewUserForm = {
   roleIds: [],
 };
 const DEPARTMENTS_SETTING_KEY = "org.departments.catalog";
+const TASK_CONVERSATION_AUTHOR_EDIT_WINDOW_MINUTES_KEY =
+  "tasks.conversation.authorEditDeleteWindowMinutes";
+
+function normalizeConversationWindowMinutes(value: unknown) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_SETTINGS.conversationAuthorEditDeleteWindowMinutes;
+  return Math.min(1440, Math.max(1, parsed));
+}
 
 function createClientId(prefix: string) {
   const secureUuid = globalThis.crypto?.randomUUID?.();
@@ -910,7 +919,24 @@ export default function AdministrationPage() {
       setUsers(usersJson);
       setRoles(rolesJson.roles ?? []);
       setModuleToggles(modulesJson.modules ?? []);
-      setSettingsForm({ appName: settingsJson["app.name"] ?? DEFAULT_SETTINGS.appName, appTagline: settingsJson["app.tagline"] ?? DEFAULT_SETTINGS.appTagline, supportEmail: settingsJson["app.supportEmail"] ?? DEFAULT_SETTINGS.supportEmail, defaultTimezone: settingsJson["system.defaultTimezone"] ?? DEFAULT_SETTINGS.defaultTimezone, themePrimary: settingsJson["theme.primary"] ?? DEFAULT_SETTINGS.themePrimary, sidebarFrom: settingsJson["theme.sidebar.from"] ?? DEFAULT_SETTINGS.sidebarFrom, sidebarMid: settingsJson["theme.sidebar.mid"] ?? DEFAULT_SETTINGS.sidebarMid, sidebarTo: settingsJson["theme.sidebar.to"] ?? DEFAULT_SETTINGS.sidebarTo, topbarFrom: settingsJson["theme.topbar.from"] ?? DEFAULT_SETTINGS.topbarFrom, topbarMid: settingsJson["theme.topbar.mid"] ?? DEFAULT_SETTINGS.topbarMid, topbarTo: settingsJson["theme.topbar.to"] ?? DEFAULT_SETTINGS.topbarTo, topbarAccent: settingsJson["theme.topbar.accent"] ?? DEFAULT_SETTINGS.topbarAccent, aiModel: settingsJson["ai.model"] ?? DEFAULT_SETTINGS.aiModel });
+      setSettingsForm({
+        appName: settingsJson["app.name"] ?? DEFAULT_SETTINGS.appName,
+        appTagline: settingsJson["app.tagline"] ?? DEFAULT_SETTINGS.appTagline,
+        supportEmail: settingsJson["app.supportEmail"] ?? DEFAULT_SETTINGS.supportEmail,
+        defaultTimezone: settingsJson["system.defaultTimezone"] ?? DEFAULT_SETTINGS.defaultTimezone,
+        themePrimary: settingsJson["theme.primary"] ?? DEFAULT_SETTINGS.themePrimary,
+        sidebarFrom: settingsJson["theme.sidebar.from"] ?? DEFAULT_SETTINGS.sidebarFrom,
+        sidebarMid: settingsJson["theme.sidebar.mid"] ?? DEFAULT_SETTINGS.sidebarMid,
+        sidebarTo: settingsJson["theme.sidebar.to"] ?? DEFAULT_SETTINGS.sidebarTo,
+        topbarFrom: settingsJson["theme.topbar.from"] ?? DEFAULT_SETTINGS.topbarFrom,
+        topbarMid: settingsJson["theme.topbar.mid"] ?? DEFAULT_SETTINGS.topbarMid,
+        topbarTo: settingsJson["theme.topbar.to"] ?? DEFAULT_SETTINGS.topbarTo,
+        topbarAccent: settingsJson["theme.topbar.accent"] ?? DEFAULT_SETTINGS.topbarAccent,
+        aiModel: settingsJson["ai.model"] ?? DEFAULT_SETTINGS.aiModel,
+        conversationAuthorEditDeleteWindowMinutes: normalizeConversationWindowMinutes(
+          settingsJson[TASK_CONVERSATION_AUTHOR_EDIT_WINDOW_MINUTES_KEY]
+        ),
+      });
       setAppLogoUrl(settingsJson["app.logo"] ?? "");
       setLeadConfigStageFlow(
         Array.isArray(leadsConfigJson.stageFlow) && leadsConfigJson.stageFlow.length > 0
@@ -1142,6 +1168,9 @@ export default function AdministrationPage() {
         "theme.topbar.to": normalizeHex(settingsForm.topbarTo, "#BF8210"),
         "theme.topbar.accent": normalizeHex(settingsForm.topbarAccent, "#AA8038"),
         "ai.model": settingsForm.aiModel.trim() || "qwen2.5:7b",
+        [TASK_CONVERSATION_AUTHOR_EDIT_WINDOW_MINUTES_KEY]: String(
+          normalizeConversationWindowMinutes(settingsForm.conversationAuthorEditDeleteWindowMinutes)
+        ),
       };
       const response = await fetch("/api/administration/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settings: settingsPayload }) });
       if (!response.ok) throw new Error("Failed to save settings");
@@ -1797,6 +1826,24 @@ export default function AdministrationPage() {
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-700">AI Model (Ollama)</label>
                       <Input value={settingsForm.aiModel} onChange={(e) => setSettingsForm((prev) => ({ ...prev, aiModel: e.target.value }))} placeholder="e.g. llama3" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-700">Conversation Edit/Delete Window (minutes)</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={1440}
+                        value={settingsForm.conversationAuthorEditDeleteWindowMinutes}
+                        onChange={(e) =>
+                          setSettingsForm((prev) => ({
+                            ...prev,
+                            conversationAuthorEditDeleteWindowMinutes: normalizeConversationWindowMinutes(
+                              e.target.value
+                            ),
+                          }))
+                        }
+                      />
+                      <p className="text-[11px] text-slate-500">Comment authors can edit/delete only within this time window.</p>
                     </div>
                   </div>
                   <div className="flex gap-2 pt-1">

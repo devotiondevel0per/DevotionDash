@@ -10,6 +10,7 @@ import {
 import { notifyTaskChange } from "@/lib/task-notifications";
 import { isMissingTaskAssigneeCanCommentColumn } from "@/lib/task-access";
 import { loadTaskStages, getDefaultStage, isClosedStage } from "@/lib/workflow-config";
+import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
 
 function isMissingTaskGroupAssignmentsTable(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -337,6 +338,9 @@ export async function GET(req: NextRequest) {
     }
     if (!loaded && lastError) throw lastError;
 
+    const conversationAuthorEditDeleteWindowMinutes =
+      await getTaskConversationAuthorEditWindowMinutes();
+
     const enriched = tasks.map((rawTask) => {
       const task = rawTask as {
         id: string;
@@ -373,6 +377,7 @@ export async function GET(req: NextRequest) {
         canEditTask: canWriteTasks,
         canChangeStatus: canWriteTasks,
         canDelete: canManageTasks,
+        conversationAuthorEditDeleteWindowMinutes,
         isFavorite: (task.favorites ?? []).length > 0,
         favoriteCount: Number(task._count?.favorites ?? 0),
         favorites: undefined,
@@ -591,6 +596,8 @@ export async function POST(req: NextRequest) {
     }).catch((error) => {
       console.error("[tasks notify create]", error);
     });
+    const conversationAuthorEditDeleteWindowMinutes =
+      await getTaskConversationAuthorEditWindowMinutes();
 
     return NextResponse.json(
       {
@@ -601,6 +608,7 @@ export async function POST(req: NextRequest) {
         canChangeStatus: true,
         canDelete: accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.tasks.manage,
         canComment: true,
+        conversationAuthorEditDeleteWindowMinutes,
         isFavorite: (typedTask.favorites ?? []).length > 0,
         favoriteCount: Number(typedTask._count?.favorites ?? 0),
         favorites: undefined,

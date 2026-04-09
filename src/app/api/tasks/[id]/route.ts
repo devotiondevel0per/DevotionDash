@@ -13,6 +13,7 @@ import {
   isMissingTaskAssigneeCanCommentColumn,
 } from "@/lib/task-access";
 import { isClosedStage, loadTaskStages } from "@/lib/workflow-config";
+import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -481,6 +482,8 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       accessResult.ctx.access
     );
     const canDelete = canManageTasks;
+    const conversationAuthorEditDeleteWindowMinutes =
+      await getTaskConversationAuthorEditWindowMinutes();
 
     return NextResponse.json({
       ...task,
@@ -491,6 +494,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       canEditTask: canWriteTasks,
       canChangeStatus: canWriteTasks,
       canDelete,
+      conversationAuthorEditDeleteWindowMinutes,
       isFavorite: task.favorites.length > 0,
       favoriteCount: task._count.favorites,
       favorites: undefined,
@@ -733,6 +737,8 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       accessResult.ctx.access
     );
     const canDelete = canManageTasks;
+    const conversationAuthorEditDeleteWindowMinutes =
+      await getTaskConversationAuthorEditWindowMinutes();
 
     await notifyTaskChange({
       action: "updated",
@@ -755,6 +761,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       canEditTask: true,
       canChangeStatus: true,
       canDelete,
+      conversationAuthorEditDeleteWindowMinutes,
       isFavorite: task.favorites.length > 0,
       favoriteCount: task._count.favorites,
       favorites: undefined,

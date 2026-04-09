@@ -3,6 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog, getClientIpAddress } from "@/lib/audit-log";
 import { requireModuleAccess } from "@/lib/api-access";
 import { invalidateOllamaModelCache } from "@/lib/ai/model-config";
+import {
+  TASK_CONVERSATION_AUTHOR_EDIT_WINDOW_MINUTES_KEY,
+  invalidateTaskConversationPolicyCache,
+  normalizeTaskConversationAuthorEditWindowMinutes,
+} from "@/lib/task-conversation-policy";
 
 export async function GET() {
   const accessResult = await requireModuleAccess("administration", "read");
@@ -36,6 +41,18 @@ export async function PUT(req: NextRequest) {
 
     if (Object.prototype.hasOwnProperty.call(normalizedSettings, "ai.model")) {
       invalidateOllamaModelCache(normalizedSettings["ai.model"]);
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(
+        normalizedSettings,
+        TASK_CONVERSATION_AUTHOR_EDIT_WINDOW_MINUTES_KEY
+      )
+    ) {
+      invalidateTaskConversationPolicyCache(
+        normalizeTaskConversationAuthorEditWindowMinutes(
+          normalizedSettings[TASK_CONVERSATION_AUTHOR_EDIT_WINDOW_MINUTES_KEY]
+        )
+      );
     }
 
     await writeAuditLog({
