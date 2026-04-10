@@ -58,6 +58,19 @@ function projectTaskSelect(includeAllowAssigneeComments: boolean) {
   };
 }
 
+function canViewProjectTask(
+  task: { assigneeId: string | null },
+  userId: string,
+  access: {
+    isAdmin: boolean;
+    permissions: { projects: { manage: boolean } };
+  },
+  scope: { isManager: boolean }
+) {
+  if (access.isAdmin || access.permissions.projects.manage || scope.isManager) return true;
+  return task.assigneeId === userId;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -119,12 +132,27 @@ export async function GET(
         projectAccess.scope.isManager
     );
 
-    const normalizedTasks = tasks.map((task) => {
+    const normalizedTasks = tasks
+      .filter((task) =>
+        canViewProjectTask(
+          { assigneeId: (task as { assigneeId: string | null }).assigneeId },
+          accessResult.ctx.userId,
+          accessResult.ctx.access,
+          projectAccess.scope
+        )
+      )
+      .map((task) => {
       const taskRecord = task as {
         id: string;
         assigneeId: string | null;
         allowAssigneeComments?: boolean;
       };
+      const canViewTask = canViewProjectTask(
+        { assigneeId: taskRecord.assigneeId },
+        accessResult.ctx.userId,
+        accessResult.ctx.access,
+        projectAccess.scope
+      );
       const allowAssigneeComments = includeAllowAssigneeComments
         ? Boolean(taskRecord.allowAssigneeComments)
         : true;
@@ -142,8 +170,8 @@ export async function GET(
         ...task,
         allowAssigneeComments,
         canComment,
-        canEditTask: canWriteTask,
-        canChangeStatus: canWriteTask,
+        canEditTask: canWriteTask && canViewTask,
+        canChangeStatus: canWriteTask && canViewTask,
         canDelete: canDeleteTask,
         conversationAuthorEditDeleteWindowMinutes,
       };

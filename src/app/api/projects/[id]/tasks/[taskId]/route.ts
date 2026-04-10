@@ -92,7 +92,15 @@ function computeTaskPermissions(
   access: UserAccess,
   scope: ProjectScope
 ) {
-  const canWriteTask = Boolean((access.isAdmin || access.permissions.projects.write) && scope.isMember);
+  const canViewAllTasks = Boolean(
+    access.isAdmin || access.permissions.projects.manage || scope.isManager
+  );
+  const canViewTask = canViewAllTasks || task.assigneeId === userId;
+  const canWriteTask = Boolean(
+    (access.isAdmin || access.permissions.projects.write) &&
+      scope.isMember &&
+      canViewTask
+  );
   const canDelete = Boolean(access.isAdmin || access.permissions.projects.manage || scope.isManager);
   const canComment = canCurrentUserCommentOnProjectTask(
     {
@@ -126,10 +134,18 @@ export async function PUT(
 
     const existingTask = await prisma.projectTask.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true },
+      select: { id: true, assigneeId: true },
     });
     if (!existingTask) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    const canViewAllTasks = Boolean(
+      accessResult.ctx.access.isAdmin ||
+        accessResult.ctx.access.permissions.projects.manage ||
+        projectAccess.scope.isManager
+    );
+    if (!canViewAllTasks && existingTask.assigneeId !== accessResult.ctx.userId) {
+      return NextResponse.json({ error: "Forbidden: task access denied" }, { status: 403 });
     }
 
     const body = (await req.json()) as {
@@ -297,10 +313,18 @@ export async function DELETE(
 
     const existingTask = await prisma.projectTask.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true },
+      select: { id: true, assigneeId: true },
     });
     if (!existingTask) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    const canViewAllTasks = Boolean(
+      accessResult.ctx.access.isAdmin ||
+        accessResult.ctx.access.permissions.projects.manage ||
+        projectAccess.scope.isManager
+    );
+    if (!canViewAllTasks && existingTask.assigneeId !== accessResult.ctx.userId) {
+      return NextResponse.json({ error: "Forbidden: task access denied" }, { status: 403 });
     }
 
     await prisma.projectTask.delete({ where: { id: taskId } });

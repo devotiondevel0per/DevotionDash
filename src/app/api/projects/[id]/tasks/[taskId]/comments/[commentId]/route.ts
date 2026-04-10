@@ -10,6 +10,19 @@ import {
 
 type RouteContext = { params: Promise<{ id: string; taskId: string; commentId: string }> };
 
+function canViewProjectTask(
+  assigneeId: string | null,
+  userId: string,
+  access: {
+    isAdmin: boolean;
+    permissions: { projects: { manage: boolean } };
+  },
+  scope: { isManager: boolean }
+) {
+  if (access.isAdmin || access.permissions.projects.manage || scope.isManager) return true;
+  return assigneeId === userId;
+}
+
 function commentSelect(includeParent: boolean) {
   return {
     id: true,
@@ -41,12 +54,22 @@ async function ensureCommentMutationAllowed(
       projectTaskId: true,
       userId: true,
       createdAt: true,
-      projectTask: { select: { projectId: true } },
+      projectTask: { select: { projectId: true, assigneeId: true } },
     },
   });
 
   if (!existing || existing.projectTaskId !== taskId || existing.projectTask.projectId !== projectId) {
     return NextResponse.json({ error: "Comment not found" }, { status: 404 });
+  }
+  if (
+    !canViewProjectTask(
+      existing.projectTask.assigneeId,
+      accessResult.ctx.userId,
+      accessResult.ctx.access,
+      projectAccess.scope
+    )
+  ) {
+    return NextResponse.json({ error: "Forbidden: task access denied" }, { status: 403 });
   }
 
   const canManageConversation =

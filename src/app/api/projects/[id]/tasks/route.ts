@@ -95,7 +95,15 @@ function computeTaskPermissions(
   access: UserAccess,
   scope: ProjectScope
 ) {
-  const canWriteTask = Boolean((access.isAdmin || access.permissions.projects.write) && scope.isMember);
+  const canViewAllTasks = Boolean(
+    access.isAdmin || access.permissions.projects.manage || scope.isManager
+  );
+  const canViewTask = canViewAllTasks || task.assigneeId === userId;
+  const canWriteTask = Boolean(
+    (access.isAdmin || access.permissions.projects.write) &&
+      scope.isMember &&
+      canViewTask
+  );
   const canDelete = Boolean(access.isAdmin || access.permissions.projects.manage || scope.isManager);
   const canComment = canCurrentUserCommentOnProjectTask(
     {
@@ -145,11 +153,20 @@ export async function GET(
     const status = normalizeTaskStatus(stages, searchParams.get("status"));
     const assigneeId = searchParams.get("assigneeId");
 
+    const canViewAllTasks = Boolean(
+      accessResult.ctx.access.isAdmin ||
+        accessResult.ctx.access.permissions.projects.manage ||
+        projectAccess.scope.isManager
+    );
     const where: Record<string, unknown> = { projectId };
 
     if (phaseId) where.phaseId = phaseId;
     if (status) where.status = status;
-    if (assigneeId) where.assigneeId = assigneeId;
+    if (canViewAllTasks) {
+      if (assigneeId) where.assigneeId = assigneeId;
+    } else {
+      where.assigneeId = accessResult.ctx.userId;
+    }
 
     let includeAllowAssigneeComments = true;
     let tasksRaw: ProjectTaskRow[] = [];

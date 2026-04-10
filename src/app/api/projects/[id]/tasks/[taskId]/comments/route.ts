@@ -10,6 +10,19 @@ import {
 
 type RouteContext = { params: Promise<{ id: string; taskId: string }> };
 
+function canViewProjectTask(
+  assigneeId: string | null,
+  userId: string,
+  access: {
+    isAdmin: boolean;
+    permissions: { projects: { manage: boolean } };
+  },
+  scope: { isManager: boolean }
+) {
+  if (access.isAdmin || access.permissions.projects.manage || scope.isManager) return true;
+  return assigneeId === userId;
+}
+
 function commentSelect(includeParent: boolean) {
   return {
     id: true,
@@ -33,10 +46,20 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
     const task = await prisma.projectTask.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true },
+      select: { id: true, assigneeId: true },
     });
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    if (
+      !canViewProjectTask(
+        task.assigneeId,
+        accessResult.ctx.userId,
+        accessResult.ctx.access,
+        projectAccess.scope
+      )
+    ) {
+      return NextResponse.json({ error: "Forbidden: task access denied" }, { status: 403 });
     }
 
     let comments: Array<Record<string, unknown>> = [];
@@ -74,10 +97,20 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
     const scopedTask = await prisma.projectTask.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true },
+      select: { id: true, assigneeId: true },
     });
     if (!scopedTask) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    if (
+      !canViewProjectTask(
+        scopedTask.assigneeId,
+        accessResult.ctx.userId,
+        accessResult.ctx.access,
+        projectAccess.scope
+      )
+    ) {
+      return NextResponse.json({ error: "Forbidden: task access denied" }, { status: 403 });
     }
 
     const taskAccess = await loadProjectTaskCommentAccessInfo(prisma, taskId);

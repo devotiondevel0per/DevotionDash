@@ -187,14 +187,14 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
   {
     id: "core_name",
     key: "name",
-    label: "Project Name",
+    label: "Company Name",
     type: "text",
     source: "core",
     coreKey: "name",
     enabled: true,
     required: true,
     order: 1,
-    placeholder: "Enter project name",
+    placeholder: "Enter company name",
     helpText: "",
     options: [],
     multiple: false,
@@ -211,7 +211,7 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
     enabled: true,
     required: false,
     order: 2,
-    placeholder: "Describe your project",
+    placeholder: "Describe your company",
     helpText: "",
     options: [],
     multiple: false,
@@ -611,14 +611,14 @@ function ProjectFormDialog({
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(err?.error ?? "Failed to save project");
+        throw new Error(err?.error ?? "Failed to save company");
       }
       const saved = (await res.json()) as Project;
-      toast.success(isEdit ? "Project updated" : "Project created");
+      toast.success(isEdit ? "Company updated" : "Company created");
       onSaved(saved);
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save project");
+      toast.error(err instanceof Error ? err.message : "Failed to save company");
     } finally {
       setSubmitting(false);
     }
@@ -631,13 +631,13 @@ function ProjectFormDialog({
       const res = await fetch(`/api/projects/${existing.id}`, { method: "DELETE" });
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(err?.error ?? "Failed to delete project");
+        throw new Error(err?.error ?? "Failed to delete company");
       }
-      toast.success("Project deleted");
+      toast.success("Company deleted");
       onDeleted?.(existing.id);
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete project");
+      toast.error(err instanceof Error ? err.message : "Failed to delete company");
     } finally {
       setDeleting(false);
     }
@@ -649,7 +649,7 @@ function ProjectFormDialog({
         <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-2xl">
             <FolderKanban className="h-5 w-5 text-[#AA8038]" />
-            {isEdit ? "Edit Project" : "Create New Project"}
+            {isEdit ? "Edit Company" : "Create New Company"}
           </DialogTitle>
           <DialogDescription>Define timeline, category, and scope clearly before execution.</DialogDescription>
         </DialogHeader>
@@ -669,7 +669,7 @@ function ProjectFormDialog({
                   <div key={field.id} className="space-y-1.5">
                     {label}
                     <Input
-                      placeholder={field.placeholder || "Project name"}
+                      placeholder={field.placeholder || "Company name"}
                       value={name}
                       onChange={(event) => setName(event.target.value)}
                       autoFocus
@@ -687,20 +687,20 @@ function ProjectFormDialog({
                       <RichTextEditor
                         value={description}
                         onChange={setDescription}
-                        placeholder={field.placeholder || "What is this project about?"}
+                          placeholder={field.placeholder || "What is this company about?"}
                         minHeight={140}
                         disabled={submitting}
                       />
                     ) : field.type === "textarea" ? (
                       <Textarea
-                        placeholder={field.placeholder || "What is this project about?"}
+                          placeholder={field.placeholder || "What is this company about?"}
                         rows={4}
                         value={toText(description)}
                         onChange={(event) => setDescription(normalizeRichText(event.target.value))}
                       />
                     ) : (
                       <Input
-                        placeholder={field.placeholder || "Project description"}
+                        placeholder={field.placeholder || "Company description"}
                         value={toText(description)}
                         onChange={(event) => setDescription(normalizeRichText(event.target.value))}
                       />
@@ -1054,7 +1054,7 @@ function ProjectFormDialog({
             <div className="pt-1 border-t">
               {confirmDelete ? (
                 <div className="flex items-center gap-2">
-                  <p className="text-sm text-red-600 flex-1">Delete this project permanently?</p>
+                  <p className="text-sm text-red-600 flex-1">Delete this company permanently?</p>
                   <Button type="button" size="sm" variant="outline" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancel</Button>
                   <Button type="button" size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => void handleDelete()} disabled={deleting}>
                     {deleting ? "Deleting..." : "Yes, Delete"}
@@ -1063,7 +1063,7 @@ function ProjectFormDialog({
               ) : (
                 <Button type="button" size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setConfirmDelete(true)}>
                   <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                  Delete Project
+                  Delete Company
                 </Button>
               )}
             </div>
@@ -1072,7 +1072,7 @@ function ProjectFormDialog({
           <DialogFooter className="border-t pt-3">
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
             <Button type="submit" disabled={submitting} style={{ backgroundColor: "#AA8038", color: "#fff" }}>
-              {submitting ? "Saving..." : isEdit ? "Save Changes" : "Create Project"}
+              {submitting ? "Saving..." : isEdit ? "Save Changes" : "Create Company"}
             </Button>
           </DialogFooter>
         </form>
@@ -1199,7 +1199,7 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
         <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-2xl">
             <CheckSquare className="h-5 w-5 text-[#AA8038]" />
-            {isEdit ? "Edit Project Task" : "Add Project Task"}
+            {isEdit ? "Edit Company Task" : "Add Company Task"}
           </DialogTitle>
           <DialogDescription>Track ownership, timeline, and delivery state clearly.</DialogDescription>
         </DialogHeader>
@@ -2049,7 +2049,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
       if (!silent) setLoading(true);
       try {
         const res = await fetch(`/api/projects/${projectId}`);
-        if (!res.ok) throw new Error("Failed to load project");
+        if (!res.ok) throw new Error("Failed to load company");
         const data = (await res.json()) as ProjectDetail;
 
         let nextStages = normalizeWorkflowStages(data.taskStages);
@@ -2074,7 +2074,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
         setMembers(data.members ?? []);
       } catch (err) {
         if (!silent) {
-          toast.error(err instanceof Error ? err.message : "Failed to load project");
+          toast.error(err instanceof Error ? err.message : "Failed to load company");
         }
       } finally {
         if (!silent) setLoading(false);
@@ -2225,7 +2225,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   if (!detail) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
-        <p>Project not found</p>
+        <p>Company not found</p>
       </div>
     );
   }
@@ -2242,7 +2242,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
             className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Projects
+            Back to Companies
           </button>
         </div>
         <div className="flex items-start justify-between gap-4">
@@ -2626,7 +2626,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
               {phases.length === 0 ? (
                 <div className="py-16 text-center text-gray-400">
                   <Layers className="h-10 w-10 mx-auto mb-3 opacity-25" />
-                  <p className="text-sm">No phases yet. Add one to structure your project.</p>
+                    <p className="text-sm">No phases yet. Add one to structure your company.</p>
                 </div>
               ) : (
                 phases.map((phase, idx) => {
@@ -2917,6 +2917,7 @@ export default function ProjectsPage() {
   const [activeStatus, setActiveStatus] = useState("all");
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [companyLayout, setCompanyLayout] = useState<"grid" | "list">("grid");
 
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -2930,12 +2931,12 @@ export default function ProjectsPage() {
       if (!silent) setLoading(true);
       try {
         const res = await fetch("/api/projects?limit=200");
-        if (!res.ok) throw new Error("Failed to load projects");
+        if (!res.ok) throw new Error("Failed to load companies");
         const data = (await res.json()) as Project[];
         setProjects(Array.isArray(data) ? data : []);
       } catch (err) {
         if (!silent) {
-          toast.error(err instanceof Error ? err.message : "Failed to load projects");
+          toast.error(err instanceof Error ? err.message : "Failed to load companies");
         }
       } finally {
         if (!silent) setLoading(false);
@@ -2953,7 +2954,7 @@ export default function ProjectsPage() {
     (async () => {
       try {
         const res = await fetch("/api/projects/form-config", { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to load project form config");
+        if (!res.ok) throw new Error("Failed to load company form config");
         const data = (await res.json()) as { fields?: ProjectFormField[] };
         if (!mounted) return;
         setProjectFormFields(
@@ -3002,7 +3003,7 @@ export default function ProjectsPage() {
   const statusFilters = useMemo(() => {
     const count = (s: string) => projects.filter((p) => p.status === s).length;
     return [
-      { id: "all", label: "All Projects", Icon: FolderOpen, count: projects.length },
+      { id: "all", label: "All Companies", Icon: FolderOpen, count: projects.length },
       { id: "active", label: "Active", Icon: CheckCircle2, count: count("active") },
       { id: "completed", label: "Completed", Icon: CheckSquare, count: count("completed") },
       { id: "archived", label: "Archived", Icon: Archive, count: count("archived") },
@@ -3075,7 +3076,7 @@ export default function ProjectsPage() {
       {/* ── Left Panel ── */}
       <div className="w-56 border-r bg-white flex flex-col shrink-0">
         <div className="p-4 border-b">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Projects</h2>
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Companies</h2>
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
           {statusFilters.map(({ id, label, Icon, count }) => {
@@ -3142,15 +3143,43 @@ export default function ProjectsPage() {
             {canWrite && (
               <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4 mr-1" />
-                New Project
+                New Company
               </Button>
             )}
-            <span className="text-sm text-gray-400">{filtered.length} project{filtered.length !== 1 ? "s" : ""}</span>
+            <span className="text-sm text-gray-400">{filtered.length} compan{filtered.length === 1 ? "y" : "ies"}</span>
+            <div className="ml-2 inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn(
+                  "h-7 px-2 text-xs",
+                  companyLayout === "grid" ? "bg-[#AA8038] text-white hover:bg-[#8f682d] hover:text-white" : "text-gray-500 hover:bg-gray-100"
+                )}
+                onClick={() => setCompanyLayout("grid")}
+              >
+                <Columns3 className="h-3.5 w-3.5 mr-1" />
+                Grid
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn(
+                  "h-7 px-2 text-xs",
+                  companyLayout === "list" ? "bg-[#AA8038] text-white hover:bg-[#8f682d] hover:text-white" : "text-gray-500 hover:bg-gray-100"
+                )}
+                onClick={() => setCompanyLayout("list")}
+              >
+                <List className="h-3.5 w-3.5 mr-1" />
+                List
+              </Button>
+            </div>
           </div>
           <div className="relative w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search projects..."
+              placeholder="Search companies..."
               className="pl-8 h-8 text-sm"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -3168,15 +3197,15 @@ export default function ProjectsPage() {
           ) : filtered.length === 0 ? (
             <div className="text-center py-20 text-gray-400">
               <FolderOpen className="h-12 w-12 mx-auto mb-3 opacity-25" />
-              <p className="text-sm font-medium">No projects found</p>
+              <p className="text-sm font-medium">No companies found</p>
               {canWrite ? (
                 <Button size="sm" variant="outline" className="mt-3" onClick={() => setCreateOpen(true)}>
                   <Plus className="h-3.5 w-3.5 mr-1" />
-                  Create your first project
+                  Create your first company
                 </Button>
               ) : null}
             </div>
-          ) : (
+          ) : companyLayout === "grid" ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((project) => (
                 <ProjectCard
@@ -3196,6 +3225,110 @@ export default function ProjectsPage() {
                   }
                 />
               ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Tasks</TableHead>
+                    <TableHead>Members</TableHead>
+                    <TableHead>Due</TableHead>
+                    <TableHead className="w-[120px] text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((project) => {
+                    const tasksCount = project.tasks?.length ?? project._count.tasks;
+                    const doneTasks = (project.tasks ?? []).filter((task) =>
+                      isTaskClosed(DEFAULT_PROJECT_TASK_STAGES, task.status)
+                    ).length;
+                    const canEditCompany =
+                      canWrite &&
+                      (
+                        canManage ||
+                        (Boolean(currentUserId) &&
+                          project.members.some(
+                            (member) =>
+                              member.user.id === currentUserId && member.role === "manager"
+                          ))
+                      );
+
+                    return (
+                      <TableRow
+                        key={project.id}
+                        className="cursor-pointer hover:bg-slate-50"
+                        onClick={() => setOpenProjectId(project.id)}
+                      >
+                        <TableCell>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-800">{project.name}</p>
+                            {project.category ? (
+                              <p className="text-xs text-slate-500">{project.category.name}</p>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "text-xs",
+                              STATUS_CONFIG[project.status]?.className ??
+                                "bg-gray-100 text-gray-600"
+                            )}
+                          >
+                            {STATUS_CONFIG[project.status]?.label ?? project.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-700">
+                          {tasksCount > 0
+                            ? `${doneTasks}/${tasksCount} done`
+                            : "No tasks"}
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-700">
+                          {project.members.length}
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-700">
+                          {project.endDate ? formatDate(project.endDate) : "No deadline"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenProjectId(project.id);
+                              }}
+                            >
+                              Open
+                            </Button>
+                            {canEditCompany ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEditProject(project);
+                                  setEditOpen(true);
+                                }}
+                              >
+                                Edit
+                              </Button>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
