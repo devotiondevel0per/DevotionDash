@@ -63,6 +63,7 @@ import {
   Pencil,
   List,
   Columns3,
+  LayoutGrid,
   Layers,
   Trash2,
   UserPlus,
@@ -2035,7 +2036,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   const [editingTask, setEditingTask] = useState<ProjectTask | undefined>(undefined);
   const [taskDetailOpen, setTaskDetailOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<ProjectTask | null>(null);
-  const [taskLayout, setTaskLayout] = useState<"list" | "kanban">("list");
+  const [taskLayout, setTaskLayout] = useState<"list" | "grid" | "kanban">("list");
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [addPhaseOpen, setAddPhaseOpen] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -2360,6 +2361,17 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                       </button>
                       <button
                         type="button"
+                        onClick={() => setTaskLayout("grid")}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
+                          taskLayout === "grid" ? "bg-[#AA8038] text-white" : "text-gray-500 hover:bg-gray-100"
+                        )}
+                      >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        Grid
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setTaskLayout("kanban")}
                         className={cn(
                           "inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
@@ -2493,6 +2505,97 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                       })}
                     </TableBody>
                   </Table>
+                ) : taskLayout === "grid" ? (
+                  <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {tasks.map((task) => {
+                      const assigneeName = task.assignee ? displayName(task.assignee) : "Unassigned";
+                      const canEditTaskItem = canEditProjectTask(task);
+                      const canChangeStatusItem = canChangeProjectTaskStatus(task);
+                      return (
+                        <article
+                          key={task.id}
+                          className="rounded-lg border bg-white p-3 shadow-sm transition-shadow hover:shadow"
+                        >
+                          <button
+                            type="button"
+                            className="line-clamp-2 text-left text-sm font-semibold text-slate-800 hover:text-[#AA8038] hover:underline"
+                            onClick={() => openTaskDetails(task)}
+                          >
+                            {task.title}
+                          </button>
+                          {task.description ? (
+                            <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                              {richTextToPlainText(task.description)}
+                            </p>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "h-5 px-1.5 text-[10px] transition-opacity",
+                                canChangeStatusItem && "cursor-pointer hover:opacity-80",
+                                togglingTaskId === task.id ? "opacity-50" : ""
+                              )}
+                              style={stageStyle(getTaskStage(taskStages, task.status).color)}
+                              onClick={() => {
+                                if (!canChangeStatusItem) return;
+                                void toggleTaskStatus(task);
+                              }}
+                              title={canChangeStatusItem ? "Click to move to next stage" : undefined}
+                            >
+                              {getTaskStageLabel(taskStages, task.status)}
+                            </Badge>
+                            <Badge
+                              variant="secondary"
+                              className={cn(
+                                "h-5 px-1.5 text-[10px]",
+                                TASK_PRIORITY_CONFIG[task.priority]?.className ?? "bg-gray-100 text-gray-600"
+                              )}
+                            >
+                              {TASK_PRIORITY_CONFIG[task.priority]?.label ?? task.priority}
+                            </Badge>
+                            {task.dueDate ? (
+                              <Badge
+                                variant="outline"
+                                className="h-5 px-1.5 text-[10px] text-orange-700 border-orange-200 bg-orange-50"
+                              >
+                                {formatDate(task.dueDate)}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              {task.assignee ? (
+                                <Avatar className="h-5 w-5">
+                                  <AvatarFallback className="text-[10px] bg-gray-100 text-gray-600">
+                                    {initials(assigneeName)}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ) : null}
+                              <span className="truncate">{assigneeName}</span>
+                            </div>
+                            <span className="shrink-0 text-[10px] text-slate-400">
+                              {formatDateTime(task.createdAt)}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="truncate">Phase: {task.phase?.name ?? "-"}</span>
+                            <button
+                              type="button"
+                              className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                              onClick={() => {
+                                if (!canEditTaskItem) return;
+                                openTaskEditor(task);
+                              }}
+                              disabled={!canEditTaskItem}
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <div className="flex min-w-max gap-3 p-3">
