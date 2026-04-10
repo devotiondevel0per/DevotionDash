@@ -799,6 +799,7 @@ model Project {
   categoryId  String?
   name        String
   description String?          @db.Text
+  customData  Json?
   status      String           @default("active") // active, archived, completed
   startDate   DateTime?
   endDate     DateTime?

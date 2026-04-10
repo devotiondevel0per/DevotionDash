@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { canListAllProjects } from "@/lib/project-access";
+import { loadProjectFormFields, sanitizeProjectCustomData } from "@/lib/project-form-config";
 
 export async function GET(req: NextRequest) {
   const accessResult = await requireModuleAccess("projects", "read");
@@ -57,27 +59,41 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, description, categoryId, startDate, endDate } = body as {
+    const { name, description, categoryId, startDate, endDate, status, customData } = body as {
       name: string;
       description?: string;
       categoryId?: string;
       startDate?: string;
       endDate?: string;
+      status?: string;
+      customData?: unknown;
     };
 
-    if (!name || typeof name !== "string" || name.trim() === "") {
-      return NextResponse.json({ error: "name is required" }, { status: 400 });
+    const fields = await loadProjectFormFields();
+    const normalizedCustomData = sanitizeProjectCustomData(customData, fields);
+    const normalizedName =
+      typeof name === "string" && name.trim()
+        ? name.trim()
+        : `Project ${new Date().toLocaleDateString()}`;
+
+    if (!normalizedName) {
+      return NextResponse.json({ error: "Project name is required" }, { status: 400 });
     }
 
     const userId = accessResult.ctx.userId;
 
     const project = await prisma.project.create({
       data: {
-        name: name.trim(),
+        name: normalizedName,
         description,
         categoryId: categoryId ?? null,
+        status:
+          status === "active" || status === "completed" || status === "archived"
+            ? status
+            : "active",
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,
+        customData: normalizedCustomData as Prisma.InputJsonValue,
         members: {
           create: {
             userId,

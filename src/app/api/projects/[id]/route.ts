@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { requireProjectReadAccess, requireProjectWriteAccess } from "@/lib/project-access";
 import { loadProjectTaskStages } from "@/lib/workflow-config";
+import { loadProjectFormFields, sanitizeProjectCustomData } from "@/lib/project-form-config";
 import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
 import {
   canCurrentUserCommentOnProjectTask,
@@ -141,13 +143,19 @@ export async function PUT(
     if (!projectAccess.ok) return projectAccess.response;
 
     const body = await req.json();
-    const { name, description, status, startDate, endDate } = body as {
+    const { name, description, status, startDate, endDate, categoryId, customData } = body as {
       name?: string;
       description?: string;
       status?: string;
       startDate?: string;
       endDate?: string;
+      categoryId?: string | null;
+      customData?: unknown;
     };
+
+    const fields = await loadProjectFormFields();
+    const normalizedCustomData =
+      customData !== undefined ? sanitizeProjectCustomData(customData, fields) : undefined;
 
     const project = await prisma.project.update({
       where: { id },
@@ -157,6 +165,12 @@ export async function PUT(
         ...(status !== undefined && { status }),
         ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
         ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
+        ...(categoryId !== undefined && {
+          category: categoryId ? { connect: { id: categoryId } } : { disconnect: true },
+        }),
+        ...(normalizedCustomData !== undefined && {
+          customData: normalizedCustomData as Prisma.InputJsonValue,
+        }),
       },
       include: {
         category: true,

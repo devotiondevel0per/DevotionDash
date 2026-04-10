@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { BarChart3, Blocks, Building2, ClipboardList, Copy, Eye, EyeOff, FileClock, GitBranch, Globe, KeyRound, LayoutDashboard, Loader2, Lock, Mail, MessageSquare, Palette, Pencil, Phone, Plus, RefreshCw, Save, Server, Shield, Sparkles, TicketCheck, Trash2, UserCheck, UserPlus, Users } from "lucide-react";
 import { DEFAULT_SECURITY_POLICY, parseListFromText, parseSecurityPolicy, serializeSecurityPolicy, type SecurityPolicy } from "@/lib/security-policy";
 import { BRANDING_UPDATED_EVENT, DEFAULT_APP_NAME, DEFAULT_APP_TAGLINE, RUNTIME_SETTINGS_STORAGE_KEY } from "@/lib/branding";
+import { ProjectFormBuilder } from "@/components/administration/project-form-builder";
 import { toast } from "sonner";
 
 type RoleSummary = { id: string; name: string; color: string; memberCount: number; permissions: RolePermissionConfig | null };
@@ -1974,6 +1975,8 @@ export default function AdministrationPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              <ProjectFormBuilder canManage={canManage} />
             </div>
           ) : null}
 

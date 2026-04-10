@@ -74,6 +74,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { buildThreadTree, type ThreadNode } from "@/lib/task-comment-thread";
+import type { ProjectFormField } from "@/lib/project-form-config";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ type Project = {
   id: string;
   name: string;
   description: string | null;
+  customData?: Record<string, unknown> | null;
   status: string;
   startDate: string | null;
   endDate: string | null;
@@ -180,6 +182,111 @@ const TASK_PRIORITY_CONFIG: Record<string, { label: string; className: string }>
   normal: { label: "Normal", className: "bg-orange-100 text-orange-700" },
   low: { label: "Low", className: "bg-gray-100 text-gray-500" },
 };
+
+const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
+  {
+    id: "core_name",
+    key: "name",
+    label: "Project Name",
+    type: "text",
+    source: "core",
+    coreKey: "name",
+    enabled: true,
+    required: true,
+    order: 1,
+    placeholder: "Enter project name",
+    helpText: "",
+    options: [],
+    multiple: false,
+    accept: "",
+    metadataFields: [],
+  },
+  {
+    id: "core_description",
+    key: "description",
+    label: "Description",
+    type: "rich_text",
+    source: "core",
+    coreKey: "description",
+    enabled: true,
+    required: false,
+    order: 2,
+    placeholder: "Describe your project",
+    helpText: "",
+    options: [],
+    multiple: false,
+    accept: "",
+    metadataFields: [],
+  },
+  {
+    id: "core_category",
+    key: "categoryId",
+    label: "Category",
+    type: "select",
+    source: "core",
+    coreKey: "categoryId",
+    enabled: true,
+    required: false,
+    order: 3,
+    placeholder: "",
+    helpText: "",
+    options: [],
+    multiple: false,
+    accept: "",
+    metadataFields: [],
+  },
+  {
+    id: "core_status",
+    key: "status",
+    label: "Status",
+    type: "select",
+    source: "core",
+    coreKey: "status",
+    enabled: true,
+    required: true,
+    order: 4,
+    placeholder: "",
+    helpText: "",
+    options: ["active", "completed", "archived"],
+    multiple: false,
+    accept: "",
+    metadataFields: [],
+  },
+  {
+    id: "core_start_date",
+    key: "startDate",
+    label: "Start Date",
+    type: "date",
+    source: "core",
+    coreKey: "startDate",
+    enabled: true,
+    required: false,
+    order: 5,
+    placeholder: "",
+    helpText: "",
+    options: [],
+    multiple: false,
+    accept: "",
+    metadataFields: [],
+  },
+  {
+    id: "core_end_date",
+    key: "endDate",
+    label: "End Date",
+    type: "date",
+    source: "core",
+    coreKey: "endDate",
+    enabled: true,
+    required: false,
+    order: 6,
+    placeholder: "",
+    helpText: "",
+    options: [],
+    multiple: false,
+    accept: "",
+    metadataFields: [],
+  },
+];
 
 const MEMBER_COLORS = [
   "bg-primary/10 text-primary",
@@ -329,6 +436,7 @@ type ProjectFormDialogProps = {
   onSaved: (project: Project) => void;
   onDeleted?: (id: string) => void;
   categories: ProjectCategory[];
+  formFields: ProjectFormField[];
   existing?: Project;
   canManageProject?: boolean;
 };
@@ -339,44 +447,161 @@ function ProjectFormDialog({
   onSaved,
   onDeleted,
   categories,
+  formFields,
   existing,
   canManageProject = true,
 }: ProjectFormDialogProps) {
   const isEdit = Boolean(existing);
   const [name, setName] = useState(existing?.name ?? "");
-  const [description, setDescription] = useState(existing?.description ?? "");
+  const [description, setDescription] = useState(normalizeRichText(existing?.description ?? ""));
   const [categoryId, setCategoryId] = useState(existing?.category?.id ?? "");
   const [startDate, setStartDate] = useState(existing?.startDate ? existing.startDate.slice(0, 10) : "");
   const [endDate, setEndDate] = useState(existing?.endDate ? existing.endDate.slice(0, 10) : "");
   const [status, setStatus] = useState(existing?.status ?? "active");
+  const [customData, setCustomData] = useState<Record<string, unknown>>(
+    existing?.customData && typeof existing.customData === "object"
+      ? (existing.customData as Record<string, unknown>)
+      : {}
+  );
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [uploadingFieldKey, setUploadingFieldKey] = useState<string | null>(null);
+
+  const enabledFields = useMemo(
+    () => [...formFields].filter((field) => field.enabled).sort((a, b) => a.order - b.order),
+    [formFields]
+  );
 
   useEffect(() => {
     if (open) {
       setName(existing?.name ?? "");
-      setDescription(existing?.description ?? "");
+      setDescription(normalizeRichText(existing?.description ?? ""));
       setCategoryId(existing?.category?.id ?? "");
       setStartDate(existing?.startDate ? existing.startDate.slice(0, 10) : "");
       setEndDate(existing?.endDate ? existing.endDate.slice(0, 10) : "");
       setStatus(existing?.status ?? "active");
+      setCustomData(
+        existing?.customData && typeof existing.customData === "object"
+          ? (existing.customData as Record<string, unknown>)
+          : {}
+      );
       setConfirmDelete(false);
     }
-  }, [open, existing]);
+  }, [open, existing, formFields]);
+
+  function updateCustomValue(key: string, value: unknown) {
+    setCustomData((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function removeCustomValue(key: string) {
+    setCustomData((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function uploadProjectFormFile(field: ProjectFormField, file: File) {
+    setUploadingFieldKey(field.key);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/projects/uploads", { method: "POST", body: fd });
+      const data = (await res.json().catch(() => null)) as
+        | { url?: string; fileName?: string; size?: number; mimeType?: string; error?: string }
+        | null;
+      if (!res.ok || !data?.url) {
+        throw new Error(data?.error ?? "Upload failed");
+      }
+      const entry = {
+        url: data.url,
+        fileName: data.fileName || file.name,
+        size: data.size ?? file.size,
+        mimeType: data.mimeType || file.type || "application/octet-stream",
+        metadata: {},
+      };
+
+      setCustomData((prev) => {
+        const currentRaw = prev[field.key];
+        const current = Array.isArray(currentRaw) ? currentRaw : [];
+        const next = field.multiple ? [...current, entry] : [entry];
+        return { ...prev, [field.key]: next };
+      });
+      toast.success("File uploaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "File upload failed");
+    } finally {
+      setUploadingFieldKey(null);
+    }
+  }
+
+  function validateRequiredFields() {
+    for (const field of enabledFields) {
+      if (!field.required) continue;
+      if (field.source === "core") {
+        if (field.coreKey === "name" && !name.trim()) return `${field.label} is required`;
+        if (
+          field.coreKey === "description" &&
+          !hasRichTextContent(description)
+        ) {
+          return `${field.label} is required`;
+        }
+        if (field.coreKey === "categoryId" && !categoryId) return `${field.label} is required`;
+        if (field.coreKey === "status" && !status) return `${field.label} is required`;
+        if (field.coreKey === "startDate" && !startDate) return `${field.label} is required`;
+        if (field.coreKey === "endDate" && !endDate) return `${field.label} is required`;
+        continue;
+      }
+
+      const value = customData[field.key];
+      if (value === undefined || value === null || value === "") return `${field.label} is required`;
+      if (field.type === "multiselect" && (!Array.isArray(value) || value.length === 0)) {
+        return `${field.label} is required`;
+      }
+      if (field.type === "file" && (!Array.isArray(value) || value.length === 0)) {
+        return `${field.label} is required`;
+      }
+      if (field.type === "file" && Array.isArray(value) && value.length > 0) {
+        for (const [fileIndex, fileEntry] of value.entries()) {
+          const row =
+            fileEntry && typeof fileEntry === "object"
+              ? (fileEntry as Record<string, unknown>)
+              : {};
+          const meta =
+            row.metadata && typeof row.metadata === "object"
+              ? (row.metadata as Record<string, unknown>)
+              : {};
+          for (const metaField of field.metadataFields) {
+            if (!metaField.required) continue;
+            const metaValue = meta[metaField.key];
+            if (metaValue === undefined || metaValue === null || metaValue === "") {
+              return `${field.label}: ${metaField.label} is required for file #${fileIndex + 1}`;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) { toast.error("Name is required"); return; }
+    const requiredError = validateRequiredFields();
+    if (requiredError) {
+      toast.error(requiredError);
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = {
-        name: name.trim(),
-        description: description.trim() || undefined,
-        categoryId: categoryId || undefined,
+        name: name.trim() || undefined,
+        description: hasRichTextContent(description) ? normalizeRichText(description) : undefined,
+        categoryId: categoryId || null,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        ...(isEdit ? { status } : {}),
+        status,
+        customData,
       };
       const url = isEdit ? `/api/projects/${existing!.id}` : "/api/projects";
       const res = await fetch(url, {
@@ -429,51 +654,401 @@ function ProjectFormDialog({
           <DialogDescription>Define timeline, category, and scope clearly before execution.</DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 px-6 py-5">
-          <div className="space-y-1.5">
-            <Label htmlFor="proj-name">Name *</Label>
-            <Input id="proj-name" placeholder="Project name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="proj-desc">Description</Label>
-            <Textarea id="proj-desc" placeholder="What is this project about?" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : (v ?? ""))} items={{ "none": "No category", ...Object.fromEntries(categories.map((c) => [c.id, c.name])) }}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No category</SelectItem>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {isEdit && canManageProject ? (
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v ?? "")}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                      <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {enabledFields.map((field) => {
+            const isRequired = field.required;
+            const label = (
+              <Label className="text-sm">
+                {field.label}
+                {isRequired ? <span className="ml-1 text-red-500">*</span> : null}
+              </Label>
+            );
+
+            if (field.source === "core") {
+              if (field.coreKey === "name") {
+                return (
+                  <div key={field.id} className="space-y-1.5">
+                    {label}
+                    <Input
+                      placeholder={field.placeholder || "Project name"}
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      autoFocus
+                    />
+                    {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
+                  </div>
+                );
+              }
+
+              if (field.coreKey === "description") {
+                return (
+                  <div key={field.id} className="space-y-1.5">
+                    {label}
+                    {field.type === "rich_text" ? (
+                      <RichTextEditor
+                        value={description}
+                        onChange={setDescription}
+                        placeholder={field.placeholder || "What is this project about?"}
+                        minHeight={140}
+                        disabled={submitting}
+                      />
+                    ) : field.type === "textarea" ? (
+                      <Textarea
+                        placeholder={field.placeholder || "What is this project about?"}
+                        rows={4}
+                        value={toText(description)}
+                        onChange={(event) => setDescription(normalizeRichText(event.target.value))}
+                      />
+                    ) : (
+                      <Input
+                        placeholder={field.placeholder || "Project description"}
+                        value={toText(description)}
+                        onChange={(event) => setDescription(normalizeRichText(event.target.value))}
+                      />
+                    )}
+                    {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
+                  </div>
+                );
+              }
+
+              if (field.coreKey === "categoryId") {
+                return (
+                  <div key={field.id} className="space-y-1.5">
+                    {label}
+                    <Select
+                      value={categoryId || "none"}
+                      onValueChange={(value) => setCategoryId(value === "none" ? "" : value ?? "")}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No category</SelectItem>
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
+                  </div>
+                );
+              }
+
+              if (field.coreKey === "status") {
+                return (
+                  <div key={field.id} className="space-y-1.5">
+                    {label}
+                    <Select value={status} onValueChange={(value) => setStatus(value ?? "active")}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                          <SelectItem key={key} value={key}>
+                            {cfg.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
+                  </div>
+                );
+              }
+
+              if (field.coreKey === "startDate" || field.coreKey === "endDate") {
+                const isStart = field.coreKey === "startDate";
+                return (
+                  <div key={field.id} className="space-y-1.5">
+                    {label}
+                    <Input
+                      type="date"
+                      value={isStart ? startDate : endDate}
+                      onChange={(event) =>
+                        isStart ? setStartDate(event.target.value) : setEndDate(event.target.value)
+                      }
+                    />
+                    {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
+                  </div>
+                );
+              }
+            }
+
+            const value = customData[field.key];
+            const descriptionText = field.helpText ? (
+              <p className="text-xs text-slate-500">{field.helpText}</p>
+            ) : null;
+
+            if (field.type === "rich_text") {
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  {label}
+                  <RichTextEditor
+                    value={typeof value === "string" ? value : ""}
+                    onChange={(next) => updateCustomValue(field.key, normalizeRichText(next))}
+                    placeholder={field.placeholder || "Enter details..."}
+                    minHeight={130}
+                    disabled={submitting}
+                  />
+                  {descriptionText}
+                </div>
+              );
+            }
+
+            if (field.type === "textarea") {
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  {label}
+                  <Textarea
+                    rows={4}
+                    value={typeof value === "string" ? value : ""}
+                    onChange={(event) => updateCustomValue(field.key, event.target.value)}
+                    placeholder={field.placeholder || ""}
+                  />
+                  {descriptionText}
+                </div>
+              );
+            }
+
+            if (field.type === "select") {
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  {label}
+                  <Select
+                    value={typeof value === "string" && value ? value : "none"}
+                    onValueChange={(next) => {
+                      if (next === "none") removeCustomValue(field.key);
+                      else updateCustomValue(field.key, next);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={field.placeholder || "Select option"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {field.options.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {descriptionText}
+                </div>
+              );
+            }
+
+            if (field.type === "multiselect") {
+              const selected = Array.isArray(value) ? value.map((item) => String(item)) : [];
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  {label}
+                  <div className="grid gap-1 rounded-md border p-2 sm:grid-cols-2">
+                    {field.options.map((option) => {
+                      const checked = selected.includes(option);
+                      return (
+                        <label key={option} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              const next = event.target.checked
+                                ? [...selected, option]
+                                : selected.filter((item) => item !== option);
+                              if (next.length === 0) removeCustomValue(field.key);
+                              else updateCustomValue(field.key, next);
+                            }}
+                          />
+                          {option}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {descriptionText}
+                </div>
+              );
+            }
+
+            if (field.type === "checkbox") {
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(value)}
+                      onChange={(event) => updateCustomValue(field.key, event.target.checked)}
+                    />
+                    {field.label}
+                    {isRequired ? <span className="text-red-500">*</span> : null}
+                  </label>
+                  {descriptionText}
+                </div>
+              );
+            }
+
+            if (field.type === "file") {
+              const files = Array.isArray(value)
+                ? (value as Array<Record<string, unknown>>)
+                : [];
+              return (
+                <div key={field.id} className="space-y-1.5 rounded-lg border p-3">
+                  {label}
+                  <Input
+                    type="file"
+                    multiple={field.multiple}
+                    accept={field.accept || undefined}
+                    onChange={(event) => {
+                      const picked = Array.from(event.target.files ?? []);
+                      if (picked.length === 0) return;
+                      void Promise.all(picked.map((file) => uploadProjectFormFile(field, file)));
+                      event.currentTarget.value = "";
+                    }}
+                    disabled={uploadingFieldKey === field.key}
+                  />
+                  {uploadingFieldKey === field.key ? (
+                    <p className="text-xs text-slate-500">Uploading...</p>
+                  ) : null}
+                  {files.length > 0 ? (
+                    <div className="space-y-2">
+                      {files.map((file, index) => {
+                        const fileName = String(file.fileName ?? "Uploaded file");
+                        const metadata =
+                          file.metadata && typeof file.metadata === "object"
+                            ? (file.metadata as Record<string, unknown>)
+                            : {};
+                        return (
+                          <div key={`${fileName}-${index}`} className="rounded border bg-slate-50 p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <a
+                                className="truncate text-sm text-[#AA8038] hover:underline"
+                                href={String(file.url ?? "#")}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {fileName}
+                              </a>
+                              <button
+                                type="button"
+                                className="text-xs text-red-600 hover:underline"
+                                onClick={() => {
+                                  const next = [...files];
+                                  next.splice(index, 1);
+                                  if (next.length === 0) removeCustomValue(field.key);
+                                  else updateCustomValue(field.key, next);
+                                }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            {field.metadataFields.length > 0 ? (
+                              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                {field.metadataFields.map((meta) => {
+                                  const metaVal = metadata[meta.key];
+                                  const updateMeta = (nextValue: unknown) => {
+                                    const nextFiles = [...files];
+                                    const current = { ...(nextFiles[index] ?? {}) };
+                                    const currentMeta =
+                                      current.metadata && typeof current.metadata === "object"
+                                        ? { ...(current.metadata as Record<string, unknown>) }
+                                        : {};
+                                    if (nextValue === "" || nextValue === undefined || nextValue === null) {
+                                      delete currentMeta[meta.key];
+                                    } else {
+                                      currentMeta[meta.key] = nextValue;
+                                    }
+                                    current.metadata = currentMeta;
+                                    nextFiles[index] = current;
+                                    updateCustomValue(field.key, nextFiles);
+                                  };
+                                  return (
+                                    <div key={meta.id} className="space-y-1">
+                                      <Label className="text-xs">
+                                        {meta.label}
+                                        {meta.required ? <span className="ml-1 text-red-500">*</span> : null}
+                                      </Label>
+                                      {meta.type === "checkbox" ? (
+                                        <label className="flex items-center gap-2 text-sm">
+                                          <input
+                                            type="checkbox"
+                                            checked={Boolean(metaVal)}
+                                            onChange={(event) => updateMeta(event.target.checked)}
+                                          />
+                                          Yes
+                                        </label>
+                                      ) : meta.type === "select" ? (
+                                        <Select
+                                          value={typeof metaVal === "string" && metaVal ? metaVal : "none"}
+                                          onValueChange={(next) => updateMeta(next === "none" ? "" : next)}
+                                        >
+                                          <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">None</SelectItem>
+                                            {meta.options.map((option) => (
+                                              <SelectItem key={option} value={option}>
+                                                {option}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <Input
+                                          type={
+                                            meta.type === "number"
+                                              ? "number"
+                                              : meta.type === "date"
+                                              ? "date"
+                                              : meta.type === "datetime"
+                                              ? "datetime-local"
+                                              : "text"
+                                          }
+                                          value={typeof metaVal === "string" || typeof metaVal === "number" ? String(metaVal) : ""}
+                                          onChange={(event) => updateMeta(event.target.value)}
+                                          placeholder={meta.placeholder || ""}
+                                        />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {descriptionText}
+                </div>
+              );
+            }
+
+            const inputType =
+              field.type === "number"
+                ? "number"
+                : field.type === "date"
+                ? "date"
+                : field.type === "datetime"
+                ? "datetime-local"
+                : field.type === "email"
+                ? "email"
+                : field.type === "url"
+                ? "url"
+                : "text";
+
+            return (
+              <div key={field.id} className="space-y-1.5">
+                {label}
+                <Input
+                  type={inputType}
+                  value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
+                  onChange={(event) => updateCustomValue(field.key, event.target.value)}
+                  placeholder={field.placeholder || ""}
+                />
+                {descriptionText}
               </div>
-            ) : null}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="proj-start" className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />Start Date</Label>
-              <Input id="proj-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="proj-end" className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />End Date</Label>
-              <Input id="proj-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-          </div>
+            );
+          })}
 
           {isEdit && canManageProject ? (
             <div className="pt-1 border-t">
@@ -2347,6 +2922,7 @@ export default function ProjectsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [projectFormFields, setProjectFormFields] = useState<ProjectFormField[]>(DEFAULT_PROJECT_FORM_FIELDS);
 
   const loadProjects = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -2371,6 +2947,29 @@ export default function ProjectsPage() {
   useEffect(() => {
     void loadProjects();
   }, [loadProjects]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/projects/form-config", { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load project form config");
+        const data = (await res.json()) as { fields?: ProjectFormField[] };
+        if (!mounted) return;
+        setProjectFormFields(
+          Array.isArray(data.fields) && data.fields.length > 0
+            ? data.fields
+            : DEFAULT_PROJECT_FORM_FIELDS
+        );
+      } catch {
+        if (!mounted) return;
+        setProjectFormFields(DEFAULT_PROJECT_FORM_FIELDS);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -2455,6 +3054,7 @@ export default function ProjectsPage() {
           onSaved={handleUpdated}
           onDeleted={handleDeleted}
           categories={categories}
+          formFields={projectFormFields}
           existing={editProject ?? undefined}
           canManageProject={
             canManage ||
@@ -2607,6 +3207,7 @@ export default function ProjectsPage() {
         onClose={() => setCreateOpen(false)}
         onSaved={handleCreated}
         categories={categories}
+        formFields={projectFormFields}
       />
       <ProjectFormDialog
         open={editOpen}
@@ -2614,6 +3215,7 @@ export default function ProjectsPage() {
         onSaved={handleUpdated}
         onDeleted={handleDeleted}
         categories={categories}
+        formFields={projectFormFields}
         existing={editProject ?? undefined}
         canManageProject={
           canManage ||
