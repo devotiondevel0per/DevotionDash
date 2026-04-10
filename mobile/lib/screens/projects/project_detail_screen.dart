@@ -497,7 +497,7 @@ class _ProjectView extends ConsumerWidget {
                   const SizedBox(height: 10),
                   LinearProgressIndicator(value: (progress / 100).clamp(0.0, 1.0)),
                   const SizedBox(height: 6),
-                  Text('$progress% completed'),
+                  Text('$progress% done'),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 10,

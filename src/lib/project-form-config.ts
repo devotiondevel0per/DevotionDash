@@ -304,6 +304,10 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
       const order = Number.isFinite(orderRaw)
         ? Math.max(1, Math.min(500, Math.round(orderRaw)))
         : 100 + result.length;
+      const resolvedCoreKey = source === "core" ? (coreKey ?? defaultCore?.coreKey ?? null) : null;
+      const isCoreStatusField = source === "core" && resolvedCoreKey === "status";
+      const fieldOptions =
+        type === "select" || type === "multiselect" ? dedupeOptions(src.options) : [];
 
       result.push({
         id,
@@ -311,13 +315,13 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
         label,
         type,
         source,
-        coreKey: source === "core" ? (coreKey ?? defaultCore?.coreKey ?? null) : null,
+        coreKey: resolvedCoreKey,
         enabled: src.enabled !== false,
         required: Boolean(src.required),
         order,
         placeholder: (typeof src.placeholder === "string" ? src.placeholder.trim() : "").slice(0, 200),
         helpText: (typeof src.helpText === "string" ? src.helpText.trim() : "").slice(0, 300),
-        options: type === "select" || type === "multiselect" ? dedupeOptions(src.options) : [],
+        options: isCoreStatusField ? ["active", "inactive"] : fieldOptions,
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",
         metadataFields: type === "file" ? sanitizeMetadataFields(src.metadataFields) : [],

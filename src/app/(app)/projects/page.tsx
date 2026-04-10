@@ -322,7 +322,7 @@ function normalizeCompanyStatus(status?: string | null): "active" | "inactive" {
   return "active";
 }
 
-function normalizeProject(project: Project): Project {
+function normalizeProject<T extends { status: string }>(project: T): T {
   return {
     ...project,
     status: normalizeCompanyStatus(project.status),
@@ -2326,7 +2326,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
             </ProgressTrack>
           </Progress>
           <span className="text-xs text-gray-500 shrink-0">
-            {tasks.filter((task) => isTaskClosed(taskStages, task.status)).length}/{tasks.length} completed - {progress}%
+            {tasks.filter((task) => isTaskClosed(taskStages, task.status)).length}/{tasks.length} done - {progress}%
           </span>
         </div>
       </div>
