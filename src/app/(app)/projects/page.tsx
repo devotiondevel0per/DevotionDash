@@ -67,9 +67,13 @@ import {
   Trash2,
   UserPlus,
   X,
+  Reply,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { buildThreadTree, type ThreadNode } from "@/lib/task-comment-thread";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -114,14 +118,24 @@ type ProjectTask = {
   priority: string;
   dueDate: string | null;
   createdAt: string;
+  allowAssigneeComments?: boolean;
+  canComment?: boolean;
+  canEditTask?: boolean;
+  canChangeStatus?: boolean;
+  canDelete?: boolean;
+  conversationAuthorEditDeleteWindowMinutes?: number;
   assignee: { id: string; name: string; fullname: string; photoUrl: string | null } | null;
   phase: { id: string; name: string } | null;
 };
 
 type ProjectTaskComment = {
   id: string;
+  projectTaskId?: string;
+  userId?: string;
+  parentCommentId: string | null;
   content: string;
   createdAt: string;
+  updatedAt?: string;
   user: { id: string; name: string; fullname: string };
 };
 
@@ -201,10 +215,32 @@ function formatDate(iso?: string | null): string {
   });
 }
 
+function formatDateTime(iso?: string | null): string {
+  if (!iso) return "-";
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return "-";
+  return dt.toLocaleString();
+}
+
 function toHtml(value: string | null | undefined): string {
   if (!value) return "";
   if (/<[^>]+>/.test(value)) return value;
   return value.replace(/\n/g, "<br/>");
+}
+
+function toText(value: string | null | undefined) {
+  if (!value) return "";
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isWithinCommentWindow(createdAt: string, windowMinutes: number) {
+  const createdAtMs = new Date(createdAt).getTime();
+  if (!Number.isFinite(createdAtMs)) return false;
+  return Date.now() - createdAtMs <= windowMinutes * 60 * 1000;
 }
 
 function normalizeTaskStatus(status?: string | null): string {
@@ -273,7 +309,11 @@ function getNextTaskStageKey(stages: WorkflowStage[], status?: string | null): s
 }
 
 function normalizeProjectTask(task: ProjectTask): ProjectTask {
-  return { ...task, status: normalizeTaskStatus(task.status) };
+  return {
+    ...task,
+    status: normalizeTaskStatus(task.status),
+    allowAssigneeComments: task.allowAssigneeComments ?? true,
+  };
 }
 
 function calcProgress(tasks: ProjectTask[], stages: WorkflowStage[]): number {
@@ -495,6 +535,9 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
   const [assigneeId, setAssigneeId] = useState(existing?.assignee?.id ?? "");
   const [phaseId, setPhaseId] = useState(existing?.phase?.id ?? "");
   const [dueDate, setDueDate] = useState(existing?.dueDate ? existing.dueDate.slice(0, 10) : "");
+  const [allowAssigneeComments, setAllowAssigneeComments] = useState(
+    existing?.allowAssigneeComments ?? true
+  );
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -508,6 +551,7 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
       setAssigneeId(existing?.assignee?.id ?? "");
       setPhaseId(existing?.phase?.id ?? "");
       setDueDate(existing?.dueDate ? existing.dueDate.slice(0, 10) : "");
+      setAllowAssigneeComments(existing?.allowAssigneeComments ?? true);
       setConfirmDelete(false);
     }
   }, [open, existing, resolveStatus]);
@@ -525,6 +569,7 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
         assigneeId: assigneeId || null,
         phaseId: phaseId || null,
         dueDate: dueDate || null,
+        allowAssigneeComments,
       };
       const url = isEdit
         ? `/api/projects/${projectId}/tasks/${existing!.id}`
@@ -652,6 +697,16 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
             <Label htmlFor="t-due" className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />Due Date</Label>
             <Input id="t-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[#AA8038]"
+              checked={allowAssigneeComments}
+              onChange={(e) => setAllowAssigneeComments(e.target.checked)}
+              disabled={submitting}
+            />
+            Allow assignee to comment
+          </label>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(0)}>Today</Button>
             <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(1)}>Tomorrow</Button>
@@ -723,6 +778,9 @@ function ProjectTaskDetailDialog({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentHtml, setEditingCommentHtml] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [replyToComment, setReplyToComment] = useState<ProjectTaskComment | null>(null);
+  const [collapsedReplies, setCollapsedReplies] = useState<Record<string, boolean>>({});
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -731,11 +789,36 @@ function ProjectTaskDetailDialog({
     setCommentText("");
     setEditingCommentId(null);
     setEditingCommentHtml("");
+    setReplyToComment(null);
+    setCollapsedReplies({});
     setLoadingComments(true);
     fetch(`/api/projects/${projectId}/tasks/${task.id}/comments`, { cache: "no-store" })
       .then((response) => response.json())
       .then((data: unknown) => {
-        if (Array.isArray(data)) setComments(data as ProjectTaskComment[]);
+        if (Array.isArray(data)) {
+          setComments(
+            data.map((comment) => {
+              const entry = comment as Partial<ProjectTaskComment>;
+              return {
+                id: String(entry.id ?? ""),
+                projectTaskId: typeof entry.projectTaskId === "string" ? entry.projectTaskId : task.id,
+                userId: typeof entry.userId === "string" ? entry.userId : entry.user?.id,
+                parentCommentId:
+                  typeof entry.parentCommentId === "string" && entry.parentCommentId.trim()
+                    ? entry.parentCommentId
+                    : null,
+                content: String(entry.content ?? ""),
+                createdAt: String(entry.createdAt ?? new Date().toISOString()),
+                updatedAt: typeof entry.updatedAt === "string" ? entry.updatedAt : undefined,
+                user: {
+                  id: String(entry.user?.id ?? ""),
+                  name: String(entry.user?.name ?? ""),
+                  fullname: String(entry.user?.fullname ?? ""),
+                },
+              };
+            })
+          );
+        }
       })
       .catch(() => toast.error("Failed to load comments"))
       .finally(() => setLoadingComments(false));
@@ -743,7 +826,7 @@ function ProjectTaskDetailDialog({
 
   useEffect(() => {
     if (comments.length > 0) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [comments]);
+  }, [comments.length]);
 
   async function postComment() {
     if (!task || !hasRichTextContent(commentText)) return;
@@ -754,14 +837,25 @@ function ProjectTaskDetailDialog({
       const response = await fetch(`/api/projects/${projectId}/tasks/${task.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          parentCommentId: replyToComment?.id ?? null,
+        }),
       });
       const data = (await response.json().catch(() => null)) as ProjectTaskComment | { error?: string } | null;
       if (!response.ok || !data || "error" in data) {
         throw new Error((data as { error?: string } | null)?.error ?? "Failed to post comment");
       }
-      setComments((prev) => [...prev, data as ProjectTaskComment]);
+      const created = data as ProjectTaskComment;
+      setComments((prev) => [
+        ...prev,
+        {
+          ...created,
+          parentCommentId: created.parentCommentId ?? null,
+        },
+      ]);
       setCommentText("");
+      setReplyToComment(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to post comment");
     } finally {
@@ -788,7 +882,11 @@ function ProjectTaskDetailDialog({
         throw new Error((data as { error?: string } | null)?.error ?? "Failed to update comment");
       }
       const updated = data as ProjectTaskComment;
-      setComments((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setComments((prev) =>
+        prev.map((item) =>
+          item.id === updated.id ? { ...updated, parentCommentId: updated.parentCommentId ?? null } : item
+        )
+      );
       setEditingCommentId(null);
       setEditingCommentHtml("");
       toast.success("Conversation updated");
@@ -799,7 +897,234 @@ function ProjectTaskDetailDialog({
     }
   }
 
+  async function deleteComment(commentId: string) {
+    if (!task) return;
+    setDeletingCommentId(commentId);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/tasks/${task.id}/comments/${commentId}`,
+        { method: "DELETE" }
+      );
+      const data = (await response.json().catch(() => null)) as
+        | { success?: boolean; error?: string }
+        | null;
+      if (!response.ok || data?.success !== true) {
+        throw new Error(data?.error ?? "Failed to delete comment");
+      }
+      setComments((prev) => prev.filter((item) => item.id !== commentId));
+      if (editingCommentId === commentId) {
+        setEditingCommentId(null);
+        setEditingCommentHtml("");
+      }
+      if (replyToComment?.id === commentId) {
+        setReplyToComment(null);
+      }
+      toast.success("Conversation deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete comment");
+    } finally {
+      setDeletingCommentId(null);
+    }
+  }
+
+  const canEditTask = task?.canEditTask ?? canWrite;
+  const canComment = task?.canComment ?? canWrite;
+  const conversationAuthorEditDeleteWindowMinutes =
+    task?.conversationAuthorEditDeleteWindowMinutes ?? 5;
+  const commentTree = useMemo(() => buildThreadTree(comments), [comments]);
+  const threadMeta = useMemo(() => {
+    const meta: Record<string, { descendants: number; depth: number }> = {};
+    const walk = (node: ThreadNode<ProjectTaskComment>) => {
+      let descendants = 0;
+      let depth = 1;
+      for (const child of node.replies) {
+        walk(child);
+        const childMeta = meta[child.id] ?? { descendants: 0, depth: 1 };
+        descendants += 1 + childMeta.descendants;
+        depth = Math.max(depth, 1 + childMeta.depth);
+      }
+      meta[node.id] = { descendants, depth };
+    };
+    for (const root of commentTree) walk(root);
+    return meta;
+  }, [commentTree]);
+  const autoCollapsedReplies = useMemo(() => {
+    const initial: Record<string, boolean> = {};
+    for (const [id, meta] of Object.entries(threadMeta)) {
+      if (meta.descendants >= 4 || meta.depth >= 4) {
+        initial[id] = true;
+      }
+    }
+    return initial;
+  }, [threadMeta]);
+  useEffect(() => {
+    setCollapsedReplies((prev) => ({ ...autoCollapsedReplies, ...prev }));
+  }, [autoCollapsedReplies]);
+
   if (!task) return null;
+
+  const renderCommentNode = (comment: ThreadNode<ProjectTaskComment>, depth: number) => {
+    const isMe = comment.user.id === meId;
+    const isWithinAuthorWindow = isWithinCommentWindow(
+      comment.createdAt,
+      conversationAuthorEditDeleteWindowMinutes
+    );
+    const canMutateComment = canManageConversation || (isMe && isWithinAuthorWindow);
+    const isEditing = editingCommentId === comment.id;
+    const hasReplies = comment.replies.length > 0;
+    const replyMeta = threadMeta[comment.id] ?? { descendants: 0, depth: 1 };
+    const isRepliesCollapsed = collapsedReplies[comment.id] ?? false;
+    const depthOffset = Math.min(depth, 6) * 14;
+
+    return (
+      <div key={comment.id} className="space-y-2" style={{ marginLeft: `${depthOffset}px` }}>
+        <div
+          className={cn(
+            "rounded-2xl border px-3 py-3 shadow-sm",
+            isMe
+              ? "border-[#AA8038]/35 bg-gradient-to-br from-[#AA8038]/[0.08] to-white"
+              : "border-slate-200/90 bg-white"
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600 shadow-sm">
+              {(comment.user.fullname || comment.user.name || "?")[0]?.toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-2 text-[11px] text-slate-500">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-800">
+                    {displayName(comment.user)}
+                  </span>
+                  {isMe ? (
+                    <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
+                      You
+                    </span>
+                  ) : null}
+                  <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500">
+                    {new Date(comment.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {canComment && !isEditing ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-transparent px-2 py-0.5 text-[11px] font-medium text-[#C78100] hover:border-[#AA8038]/20 hover:bg-[#AA8038]/10"
+                      onClick={() => {
+                        setReplyToComment(comment);
+                        setEditingCommentId(null);
+                        setEditingCommentHtml("");
+                      }}
+                    >
+                      <Reply className="mr-1 inline h-3 w-3" />
+                      Reply
+                    </button>
+                  ) : null}
+                  {canMutateComment && !isEditing ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-transparent px-2 py-0.5 text-[11px] font-medium text-[#C78100] hover:border-[#AA8038]/20 hover:bg-[#AA8038]/10"
+                      onClick={() => {
+                        setEditingCommentId(comment.id);
+                        setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
+                      }}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                  {canMutateComment && !isEditing ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-transparent px-2 py-0.5 text-[11px] font-medium text-red-600 hover:border-red-200 hover:bg-red-50"
+                      onClick={() => void deleteComment(comment.id)}
+                      disabled={deletingCommentId === comment.id}
+                    >
+                      {deletingCommentId === comment.id ? (
+                        <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-1 inline h-3 w-3" />
+                      )}
+                      Delete
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {isEditing ? (
+                <div className="space-y-2 rounded-lg border bg-white p-2">
+                  <RichTextEditor
+                    value={editingCommentHtml}
+                    onChange={setEditingCommentHtml}
+                    placeholder="Edit conversation..."
+                    minHeight={100}
+                    disabled={savingEdit}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingCommentId(null);
+                        setEditingCommentHtml("");
+                      }}
+                      disabled={savingEdit}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-[#AA8038] text-white hover:bg-[#D48A00]"
+                      onClick={() => void saveCommentEdit()}
+                      disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
+                    >
+                      {savingEdit ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : null}
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
+                  dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
+                />
+              )}
+              {hasReplies ? (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-full border border-[#AA8038]/25 bg-white px-2.5 py-1 text-[11px] font-medium text-[#8A651E] hover:bg-[#AA8038]/10"
+                    onClick={() =>
+                      setCollapsedReplies((prev) => ({
+                        ...prev,
+                        [comment.id]: !(prev[comment.id] ?? false),
+                      }))
+                    }
+                  >
+                    {isRepliesCollapsed ? (
+                      <ChevronRight className="mr-1 h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    {isRepliesCollapsed ? "Expand" : "Collapse"} thread
+                  </button>
+                  <span className="text-[11px] text-slate-500">
+                    {replyMeta.descendants} repl
+                    {replyMeta.descendants === 1 ? "y" : "ies"} in this branch
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        {hasReplies && !isRepliesCollapsed
+          ? comment.replies.map((reply) => renderCommentNode(reply, depth + 1))
+          : null}
+      </div>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
@@ -822,7 +1147,7 @@ function ProjectTaskDetailDialog({
                 {formatDate(task.dueDate)}
               </span>
             ) : null}
-            {canWrite ? (
+            {canEditTask ? (
               <button
                 type="button"
                 className="rounded px-2 py-1 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
@@ -858,106 +1183,54 @@ function ProjectTaskDetailDialog({
               <div className="flex items-center justify-center py-6 text-slate-400">
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
-            ) : comments.length === 0 ? (
+            ) : commentTree.length === 0 ? (
               <p className="text-sm text-slate-400 italic">No comments yet. Be the first to add one.</p>
             ) : (
-              comments.map((comment) => {
-                const isMe = comment.user.id === meId;
-                const canEditComment = (isMe || canManageConversation) && canWrite;
-                const isEditing = editingCommentId === comment.id;
-                return (
-                  <div
-                    key={comment.id}
-                    className={cn(
-                      "rounded-xl border px-3 py-3 shadow-sm",
-                      isMe ? "border-[#AA8038]/25 bg-[#AA8038]/[0.03]" : "border-slate-200 bg-white"
-                    )}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                        <span className="font-medium text-slate-700">{comment.user.fullname || comment.user.name}</span>
-                        {isMe ? (
-                          <span className="rounded-full bg-[#AA8038]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C78100]">
-                            You
-                          </span>
-                        ) : null}
-                        <span>{new Date(comment.createdAt).toLocaleString()}</span>
-                        {canEditComment && !isEditing ? (
-                          <button
-                            type="button"
-                            className="rounded px-1 py-0.5 text-[11px] font-medium text-[#C78100] hover:bg-[#AA8038]/10"
-                            onClick={() => {
-                              setEditingCommentId(comment.id);
-                              setEditingCommentHtml(normalizeRichText(toHtml(comment.content)));
-                            }}
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                      </div>
-                      {isEditing ? (
-                        <div className="space-y-2 rounded-lg border bg-white p-2">
-                          <RichTextEditor
-                            value={editingCommentHtml}
-                            onChange={setEditingCommentHtml}
-                            placeholder="Edit conversation..."
-                            minHeight={100}
-                            disabled={savingEdit}
-                          />
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setEditingCommentId(null);
-                                setEditingCommentHtml("");
-                              }}
-                              disabled={savingEdit}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="bg-[#AA8038] text-white hover:bg-[#D48A00]"
-                              onClick={() => void saveCommentEdit()}
-                              disabled={savingEdit || !hasRichTextContent(editingCommentHtml)}
-                            >
-                              {savingEdit ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-                              Save
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          className="prose prose-sm max-w-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800"
-                          dangerouslySetInnerHTML={{ __html: normalizeRichText(toHtml(comment.content)) }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              })
+              commentTree.map((comment) => renderCommentNode(comment, 0))
             )}
             <div ref={bottomRef} />
           </div>
 
           <div className="shrink-0 border-t bg-white px-6 py-3">
             <div className="space-y-2">
+              {replyToComment ? (
+                <div className="flex items-start justify-between gap-2 rounded-lg border border-[#AA8038]/30 bg-[#AA8038]/10 px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#8A651E]">
+                      Replying to {displayName(replyToComment.user)}
+                    </p>
+                    <p className="truncate text-[#8A651E]/90">
+                      {toText(replyToComment.content) || "Message"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-[#8A651E] hover:bg-[#AA8038]/20"
+                    onClick={() => setReplyToComment(null)}
+                    aria-label="Cancel reply"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : null}
+              {!canComment ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  You can view this task, but commenting is disabled for this assignment.
+                </div>
+              ) : null}
               <RichTextEditor
                 value={commentText}
                 onChange={setCommentText}
-                placeholder={canWrite ? "Write a comment..." : "Read-only"}
+                placeholder={canComment ? "Write a comment..." : "Read-only"}
                 minHeight={110}
-                disabled={posting || !canWrite}
+                disabled={posting || !canComment}
               />
               <div className="flex justify-end">
                 <Button
                   className="h-10 bg-[#AA8038] text-white hover:bg-[#D48A00]"
                   size="icon"
                   onClick={() => void postComment()}
-                  disabled={posting || !canWrite || !hasRichTextContent(commentText)}
+                  disabled={posting || !canComment || !hasRichTextContent(commentText)}
                 >
                   {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
@@ -1287,6 +1560,14 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   const isProjectManager = myMembership?.role === "manager";
   const canProjectWrite = canWrite && (canManage || isProjectMember);
   const canProjectManage = canWrite && (canManage || isProjectManager);
+  const canEditProjectTask = useCallback(
+    (task: ProjectTask) => task.canEditTask ?? canProjectWrite,
+    [canProjectWrite]
+  );
+  const canChangeProjectTaskStatus = useCallback(
+    (task: ProjectTask) => task.canChangeStatus ?? canEditProjectTask(task),
+    [canEditProjectTask]
+  );
 
   function openTaskDetails(task: ProjectTask) {
     setActiveTask(task);
@@ -1300,6 +1581,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   }
 
   async function moveTaskToStage(task: ProjectTask, nextStatus: string) {
+    if (!canChangeProjectTaskStatus(task)) return;
     if (normalizeTaskStatus(task.status) === normalizeTaskStatus(nextStatus)) return;
     setTogglingTaskId(task.id);
     try {
@@ -1320,6 +1602,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
   }
 
   async function toggleTaskStatus(task: ProjectTask) {
+    if (!canChangeProjectTaskStatus(task)) return;
     const next = getNextTaskStageKey(taskStages, task.status);
     await moveTaskToStage(task, next);
   }
@@ -1558,6 +1841,8 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                     <TableBody>
                       {tasks.map((task) => {
                         const assigneeName = task.assignee ? displayName(task.assignee) : "Unassigned";
+                        const canEditTaskItem = canEditProjectTask(task);
+                        const canChangeStatusItem = canChangeProjectTaskStatus(task);
                         return (
                           <TableRow
                             key={task.id}
@@ -1572,16 +1857,22 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                 </p>
                               )}
                             </TableCell>
-                            <TableCell onClick={(e) => { if (!canProjectWrite) return; e.stopPropagation(); void toggleTaskStatus(task); }}>
+                            <TableCell
+                              onClick={(e) => {
+                                if (!canChangeStatusItem) return;
+                                e.stopPropagation();
+                                void toggleTaskStatus(task);
+                              }}
+                            >
                               <Badge
                                 variant="outline"
                                 className={cn(
                                   "text-xs transition-opacity select-none",
-                                  canProjectWrite && "cursor-pointer hover:opacity-80",
+                                  canChangeStatusItem && "cursor-pointer hover:opacity-80",
                                   togglingTaskId === task.id ? "opacity-50" : ""
                                 )}
                                 style={stageStyle(getTaskStage(taskStages, task.status).color)}
-                                title={canProjectWrite ? "Click to move to next stage" : undefined}
+                                title={canChangeStatusItem ? "Click to move to next stage" : undefined}
                               >
                                 {getTaskStageLabel(taskStages, task.status)}
                               </Badge>
@@ -1594,7 +1885,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                 {TASK_PRIORITY_CONFIG[task.priority]?.label ?? task.priority}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">{formatDate(task.createdAt)}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{formatDateTime(task.createdAt)}</TableCell>
                             <TableCell>
                               {task.assignee ? (
                                 <div className="flex items-center gap-1.5">
@@ -1611,10 +1902,13 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                             <TableCell className="text-xs text-gray-500">{formatDate(task.dueDate)}</TableCell>
                             <TableCell className="pr-4" onClick={(e) => e.stopPropagation()}>
                               <button
-                                onClick={() => { if (!canProjectWrite) return; openTaskEditor(task); }}
+                                onClick={() => {
+                                  if (!canEditTaskItem) return;
+                                  openTaskEditor(task);
+                                }}
                                 className="text-gray-300 hover:text-gray-600 transition-colors p-1 rounded"
                                 title="Edit task"
-                                disabled={!canProjectWrite}
+                                disabled={!canEditTaskItem}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
@@ -1645,6 +1939,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                               const draggedTask = tasks.find((item) => item.id === dragTaskId);
                               setDragTaskId(null);
                               if (!draggedTask) return;
+                              if (!canChangeProjectTaskStatus(draggedTask)) return;
                               void moveTaskToStage(draggedTask, stage.key);
                             }}
                             className={cn(
@@ -1666,11 +1961,16 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                 </p>
                               ) : stageTasks.map((task) => {
                                 const assigneeName = task.assignee ? displayName(task.assignee) : "Unassigned";
+                                const canEditTaskItem = canEditProjectTask(task);
+                                const canChangeStatusItem = canChangeProjectTaskStatus(task);
                                 return (
                                   <article
                                     key={task.id}
-                                    draggable={canProjectWrite}
-                                    onDragStart={() => setDragTaskId(task.id)}
+                                    draggable={canChangeStatusItem}
+                                    onDragStart={() => {
+                                      if (!canChangeStatusItem) return;
+                                      setDragTaskId(task.id);
+                                    }}
                                     onDragEnd={() => setDragTaskId(null)}
                                     className="rounded-md border bg-white p-3 shadow-sm"
                                   >
@@ -1710,7 +2010,11 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                       <button
                                         type="button"
                                         className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                                        onClick={() => { if (!canProjectWrite) return; void toggleTaskStatus(task); }}
+                                        onClick={() => {
+                                          if (!canChangeStatusItem) return;
+                                          void toggleTaskStatus(task);
+                                        }}
+                                        disabled={!canChangeStatusItem}
                                       >
                                         Next
                                       </button>

@@ -3,6 +3,30 @@ import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { requireProjectReadAccess, requireProjectWriteAccess } from "@/lib/project-access";
 import { loadProjectTaskStages } from "@/lib/workflow-config";
+import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
+import {
+  canCurrentUserCommentOnProjectTask,
+  isMissingProjectTaskAllowAssigneeCommentsColumn,
+} from "@/lib/project-task-access";
+
+function projectTaskSelect(includeAllowAssigneeComments: boolean) {
+  return {
+    id: true,
+    projectId: true,
+    phaseId: true,
+    assigneeId: true,
+    title: true,
+    description: true,
+    status: true,
+    priority: true,
+    dueDate: true,
+    createdAt: true,
+    updatedAt: true,
+    ...(includeAllowAssigneeComments ? { allowAssigneeComments: true } : {}),
+    assignee: { select: { id: true, name: true, fullname: true, photoUrl: true } },
+    phase: { select: { id: true, name: true } },
+  };
+}
 
 export async function GET(
   req: NextRequest,
@@ -28,21 +52,74 @@ export async function GET(
         phases: {
           orderBy: { order: "asc" },
         },
-        tasks: {
-          include: {
-            assignee: { select: { id: true, name: true, fullname: true, photoUrl: true } },
-            phase: { select: { id: true, name: true } },
-          },
-          orderBy: { createdAt: "desc" },
-        },
       },
     });
 
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     const taskStages = await loadProjectTaskStages();
+    const conversationAuthorEditDeleteWindowMinutes =
+      await getTaskConversationAuthorEditWindowMinutes();
 
-    return NextResponse.json({ ...project, taskStages });
+    let includeAllowAssigneeComments = true;
+    let tasks: Array<Record<string, unknown>> = [];
+    try {
+      tasks = await prisma.projectTask.findMany({
+        where: { projectId: id },
+        orderBy: { createdAt: "desc" },
+        select: projectTaskSelect(true),
+      });
+    } catch (error) {
+      if (!isMissingProjectTaskAllowAssigneeCommentsColumn(error)) throw error;
+      includeAllowAssigneeComments = false;
+      tasks = await prisma.projectTask.findMany({
+        where: { projectId: id },
+        orderBy: { createdAt: "desc" },
+        select: projectTaskSelect(false),
+      });
+    }
+
+    const canWriteTask = Boolean(
+      (accessResult.ctx.access.isAdmin || accessResult.ctx.access.permissions.projects.write) &&
+        projectAccess.scope.isMember
+    );
+    const canDeleteTask = Boolean(
+      accessResult.ctx.access.isAdmin ||
+        accessResult.ctx.access.permissions.projects.manage ||
+        projectAccess.scope.isManager
+    );
+
+    const normalizedTasks = tasks.map((task) => {
+      const taskRecord = task as {
+        id: string;
+        assigneeId: string | null;
+        allowAssigneeComments?: boolean;
+      };
+      const allowAssigneeComments = includeAllowAssigneeComments
+        ? Boolean(taskRecord.allowAssigneeComments)
+        : true;
+      const canComment = canCurrentUserCommentOnProjectTask(
+        {
+          id: taskRecord.id,
+          assigneeId: taskRecord.assigneeId,
+          allowAssigneeComments,
+        },
+        accessResult.ctx.userId,
+        accessResult.ctx.access
+      );
+
+      return {
+        ...task,
+        allowAssigneeComments,
+        canComment,
+        canEditTask: canWriteTask,
+        canChangeStatus: canWriteTask,
+        canDelete: canDeleteTask,
+        conversationAuthorEditDeleteWindowMinutes,
+      };
+    });
+
+    return NextResponse.json({ ...project, tasks: normalizedTasks, taskStages });
   } catch (error) {
     console.error("[GET /api/projects/[id]]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

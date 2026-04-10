@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
-import { requireProjectReadAccess, requireProjectWriteAccess } from "@/lib/project-access";
+import { requireProjectReadAccess, requireProjectWriteAccess, type ProjectScope } from "@/lib/project-access";
 import { loadProjectTaskStages, getDefaultStage } from "@/lib/workflow-config";
+import {
+  canCurrentUserCommentOnProjectTask,
+  isMissingProjectTaskAllowAssigneeCommentsColumn,
+} from "@/lib/project-task-access";
+import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
+import type { UserAccess } from "@/lib/rbac";
 
 const VALID_TASK_PRIORITIES = new Set(["low", "normal", "high"]);
 
@@ -29,6 +36,95 @@ function normalizeOptionalId(value?: string | null): string | null | undefined {
   return normalized;
 }
 
+function projectTaskSelect(includeAllowAssigneeComments: boolean) {
+  return {
+    id: true,
+    projectId: true,
+    phaseId: true,
+    assigneeId: true,
+    title: true,
+    description: true,
+    status: true,
+    priority: true,
+    dueDate: true,
+    createdAt: true,
+    updatedAt: true,
+    ...(includeAllowAssigneeComments ? { allowAssigneeComments: true } : {}),
+    assignee: { select: { id: true, name: true, fullname: true, photoUrl: true } },
+    phase: { select: { id: true, name: true } },
+  };
+}
+
+type ProjectTaskRow = Awaited<
+  | {
+      id: string;
+      projectId: string;
+      phaseId: string | null;
+      assigneeId: string | null;
+      title: string;
+      description: string | null;
+      status: string;
+      priority: string;
+      dueDate: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+      allowAssigneeComments?: boolean;
+      assignee: { id: string; name: string; fullname: string; photoUrl: string | null } | null;
+      phase: { id: string; name: string } | null;
+    }
+  | null
+>;
+
+type ProjectTaskNormalized = Exclude<ProjectTaskRow, null> & {
+  allowAssigneeComments: boolean;
+};
+
+function toKnownProjectTask(raw: ProjectTaskRow, includeAllowAssigneeComments: boolean): ProjectTaskNormalized {
+  if (!raw) throw new Error("Project task not found");
+  return {
+    ...raw,
+    allowAssigneeComments: includeAllowAssigneeComments
+      ? Boolean((raw as { allowAssigneeComments?: boolean }).allowAssigneeComments)
+      : true,
+  };
+}
+
+function computeTaskPermissions(
+  task: ProjectTaskNormalized,
+  userId: string,
+  access: UserAccess,
+  scope: ProjectScope
+) {
+  const canWriteTask = Boolean((access.isAdmin || access.permissions.projects.write) && scope.isMember);
+  const canDelete = Boolean(access.isAdmin || access.permissions.projects.manage || scope.isManager);
+  const canComment = canCurrentUserCommentOnProjectTask(
+    {
+      id: task.id,
+      assigneeId: task.assigneeId,
+      allowAssigneeComments: task.allowAssigneeComments,
+    },
+    userId,
+    access
+  );
+
+  return {
+    canComment,
+    canEditTask: canWriteTask,
+    canChangeStatus: canWriteTask,
+    canDelete,
+  };
+}
+
+function isAllowAssigneeCommentsMissing(error: unknown) {
+  if (isMissingProjectTaskAllowAssigneeCommentsColumn(error)) return true;
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    const meta = (error.meta ?? {}) as Record<string, unknown>;
+    const column = String(meta.column ?? meta.field_name ?? "");
+    return column.toLowerCase().includes("allowassigneecomments");
+  }
+  return false;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -42,6 +138,8 @@ export async function GET(
     if (!projectAccess.ok) return projectAccess.response;
 
     const stages = await loadProjectTaskStages();
+    const conversationAuthorEditDeleteWindowMinutes =
+      await getTaskConversationAuthorEditWindowMinutes();
     const { searchParams } = new URL(req.url);
     const phaseId = searchParams.get("phaseId");
     const status = normalizeTaskStatus(stages, searchParams.get("status"));
@@ -53,13 +151,36 @@ export async function GET(
     if (status) where.status = status;
     if (assigneeId) where.assigneeId = assigneeId;
 
-    const tasks = await prisma.projectTask.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: {
-        assignee: { select: { id: true, name: true, fullname: true, photoUrl: true } },
-        phase: { select: { id: true, name: true } },
-      },
+    let includeAllowAssigneeComments = true;
+    let tasksRaw: ProjectTaskRow[] = [];
+    try {
+      tasksRaw = await prisma.projectTask.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        select: projectTaskSelect(true),
+      });
+    } catch (error) {
+      if (!isAllowAssigneeCommentsMissing(error)) throw error;
+      includeAllowAssigneeComments = false;
+      tasksRaw = await prisma.projectTask.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        select: projectTaskSelect(false),
+      });
+    }
+
+    const tasks = tasksRaw.map((raw) => {
+      const task = toKnownProjectTask(raw, includeAllowAssigneeComments);
+      return {
+        ...task,
+        ...computeTaskPermissions(
+          task,
+          accessResult.ctx.userId,
+          accessResult.ctx.access,
+          projectAccess.scope
+        ),
+        conversationAuthorEditDeleteWindowMinutes,
+      };
     });
 
     return NextResponse.json({ items: tasks, stages });
@@ -82,7 +203,7 @@ export async function POST(
     if (!projectAccess.ok) return projectAccess.response;
 
     const body = await req.json();
-    const { title, description, phaseId, assigneeId, status, priority, dueDate } =
+    const { title, description, phaseId, assigneeId, status, priority, dueDate, allowAssigneeComments } =
       body as {
         title: string;
         description?: string;
@@ -91,14 +212,21 @@ export async function POST(
         status?: string;
         priority?: string;
         dueDate?: string;
+        allowAssigneeComments?: boolean;
       };
 
     if (!title || typeof title !== "string" || title.trim() === "") {
       return NextResponse.json({ error: "title is required" }, { status: 400 });
     }
 
+    if (allowAssigneeComments !== undefined && typeof allowAssigneeComments !== "boolean") {
+      return NextResponse.json({ error: "allowAssigneeComments must be a boolean" }, { status: 400 });
+    }
+
     const ptStages = await loadProjectTaskStages();
     const defaultPtStage = getDefaultStage(ptStages);
+    const conversationAuthorEditDeleteWindowMinutes =
+      await getTaskConversationAuthorEditWindowMinutes();
 
     const normalizedAssigneeId = normalizeOptionalId(assigneeId);
     const normalizedPhaseId = normalizeOptionalId(phaseId);
@@ -149,24 +277,65 @@ export async function POST(
       return NextResponse.json({ error: "Invalid due date" }, { status: 400 });
     }
 
-    const task = await prisma.projectTask.create({
-      data: {
-        projectId,
-        title: title.trim(),
-        description,
-        phaseId: normalizedPhaseId ?? null,
-        assigneeId: normalizedAssigneeId ?? null,
-        status: normalizedStatus,
-        priority: normalizedPriority,
-        dueDate: parsedDueDate,
-      },
-      include: {
-        assignee: { select: { id: true, name: true, fullname: true, photoUrl: true } },
-        phase: { select: { id: true, name: true } },
-      },
-    });
+    let includeAllowAssigneeComments = true;
+    let createdTaskId = "";
+    try {
+      const created = await prisma.projectTask.create({
+        data: {
+          projectId,
+          title: title.trim(),
+          description,
+          phaseId: normalizedPhaseId ?? null,
+          assigneeId: normalizedAssigneeId ?? null,
+          status: normalizedStatus,
+          priority: normalizedPriority,
+          allowAssigneeComments: allowAssigneeComments ?? true,
+          dueDate: parsedDueDate,
+        },
+        select: { id: true },
+      });
+      createdTaskId = created.id;
+    } catch (error) {
+      if (!isAllowAssigneeCommentsMissing(error)) throw error;
+      includeAllowAssigneeComments = false;
+      const created = await prisma.projectTask.create({
+        data: {
+          projectId,
+          title: title.trim(),
+          description,
+          phaseId: normalizedPhaseId ?? null,
+          assigneeId: normalizedAssigneeId ?? null,
+          status: normalizedStatus,
+          priority: normalizedPriority,
+          dueDate: parsedDueDate,
+        },
+        select: { id: true },
+      });
+      createdTaskId = created.id;
+    }
 
-    return NextResponse.json(task, { status: 201 });
+    const taskRaw = await prisma.projectTask.findUnique({
+      where: { id: createdTaskId },
+      select: projectTaskSelect(includeAllowAssigneeComments),
+    });
+    if (!taskRaw) {
+      return NextResponse.json({ error: "Task not found after create" }, { status: 404 });
+    }
+    const task = toKnownProjectTask(taskRaw, includeAllowAssigneeComments);
+
+    return NextResponse.json(
+      {
+        ...task,
+        ...computeTaskPermissions(
+          task,
+          accessResult.ctx.userId,
+          accessResult.ctx.access,
+          projectAccess.scope
+        ),
+        conversationAuthorEditDeleteWindowMinutes,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("[POST /api/projects/[id]/tasks]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

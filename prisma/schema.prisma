@@ -846,6 +846,7 @@ model ProjectTask {
   description String?       @db.Text
   status      String        @default("todo") // todo, in_progress, done
   priority    String        @default("normal")
+  allowAssigneeComments Boolean @default(true)
   dueDate     DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -861,13 +862,17 @@ model ProjectTaskComment {
   id            String      @id @default(cuid())
   projectTaskId String
   userId        String
+  parentCommentId String?
   content       String      @db.Text
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   projectTask   ProjectTask @relation(fields: [projectTaskId], references: [id], onDelete: Cascade)
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent        ProjectTaskComment? @relation("ProjectTaskCommentThread", fields: [parentCommentId], references: [id], onDelete: SetNull)
+  replies       ProjectTaskComment[] @relation("ProjectTaskCommentThread")
 
   @@map("project_task_comments")
+  @@index([projectTaskId, parentCommentId, createdAt])
 }
 
 // ─────────────────────────────────────────────
