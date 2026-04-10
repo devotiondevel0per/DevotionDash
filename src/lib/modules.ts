@@ -35,7 +35,7 @@ export interface Module {
 export const modules: Module[] = [
   { id: "home",         label: "Home",          href: "/home",         icon: Home,        color: "#B0812B" },
   { id: "tasks",        label: "Tasks",          href: "/tasks",        icon: CheckSquare, color: "#C79810" },
-  { id: "projects",     label: "Projects",       href: "/projects",     icon: FolderKanban,color: "#437388" },
+  { id: "projects",     label: "Companies",      href: "/projects",     icon: FolderKanban,color: "#437388" },
   { id: "documents",    label: "Documents",      href: "/documents",    icon: FolderOpen,  color: "#437388" },
   { id: "email",        label: "E-Mail",         href: "/email",        icon: Mail,        color: "#5EAD63" },
   { id: "board",        label: "Board",          href: "/board",        icon: Clipboard,   color: "#C79810" },

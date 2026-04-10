@@ -77,6 +77,7 @@ function asOptionLines(lines: string) {
 export function ProjectFormBuilder({ canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingFieldId, setDeletingFieldId] = useState<string | null>(null);
   const [fields, setFields] = useState<ProjectFormField[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -156,15 +157,46 @@ export function ProjectFormBuilder({ canManage }: Props) {
     setDirty(true);
   }
 
-  function removeField(id: string) {
+  async function lookupFieldImpactCount(fieldKey: string): Promise<number> {
+    if (!fieldKey) return 0;
+    const res = await fetch(
+      `/api/administration/project-form-config/impact?fieldKey=${encodeURIComponent(fieldKey)}`,
+      { cache: "no-store" }
+    );
+    const data = (await res.json().catch(() => null)) as { count?: unknown; error?: string } | null;
+    if (!res.ok) throw new Error(data?.error ?? "Failed to check field usage");
+    return typeof data?.count === "number" ? Math.max(0, Math.floor(data.count)) : 0;
+  }
+
+  async function removeField(id: string) {
     const item = fields.find((entry) => entry.id === id);
-    if (!item || item.source === "core") return;
-    setFields((prev) => prev.filter((entry) => entry.id !== id).map((entry, index) => ({ ...entry, order: index + 1 })));
-    if (selectedId === id) {
-      const next = fields.find((entry) => entry.id !== id);
-      setSelectedId(next?.id ?? null);
+    if (!item || item.source === "core" || !canManage) return;
+
+    setDeletingFieldId(id);
+    try {
+      const impactCount = await lookupFieldImpactCount(item.key);
+      const hasDataMsg =
+        impactCount > 0
+          ? `"${item.label}" has saved data in ${impactCount} project${impactCount === 1 ? "" : "s"}. Removing this field will hide it from the form, but existing saved values will be preserved. Continue?`
+          : `Remove "${item.label}" from this form? Existing saved values (if any) will remain preserved.`;
+
+      if (!window.confirm(hasDataMsg)) return;
+
+      setFields((prev) => {
+        const next = prev
+          .filter((entry) => entry.id !== id)
+          .map((entry, index) => ({ ...entry, order: index + 1 }));
+        if (selectedId === id) {
+          setSelectedId(next[0]?.id ?? null);
+        }
+        return next;
+      });
+      setDirty(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove field");
+    } finally {
+      setDeletingFieldId(null);
     }
-    setDirty(true);
   }
 
   function addMetaField(targetId: string) {
@@ -298,9 +330,9 @@ export function ProjectFormBuilder({ canManage }: Props) {
                   className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
                   onClick={(event) => {
                     event.stopPropagation();
-                    removeField(field.id);
+                    void removeField(field.id);
                   }}
-                  disabled={!canManage}
+                  disabled={!canManage || deletingFieldId === field.id}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

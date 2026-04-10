@@ -39,7 +39,7 @@ const appModules = <AppModuleDefinition>[
   ),
   AppModuleDefinition(
     id: 'projects',
-    label: 'Projects',
+    label: 'Companies',
     route: '/projects',
     icon: Icons.folder_special_rounded,
     color: Color(0xFF437388),

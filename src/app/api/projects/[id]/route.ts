@@ -10,6 +10,34 @@ import {
   canCurrentUserCommentOnProjectTask,
   isMissingProjectTaskAllowAssigneeCommentsColumn,
 } from "@/lib/project-task-access";
+import type { ProjectFormField } from "@/lib/project-form-config";
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function mergeProjectCustomDataPreservingUnknown(
+  existing: unknown,
+  incoming: Record<string, unknown>,
+  fields: ProjectFormField[]
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...asRecord(existing) };
+  const editableFieldKeys = new Set(
+    fields
+      .filter((field) => field.source === "custom" && field.enabled)
+      .map((field) => field.key)
+  );
+
+  for (const key of editableFieldKeys) {
+    delete merged[key];
+  }
+  for (const [key, value] of Object.entries(incoming)) {
+    merged[key] = value;
+  }
+
+  return merged;
+}
 
 function projectTaskSelect(includeAllowAssigneeComments: boolean) {
   return {
@@ -156,6 +184,24 @@ export async function PUT(
     const fields = await loadProjectFormFields();
     const normalizedCustomData =
       customData !== undefined ? sanitizeProjectCustomData(customData, fields) : undefined;
+    let mergedCustomData: Prisma.InputJsonValue | undefined;
+
+    if (normalizedCustomData !== undefined) {
+      const existingProject = await prisma.project.findUnique({
+        where: { id },
+        select: { customData: true },
+      });
+      if (!existingProject) {
+        return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      }
+
+      const merged = mergeProjectCustomDataPreservingUnknown(
+        existingProject.customData,
+        normalizedCustomData,
+        fields
+      );
+      mergedCustomData = merged as Prisma.InputJsonValue;
+    }
 
     const project = await prisma.project.update({
       where: { id },
@@ -168,8 +214,8 @@ export async function PUT(
         ...(categoryId !== undefined && {
           category: categoryId ? { connect: { id: categoryId } } : { disconnect: true },
         }),
-        ...(normalizedCustomData !== undefined && {
-          customData: normalizedCustomData as Prisma.InputJsonValue,
+        ...(mergedCustomData !== undefined && {
+          customData: mergedCustomData,
         }),
       },
       include: {
