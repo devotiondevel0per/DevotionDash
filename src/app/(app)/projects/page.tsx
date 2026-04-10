@@ -2916,25 +2916,35 @@ type ProjectCardProps = {
 };
 
 function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardProps) {
-  const [hovered, setHovered] = useState(false);
   const tasksCount = project.tasks?.length ?? project._count.tasks;
-  const doneTasks = (project.tasks ?? []).filter((task) => isTaskClosed(DEFAULT_PROJECT_TASK_STAGES, task.status)).length;
-  const progress = tasksCount > 0 ? Math.round((doneTasks / tasksCount) * 100) : 0;
   const membersCount = project.members.length;
+  const details = toText(project.description ?? "");
 
   return (
     <Card
-      className="relative overflow-hidden hover:shadow-lg transition-all duration-200 cursor-pointer group"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className="relative overflow-hidden hover:shadow-lg transition-all duration-200 cursor-pointer"
       onClick={onOpen}
     >
+      {canEditProject ? (
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="absolute right-3 top-3 z-10 h-8 w-8 bg-white/90"
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit();
+          }}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      ) : null}
       <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-2 gap-2">
+        <div className="mb-2 flex items-start justify-between gap-2 pr-10">
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-semibold text-gray-900 truncate">{project.name}</h3>
-            {project.description && (
-              <p className="text-xs text-gray-500 mt-1 line-clamp-2">{project.description}</p>
+            {details && (
+              <p className="mt-1 line-clamp-2 text-xs text-gray-500">{details}</p>
             )}
           </div>
           <Badge
@@ -2945,19 +2955,8 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
           </Badge>
         </div>
 
-        {/* Progress indicator */}
-        <div className="mt-3 mb-3">
-          <div className="flex justify-between text-xs text-gray-400 mb-1">
-            <span>Progress</span>
-            <span className="text-gray-400">{tasksCount > 0 ? `${doneTasks}/${tasksCount} done` : "No tasks"}</span>
-          </div>
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: "#AA8038" }} />
-          </div>
-        </div>
-
         {/* Meta row */}
-        <div className="flex items-center gap-2 flex-wrap text-xs text-gray-400 mb-3">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-400">
           {project.category && (
             <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
               {project.category.name}
@@ -2971,10 +2970,13 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
             <List className="h-3 w-3" />
             {project._count.phases} phase{project._count.phases !== 1 ? "s" : ""}
           </span>
+          <span className="flex items-center gap-1">
+            <Users className="h-3 w-3" />
+            {membersCount} member{membersCount !== 1 ? "s" : ""}
+          </span>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center">
           <div className="flex -space-x-1.5">
             {project.members.slice(0, 4).map((m, idx) => (
               <Avatar key={m.id} className="h-7 w-7 border-2 border-white">
@@ -2994,29 +2996,7 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <Calendar className="h-3 w-3" />
-            {project.endDate ? formatDate(project.endDate) : "No deadline"}
-          </div>
         </div>
-
-        {/* Hover overlay */}
-        {hovered && (
-          <div
-            className="absolute inset-0 flex items-center justify-center gap-2 bg-white/80 backdrop-blur-[1px]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={onOpen}>
-              Open
-            </Button>
-            {canEditProject && (
-              <Button size="sm" variant="outline" onClick={onEdit}>
-                <Pencil className="h-3.5 w-3.5 mr-1" />
-                Edit
-              </Button>
-            )}
-          </div>
-        )}
       </CardContent>
     </Card>
   );
@@ -3350,19 +3330,17 @@ export default function ProjectsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Company</TableHead>
+                    <TableHead>Details</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Tasks</TableHead>
                     <TableHead>Members</TableHead>
-                    <TableHead>Due</TableHead>
-                    <TableHead className="w-[120px] text-right">Actions</TableHead>
+                    <TableHead className="w-[90px] text-right">Edit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map((project) => {
                     const tasksCount = project.tasks?.length ?? project._count.tasks;
-                    const doneTasks = (project.tasks ?? []).filter((task) =>
-                      isTaskClosed(DEFAULT_PROJECT_TASK_STAGES, task.status)
-                    ).length;
+                    const details = toText(project.description ?? "");
                     const canEditCompany =
                       canWrite &&
                       (
@@ -3383,8 +3361,17 @@ export default function ProjectsPage() {
                         <TableCell>
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium text-slate-800">{project.name}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-600">
+                          <div className="min-w-0 max-w-[24rem]">
+                            {details ? (
+                              <p className="line-clamp-2 text-xs text-slate-500">{details}</p>
+                            ) : (
+                              <p className="text-xs text-slate-400">No details</p>
+                            )}
                             {project.category ? (
-                              <p className="text-xs text-slate-500">{project.category.name}</p>
+                              <p className="mt-1 text-xs text-slate-500">{project.category.name}</p>
                             ) : null}
                           </div>
                         </TableCell>
@@ -3401,30 +3388,13 @@ export default function ProjectsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-slate-700">
-                          {tasksCount > 0
-                            ? `${doneTasks}/${tasksCount} done`
-                            : "No tasks"}
+                          {tasksCount} task{tasksCount !== 1 ? "s" : ""}
                         </TableCell>
                         <TableCell className="text-sm text-slate-700">
                           {project.members.length}
                         </TableCell>
-                        <TableCell className="text-sm text-slate-700">
-                          {project.endDate ? formatDate(project.endDate) : "No deadline"}
-                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-xs"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setOpenProjectId(project.id);
-                              }}
-                            >
-                              Open
-                            </Button>
                             {canEditCompany ? (
                               <Button
                                 type="button"
