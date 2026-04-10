@@ -12,6 +12,15 @@ import {
 } from "@/lib/project-task-access";
 import type { ProjectFormField } from "@/lib/project-form-config";
 
+function normalizeCompanyStatus(value: unknown): "active" | "inactive" {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "active") return "active";
+  if (normalized === "inactive" || normalized === "archived" || normalized === "completed") {
+    return "inactive";
+  }
+  return "active";
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
@@ -98,7 +107,7 @@ export async function GET(
       },
     });
 
-    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    if (!project) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
     const taskStages = await loadProjectTaskStages();
     const conversationAuthorEditDeleteWindowMinutes =
@@ -177,7 +186,12 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ ...project, tasks: normalizedTasks, taskStages });
+    return NextResponse.json({
+      ...project,
+      status: normalizeCompanyStatus(project.status),
+      tasks: normalizedTasks,
+      taskStages,
+    });
   } catch (error) {
     console.error("[GET /api/projects/[id]]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -220,7 +234,7 @@ export async function PUT(
         select: { customData: true },
       });
       if (!existingProject) {
-        return NextResponse.json({ error: "Project not found" }, { status: 404 });
+        return NextResponse.json({ error: "Company not found" }, { status: 404 });
       }
 
       const merged = mergeProjectCustomDataPreservingUnknown(
@@ -236,7 +250,7 @@ export async function PUT(
       data: {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
-        ...(status !== undefined && { status }),
+        ...(status !== undefined && { status: normalizeCompanyStatus(status) }),
         ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
         ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
         ...(categoryId !== undefined && {
@@ -260,7 +274,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(project);
+    return NextResponse.json({
+      ...project,
+      status: normalizeCompanyStatus(project.status),
+    });
   } catch (error) {
     console.error("[PUT /api/projects/[id]]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

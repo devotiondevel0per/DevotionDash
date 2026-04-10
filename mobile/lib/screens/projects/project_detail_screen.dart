@@ -65,7 +65,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen>
     startAutoRefresh(const Duration(seconds: 30), _refresh);
   }
 
-  static const _projectStatuses = ['active', 'completed', 'archived'];
+  static const _projectStatuses = ['active', 'inactive'];
   static const _taskStatuses = ['todo', 'in_progress', 'done', 'cancelled'];
   static const _taskPriorities = ['low', 'normal', 'high'];
 
@@ -132,13 +132,14 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen>
   }
 
   Color _statusColor(String status) {
-    switch (status) {
+    switch (status.trim().toLowerCase()) {
       case 'completed':
       case 'done':
         return const Color(0xFF10B981);
       case 'active':
       case 'in_progress':
         return const Color(0xFF3B82F6);
+      case 'inactive':
       case 'archived':
       case 'cancelled':
         return const Color(0xFF6B7280);
@@ -321,6 +322,14 @@ class _ProjectView extends ConsumerWidget {
   });
 
   String _s(dynamic v) => v?.toString() ?? '';
+  String _normalizeProjectStatus(dynamic value) {
+    final status = _s(value).trim().toLowerCase();
+    if (status == 'active') return 'active';
+    if (status == 'inactive' || status == 'archived' || status == 'completed') {
+      return 'inactive';
+    }
+    return 'active';
+  }
   Map<String, dynamic> _m(dynamic v) =>
       v is Map ? Map<String, dynamic>.from(v) : const {};
   List<Map<String, dynamic>> _rows(dynamic v) {
@@ -332,7 +341,7 @@ class _ProjectView extends ConsumerWidget {
     final api = ref.read(apiClientProvider);
     final name = TextEditingController(text: _s(project['name']));
     final description = TextEditingController(text: _s(project['description']));
-    var status = _s(project['status']).isNotEmpty ? _s(project['status']) : 'active';
+    var status = _normalizeProjectStatus(project['status']);
     DateTime? start = DateTime.tryParse(_s(project['startDate']));
     DateTime? end = DateTime.tryParse(_s(project['endDate']));
 
@@ -458,7 +467,7 @@ class _ProjectView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = _s(project['status']).isNotEmpty ? _s(project['status']) : 'active';
+    final status = _normalizeProjectStatus(project['status']);
     return RefreshIndicator(
       onRefresh: () async => refresh(),
       child: ListView(

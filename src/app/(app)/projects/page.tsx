@@ -167,8 +167,7 @@ type TeamUser = {
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   active: { label: "Active", className: "bg-green-100 text-green-700" },
-  completed: { label: "Completed", className: "bg-primary/10 text-primary" },
-  archived: { label: "Archived", className: "bg-gray-100 text-gray-500" },
+  inactive: { label: "Inactive", className: "bg-gray-100 text-gray-500" },
 };
 
 const DEFAULT_PROJECT_TASK_STAGES: WorkflowStage[] = [
@@ -248,7 +247,7 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
     order: 4,
     placeholder: "",
     helpText: "",
-    options: ["active", "completed", "archived"],
+    options: ["active", "inactive"],
     multiple: false,
     accept: "",
     metadataFields: [],
@@ -312,6 +311,22 @@ function initials(name: string): string {
 
 function displayName(user: { name: string; fullname: string }): string {
   return user.fullname || user.name;
+}
+
+function normalizeCompanyStatus(status?: string | null): "active" | "inactive" {
+  const normalized = (status ?? "").trim().toLowerCase();
+  if (normalized === "active") return "active";
+  if (normalized === "inactive" || normalized === "archived" || normalized === "completed") {
+    return "inactive";
+  }
+  return "active";
+}
+
+function normalizeProject(project: Project): Project {
+  return {
+    ...project,
+    status: normalizeCompanyStatus(project.status),
+  };
 }
 
 function formatDate(iso?: string | null): string {
@@ -458,7 +473,7 @@ function ProjectFormDialog({
   const [categoryId, setCategoryId] = useState(existing?.category?.id ?? "");
   const [startDate, setStartDate] = useState(existing?.startDate ? existing.startDate.slice(0, 10) : "");
   const [endDate, setEndDate] = useState(existing?.endDate ? existing.endDate.slice(0, 10) : "");
-  const [status, setStatus] = useState(existing?.status ?? "active");
+  const [status, setStatus] = useState(normalizeCompanyStatus(existing?.status));
   const [customData, setCustomData] = useState<Record<string, unknown>>(
     existing?.customData && typeof existing.customData === "object"
       ? (existing.customData as Record<string, unknown>)
@@ -481,7 +496,7 @@ function ProjectFormDialog({
       setCategoryId(existing?.category?.id ?? "");
       setStartDate(existing?.startDate ? existing.startDate.slice(0, 10) : "");
       setEndDate(existing?.endDate ? existing.endDate.slice(0, 10) : "");
-      setStatus(existing?.status ?? "active");
+      setStatus(normalizeCompanyStatus(existing?.status));
       setCustomData(
         existing?.customData && typeof existing.customData === "object"
           ? (existing.customData as Record<string, unknown>)
@@ -2068,7 +2083,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
           // Keep project payload fallback when task endpoint is unavailable.
         }
 
-        setDetail(data);
+        setDetail(normalizeProject(data));
         setTasks(nextTasks);
         setTaskStages(nextStages);
         setPhases(data.phases ?? []);
@@ -3036,7 +3051,7 @@ export default function ProjectsPage() {
         const res = await fetch("/api/projects?limit=200");
         if (!res.ok) throw new Error("Failed to load companies");
         const data = (await res.json()) as Project[];
-        setProjects(Array.isArray(data) ? data : []);
+        setProjects(Array.isArray(data) ? data.map(normalizeProject) : []);
       } catch (err) {
         if (!silent) {
           toast.error(err instanceof Error ? err.message : "Failed to load companies");
@@ -3108,8 +3123,7 @@ export default function ProjectsPage() {
     return [
       { id: "all", label: "All Companies", Icon: FolderOpen, count: projects.length },
       { id: "active", label: "Active", Icon: CheckCircle2, count: count("active") },
-      { id: "completed", label: "Completed", Icon: CheckSquare, count: count("completed") },
-      { id: "archived", label: "Archived", Icon: Archive, count: count("archived") },
+      { id: "inactive", label: "Inactive", Icon: Archive, count: count("inactive") },
     ];
   }, [projects]);
 
@@ -3132,11 +3146,12 @@ export default function ProjectsPage() {
   }, [projects, activeStatus, activeCategory, searchQuery]);
 
   function handleCreated(project: Project) {
-    setProjects((prev) => [project, ...prev]);
+    setProjects((prev) => [normalizeProject(project), ...prev]);
   }
 
   function handleUpdated(project: Project) {
-    setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)));
+    const normalized = normalizeProject(project);
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? normalized : p)));
   }
 
   function handleDeleted(id: string) {

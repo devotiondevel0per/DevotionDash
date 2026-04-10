@@ -19,13 +19,26 @@ final projectsProvider = FutureProvider.autoDispose
   );
   return raw
       .whereType<Map>()
-      .map((row) => Map<String, dynamic>.from(row))
+      .map((row) {
+        final next = Map<String, dynamic>.from(row);
+        next['status'] = _normalizeCompanyStatus(next['status']?.toString());
+        return next;
+      })
       .toList();
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const _kPrimary = Color(0xFFEC4899);
+
+String _normalizeCompanyStatus(String? status) {
+  final normalized = (status ?? '').trim().toLowerCase();
+  if (normalized == 'active') return 'active';
+  if (normalized == 'inactive' || normalized == 'archived' || normalized == 'completed') {
+    return 'inactive';
+  }
+  return 'active';
+}
 
 String _formatDate(String? raw) {
   if (raw == null || raw.isEmpty) return '';
@@ -37,17 +50,10 @@ String _formatDate(String? raw) {
 }
 
 Color _statusColor(String? status) {
-  switch ((status ?? '').toLowerCase()) {
+  switch (_normalizeCompanyStatus(status)) {
     case 'active':
-    case 'in_progress':
       return const Color(0xFF3B82F6);
-    case 'completed':
-      return const Color(0xFF10B981);
-    case 'on_hold':
-    case 'paused':
-      return const Color(0xFFF59E0B);
-    case 'cancelled':
-    case 'archived':
+    case 'inactive':
       return const Color(0xFF6B7280);
     default:
       return const Color(0xFF6B7280);
@@ -286,7 +292,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Row(
                   children: [
-                    for (final s in const ['all', 'active', 'completed', 'archived'])
+                    for (final s in const ['all', 'active', 'inactive'])
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
@@ -334,7 +340,7 @@ class _ProjectCard extends StatelessWidget {
 
     final name = (project['name'] ?? 'Untitled').toString();
     final description = (project['description'] ?? '').toString();
-    final status = (project['status'] ?? '').toString();
+    final status = _normalizeCompanyStatus((project['status'] ?? '').toString());
     final statusColor = _statusColor(status);
 
     final endDate = _formatDate(project['endDate']?.toString() ??

@@ -88,6 +88,7 @@ type AdminSection =
   | "users"
   | "roles"
   | "settings"
+  | "companyForm"
   | "leadConfig"
   | "workflowConfig"
   | "modules"
@@ -692,6 +693,7 @@ export default function AdministrationPage() {
     { id: "users" as AdminSection, label: "Users & Access", icon: Users, visible: canReadSection("users") },
     { id: "roles" as AdminSection, label: "Roles", icon: Shield, visible: canReadSection("roles") },
     { id: "settings" as AdminSection, label: "Settings", icon: Palette, visible: canReadSection("settings") },
+    { id: "companyForm" as AdminSection, label: "Company Form", icon: Building2, visible: canReadSection("companyForm") },
     { id: "leadConfig" as AdminSection, label: "Leads Config", icon: ClipboardList, visible: canReadSection("leadConfig") },
     { id: "workflowConfig" as AdminSection, label: "Workflow Stages", icon: GitBranch, visible: canReadSection("workflowConfig") },
     { id: "modules" as AdminSection, label: "Modules", icon: Blocks, visible: canReadSection("modules") },
@@ -1976,6 +1978,11 @@ export default function AdministrationPage() {
                 </CardContent>
               </Card>
 
+            </div>
+          ) : null}
+
+          {section === "companyForm" ? (
+            <div className="space-y-4">
               <ProjectFormBuilder canManage={canManage} />
             </div>
           ) : null}
@@ -2408,7 +2415,7 @@ export default function AdministrationPage() {
                 {(["tasks", "servicedesk", "projectTasks"] as const).map((m) => (
                   <button key={m} onClick={() => setActiveWorkflowModule(m)}
                     className={cn("px-4 py-2 text-sm border-b-2 -mb-px", activeWorkflowModule === m ? "border-[#AA8038] text-[#AA8038] font-medium" : "border-transparent text-slate-600 hover:text-slate-900")}>
-                    {m === "tasks" ? "Tasks" : m === "servicedesk" ? "Ticket Desk" : "Project Tasks"}
+                    {m === "tasks" ? "Tasks" : m === "servicedesk" ? "Ticket Desk" : "Company Tasks"}
                   </button>
                 ))}
               </div>

@@ -69,9 +69,8 @@ function nextFieldOrder(fields: ProjectFormField[]) {
 
 function asOptionLines(lines: string) {
   return lines
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .split(/\r?\n/)
+    .map((line) => line.trim());
 }
 
 export function ProjectFormBuilder({ canManage }: Props) {
@@ -88,7 +87,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
     (async () => {
       try {
         const res = await fetch("/api/administration/project-form-config", { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to load project form config");
+        if (!res.ok) throw new Error("Failed to load company form config");
         const data = (await res.json()) as { fields?: ProjectFormField[] };
         if (!mounted) return;
         const list = Array.isArray(data.fields) ? data.fields : [];
@@ -96,7 +95,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
         setSelectedId(list[0]?.id ?? null);
       } catch (error) {
         if (mounted) {
-          toast.error(error instanceof Error ? error.message : "Failed to load project form config");
+          toast.error(error instanceof Error ? error.message : "Failed to load company form config");
         }
       } finally {
         if (mounted) setLoading(false);
@@ -177,7 +176,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
       const impactCount = await lookupFieldImpactCount(item.key);
       const hasDataMsg =
         impactCount > 0
-          ? `"${item.label}" has saved data in ${impactCount} project${impactCount === 1 ? "" : "s"}. Removing this field will hide it from the form, but existing saved values will be preserved. Continue?`
+          ? `"${item.label}" has saved data in ${impactCount} compan${impactCount === 1 ? "y" : "ies"}. Removing this field will hide it from the form, but existing saved values will be preserved. Continue?`
           : `Remove "${item.label}" from this form? Existing saved values (if any) will remain preserved.`;
 
       if (!window.confirm(hasDataMsg)) return;
@@ -247,13 +246,13 @@ export function ProjectFormBuilder({ canManage }: Props) {
         body: JSON.stringify({ fields }),
       });
       const data = (await res.json().catch(() => null)) as { error?: string; fields?: ProjectFormField[] } | null;
-      if (!res.ok) throw new Error(data?.error ?? "Failed to save project form");
+      if (!res.ok) throw new Error(data?.error ?? "Failed to save company form");
       const updated = Array.isArray(data?.fields) ? data.fields : fields;
       setFields(updated);
       setDirty(false);
-      toast.success("Project form settings saved");
+      toast.success("Company form settings saved");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save project form");
+      toast.error(error instanceof Error ? error.message : "Failed to save company form");
     } finally {
       setSaving(false);
     }
@@ -263,9 +262,9 @@ export function ProjectFormBuilder({ canManage }: Props) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Project Form Builder</CardTitle>
+          <CardTitle>Company Form Builder</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-slate-500">Loading form builder…</CardContent>
+        <CardContent className="text-sm text-slate-500">Loading form builder...</CardContent>
       </Card>
     );
   }
@@ -273,7 +272,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Project Form Builder</CardTitle>
+        <CardTitle>Company Form Builder</CardTitle>
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={addCustomField} disabled={!canManage || saving}>
             <Plus className="mr-1 h-3.5 w-3.5" />
@@ -625,3 +624,4 @@ export function ProjectFormBuilder({ canManage }: Props) {
     </Card>
   );
 }
+
