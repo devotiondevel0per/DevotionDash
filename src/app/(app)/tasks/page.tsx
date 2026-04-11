@@ -156,6 +156,36 @@ type TaskFormState = {
   descriptionHtml: string;
 };
 
+type TaskFormPane = "main" | "side";
+type TaskFormCoreFieldKey =
+  | "title"
+  | "type"
+  | "status"
+  | "priority"
+  | "dueDate"
+  | "duePresets"
+  | "description"
+  | "attachments"
+  | "assignees"
+  | "privateTask";
+
+type TaskFormConfigField = {
+  id: string;
+  key: string;
+  label: string;
+  type: string;
+  source: "core";
+  coreKey: TaskFormCoreFieldKey;
+  enabled: boolean;
+  required: boolean;
+  order: number;
+  helpText: string;
+  pane: TaskFormPane;
+  layoutRow: number;
+  layoutColumns: 1 | 2 | 3 | 4;
+  layoutColSpan: number;
+};
+
 const VIEW_TABS: Array<{ id: TaskView; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "personal", label: "Personal" },
@@ -237,6 +267,66 @@ const EMPTY_FORM: TaskFormState = {
   isPrivate: false,
   descriptionHtml: "",
 };
+
+const DEFAULT_TASK_FORM_FIELDS: TaskFormConfigField[] = [
+  { id: "core_title", key: "title", label: "Subject", type: "text", source: "core", coreKey: "title", enabled: true, required: true, order: 1, helpText: "", pane: "main", layoutRow: 1, layoutColumns: 1, layoutColSpan: 1 },
+  { id: "core_type", key: "type", label: "Type", type: "select", source: "core", coreKey: "type", enabled: true, required: true, order: 2, helpText: "", pane: "main", layoutRow: 2, layoutColumns: 2, layoutColSpan: 1 },
+  { id: "core_status", key: "status", label: "Status", type: "select", source: "core", coreKey: "status", enabled: true, required: true, order: 3, helpText: "", pane: "main", layoutRow: 2, layoutColumns: 2, layoutColSpan: 1 },
+  { id: "core_priority", key: "priority", label: "Priority", type: "select", source: "core", coreKey: "priority", enabled: true, required: true, order: 4, helpText: "", pane: "main", layoutRow: 3, layoutColumns: 2, layoutColSpan: 1 },
+  { id: "core_due_date", key: "dueDate", label: "Deadline", type: "date", source: "core", coreKey: "dueDate", enabled: true, required: false, order: 5, helpText: "", pane: "main", layoutRow: 3, layoutColumns: 2, layoutColSpan: 1 },
+  { id: "core_due_presets", key: "duePresets", label: "Deadline Presets", type: "actions", source: "core", coreKey: "duePresets", enabled: true, required: false, order: 6, helpText: "", pane: "main", layoutRow: 4, layoutColumns: 1, layoutColSpan: 1 },
+  { id: "core_description", key: "description", label: "Description", type: "rich_text", source: "core", coreKey: "description", enabled: true, required: false, order: 7, helpText: "", pane: "main", layoutRow: 5, layoutColumns: 1, layoutColSpan: 1 },
+  { id: "core_attachments", key: "attachments", label: "Attachments", type: "file", source: "core", coreKey: "attachments", enabled: true, required: false, order: 8, helpText: "", pane: "main", layoutRow: 6, layoutColumns: 1, layoutColSpan: 1 },
+  { id: "core_assignees", key: "assignees", label: "Assigned to", type: "assignees", source: "core", coreKey: "assignees", enabled: true, required: false, order: 9, helpText: "", pane: "side", layoutRow: 1, layoutColumns: 1, layoutColSpan: 1 },
+  { id: "core_private", key: "privateTask", label: "Private task", type: "checkbox", source: "core", coreKey: "privateTask", enabled: true, required: false, order: 10, helpText: "", pane: "side", layoutRow: 2, layoutColumns: 1, layoutColSpan: 1 },
+];
+
+function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
+  const allowedCoreKeys = new Set<TaskFormCoreFieldKey>(DEFAULT_TASK_FORM_FIELDS.map((field) => field.coreKey));
+  const byCore = new Map<TaskFormCoreFieldKey, TaskFormConfigField>();
+  if (Array.isArray(input)) {
+    for (const entry of input) {
+      if (!entry || typeof entry !== "object") continue;
+      const src = entry as Record<string, unknown>;
+      const coreKey = (src.coreKey ?? src.key)?.toString() as TaskFormCoreFieldKey | undefined;
+      if (!coreKey || !allowedCoreKeys.has(coreKey)) continue;
+      const fallback = DEFAULT_TASK_FORM_FIELDS.find((field) => field.coreKey === coreKey);
+      if (!fallback) continue;
+      const layoutColumnsRaw = Number.parseInt(String(src.layoutColumns ?? fallback.layoutColumns), 10);
+      const layoutColumns = Math.max(1, Math.min(4, Number.isFinite(layoutColumnsRaw) ? layoutColumnsRaw : fallback.layoutColumns)) as 1 | 2 | 3 | 4;
+      const layoutColSpanRaw = Number.parseInt(String(src.layoutColSpan ?? fallback.layoutColSpan), 10);
+      const layoutColSpan = Math.max(1, Math.min(layoutColumns, Number.isFinite(layoutColSpanRaw) ? layoutColSpanRaw : fallback.layoutColSpan));
+      const layoutRowRaw = Number.parseInt(String(src.layoutRow ?? fallback.layoutRow), 10);
+      const layoutRow = Math.max(1, Math.min(500, Number.isFinite(layoutRowRaw) ? layoutRowRaw : fallback.layoutRow));
+      const orderRaw = Number.parseInt(String(src.order ?? fallback.order), 10);
+      const order = Number.isFinite(orderRaw) ? Math.max(1, Math.min(500, orderRaw)) : fallback.order;
+      const pane = src.pane === "side" ? "side" : "main";
+      const required = coreKey === "title" ? true : Boolean(src.required);
+      const enabled = coreKey === "title" ? true : src.enabled !== false;
+      byCore.set(coreKey, {
+        ...fallback,
+        label: (typeof src.label === "string" ? src.label.trim() : "") || fallback.label,
+        helpText: (typeof src.helpText === "string" ? src.helpText.trim() : "").slice(0, 300),
+        pane,
+        layoutRow,
+        layoutColumns,
+        layoutColSpan,
+        order,
+        enabled,
+        required,
+      });
+    }
+  }
+
+  const merged = DEFAULT_TASK_FORM_FIELDS.map((field) => byCore.get(field.coreKey) ?? field);
+  return [...merged]
+    .sort((a, b) => {
+      if (a.pane !== b.pane) return a.pane === "main" ? -1 : 1;
+      if (a.layoutRow !== b.layoutRow) return a.layoutRow - b.layoutRow;
+      return a.order - b.order;
+    })
+    .map((field, index) => ({ ...field, order: index + 1 }));
+}
 
 function nameOf(user: { name: string; fullname: string }) {
   return user.fullname?.trim() || user.name || "Unknown";
@@ -375,6 +465,7 @@ function TaskModal({
   initial,
   stages,
   meId,
+  formFields,
 }: {
   open: boolean;
   onClose: () => void;
@@ -384,6 +475,7 @@ function TaskModal({
   initial: TaskFormState;
   stages: WorkflowStage[];
   meId: string;
+  formFields: TaskFormConfigField[];
 }) {
   const [form, setForm] = useState<TaskFormState>(initial);
   const [saving, setSaving] = useState(false);
@@ -405,6 +497,40 @@ function TaskModal({
     setFiles([]);
   }, [open, initial, meId]);
 
+  const activeFormFields = useMemo(
+    () => normalizeTaskFormFields(formFields).filter((field) => field.enabled),
+    [formFields]
+  );
+  const formFieldByCore = useMemo(
+    () => new Map(activeFormFields.map((field) => [field.coreKey, field])),
+    [activeFormFields]
+  );
+  const paneRows = useMemo(() => {
+    const buildRows = (pane: TaskFormPane) => {
+      const map = new Map<number, { row: number; columns: 1 | 2 | 3 | 4; fields: TaskFormConfigField[] }>();
+      for (const field of activeFormFields.filter((entry) => entry.pane === pane)) {
+        const row = Math.max(1, Math.min(500, field.layoutRow));
+        const columns = Math.max(1, Math.min(4, field.layoutColumns)) as 1 | 2 | 3 | 4;
+        const existing = map.get(row);
+        if (!existing) {
+          map.set(row, { row, columns, fields: [field] });
+        } else {
+          existing.fields.push(field);
+        }
+      }
+      return Array.from(map.values())
+        .sort((a, b) => a.row - b.row)
+        .map((entry) => ({
+          ...entry,
+          fields: entry.fields.sort((a, b) => a.order - b.order),
+        }));
+    };
+    return {
+      main: buildRows("main"),
+      side: buildRows("side"),
+    };
+  }, [activeFormFields]);
+
   async function uploadFiles(taskId: string) {
     if (files.length === 0) return;
     const data = new FormData();
@@ -418,8 +544,42 @@ function TaskModal({
 
   async function submit() {
     const preparedForm = ensureCreatorAssignee(form);
-    if (!preparedForm.title.trim()) {
-      toast.error("Subject is required");
+    const titleField = formFieldByCore.get("title");
+    if ((titleField?.required ?? true) && !preparedForm.title.trim()) {
+      toast.error(`${titleField?.label ?? "Subject"} is required`);
+      return;
+    }
+    const typeField = formFieldByCore.get("type");
+    if (typeField?.required && !preparedForm.type) {
+      toast.error(`${typeField.label} is required`);
+      return;
+    }
+    const statusField = formFieldByCore.get("status");
+    if (statusField?.required && !preparedForm.status) {
+      toast.error(`${statusField.label} is required`);
+      return;
+    }
+    const priorityField = formFieldByCore.get("priority");
+    if (priorityField?.required && !preparedForm.priority) {
+      toast.error(`${priorityField.label} is required`);
+      return;
+    }
+    const dueDateField = formFieldByCore.get("dueDate");
+    if (dueDateField?.required && !preparedForm.dueDate) {
+      toast.error(`${dueDateField.label} is required`);
+      return;
+    }
+    const descriptionField = formFieldByCore.get("description");
+    if (
+      descriptionField?.required &&
+      !hasRichTextContent(normalizeRichText(preparedForm.descriptionHtml))
+    ) {
+      toast.error(`${descriptionField.label} is required`);
+      return;
+    }
+    const assigneesField = formFieldByCore.get("assignees");
+    if (assigneesField?.required && preparedForm.assignees.length === 0) {
+      toast.error(`${assigneesField.label} is required`);
       return;
     }
 
@@ -553,162 +713,210 @@ function TaskModal({
     setForm((prev) => ({ ...prev, dueDate: value }));
   }
 
-  return (
-    <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
-      <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-[1180px]">
-        <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
-          <DialogTitle className="flex items-center gap-2 text-2xl">
-            {titleIcon}
-            <span>{form.id ? "Edit Task" : "Create New Task"}</span>
-          </DialogTitle>
-          <DialogDescription>Subject, responsible users, status, deadline, rich text, and attachments.</DialogDescription>
-        </DialogHeader>
+  function renderField(field: TaskFormConfigField): ReactNode {
+    const label = field.required ? `${field.label} *` : field.label;
+    const helpText = field.helpText?.trim();
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden px-6 py-4 lg:grid-cols-[1fr_0.95fr]">
-            <div className="space-y-4 overflow-auto pr-1">
-            <div className="space-y-1.5">
-              <Label>Subject *</Label>
-              <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
-            </div>
+    if (field.coreKey === "title") {
+      return (
+        <div className="space-y-1.5">
+          <Label>{label}</Label>
+          <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Select value={form.type} onValueChange={(v) => setForm((p) => ({ ...p, type: v as TaskType }))}>
-                <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="task">Task</SelectItem>
-                  <SelectItem value="event">Event</SelectItem>
-                  <SelectItem value="note">Note</SelectItem>
-                </SelectContent>
-              </Select>
+    if (field.coreKey === "type") {
+      return (
+        <div className="space-y-1.5">
+          <Label>{label}</Label>
+          <Select value={form.type} onValueChange={(v) => setForm((p) => ({ ...p, type: v as TaskType }))}>
+            <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="task">Task</SelectItem>
+              <SelectItem value="event">Event</SelectItem>
+              <SelectItem value="note">Note</SelectItem>
+            </SelectContent>
+          </Select>
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
 
-              <Select value={form.status} onValueChange={(v) => { if (v) setForm((p) => ({ ...p, status: v })); }}>
-                <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  {stages.map((s) => (
-                    <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+    if (field.coreKey === "status") {
+      return (
+        <div className="space-y-1.5">
+          <Label>{label}</Label>
+          <Select value={form.status} onValueChange={(v) => { if (v) setForm((p) => ({ ...p, status: v })); }}>
+            <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              {stages.map((stage) => (
+                <SelectItem key={stage.key} value={stage.key}>{stage.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
 
-              <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v as TaskPriority }))}>
-                <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
+    if (field.coreKey === "priority") {
+      return (
+        <div className="space-y-1.5">
+          <Label>{label}</Label>
+          <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v as TaskPriority }))}>
+            <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
 
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5 text-xs text-slate-600"><CalendarDays className="h-3.5 w-3.5" />Deadline</Label>
-                <Input type="date" value={form.dueDate} onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))} />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(0)}>Today</Button>
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(1)}>Tomorrow</Button>
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(3)}>In 3 Days</Button>
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(7)}>Next Week</Button>
-              <Button type="button" size="sm" variant="ghost" className="h-8 text-xs text-slate-500 hover:text-slate-700" onClick={() => setForm((p) => ({ ...p, dueDate: "" }))}>Clear</Button>
-            </div>
+    if (field.coreKey === "dueDate") {
+      return (
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <CalendarDays className="h-3.5 w-3.5" />
+            {label}
+          </Label>
+          <Input type="date" value={form.dueDate} onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))} />
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
 
-            <RichTextEditor
-              value={form.descriptionHtml}
-              onChange={(next) => setForm((prev) => ({ ...prev, descriptionHtml: next }))}
-              placeholder="Write task description..."
-              minHeight={220}
-              disabled={saving}
-            />
-
-            <div className="space-y-2">
-              <Label>Attach file</Label>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" onClick={() => document.getElementById("task-file-input")?.click()}>
-                  <Paperclip className="mr-1 h-4 w-4" />Attach
-                </Button>
-                <input
-                  id="task-file-input"
-                  className="hidden"
-                  type="file"
-                  multiple
-                  onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-                />
-                <span className="text-xs text-slate-500">{files.length > 0 ? `${files.length} file(s)` : "No files"}</span>
-                {files.length > 0 ? (
-                  <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-slate-500 hover:text-slate-700" onClick={() => setFiles([])}>
-                    Clear files
-                  </Button>
-                ) : null}
-              </div>
-            </div>
+    if (field.coreKey === "duePresets") {
+      return (
+        <div className="space-y-1.5">
+          <Label>{field.label}</Label>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(0)}>Today</Button>
+            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(1)}>Tomorrow</Button>
+            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(3)}>In 3 Days</Button>
+            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(7)}>Next Week</Button>
+            <Button type="button" size="sm" variant="ghost" className="h-8 text-xs text-slate-500 hover:text-slate-700" onClick={() => setForm((p) => ({ ...p, dueDate: "" }))}>Clear</Button>
           </div>
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
 
-          <div className="space-y-3 overflow-auto rounded border bg-slate-50 p-3">
-            <Label>Assigned to</Label>
-            {groups.length > 0 ? (
-              <div className="rounded border bg-white p-2">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Assign Groups
-                </p>
-                <div className="space-y-1.5">
-                  {groups.map((group) => (
-                    <label
-                      key={`group-${group.id}`}
-                      className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 hover:bg-slate-50"
-                    >
-                      <span className="flex min-w-0 items-center gap-2 text-xs text-slate-700">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: group.color ?? "#94a3b8" }}
-                        />
-                        <span className="truncate">{group.name}</span>
+    if (field.coreKey === "description") {
+      return (
+        <div className="space-y-1.5">
+          <Label>{label}</Label>
+          <RichTextEditor
+            value={form.descriptionHtml}
+            onChange={(next) => setForm((prev) => ({ ...prev, descriptionHtml: next }))}
+            placeholder="Write task description..."
+            minHeight={220}
+            disabled={saving}
+          />
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
+
+    if (field.coreKey === "attachments") {
+      return (
+        <div className="space-y-2">
+          <Label>{field.label}</Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => document.getElementById("task-file-input")?.click()}>
+              <Paperclip className="mr-1 h-4 w-4" />Attach
+            </Button>
+            <input
+              id="task-file-input"
+              className="hidden"
+              type="file"
+              multiple
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            />
+            <span className="text-xs text-slate-500">{files.length > 0 ? `${files.length} file(s)` : "No files"}</span>
+            {files.length > 0 ? (
+              <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-slate-500 hover:text-slate-700" onClick={() => setFiles([])}>
+                Clear files
+              </Button>
+            ) : null}
+          </div>
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
+
+    if (field.coreKey === "assignees") {
+      return (
+        <div className="space-y-3">
+          <Label>{field.label}</Label>
+          {groups.length > 0 ? (
+            <div className="rounded border bg-white p-2">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Assign Groups
+              </p>
+              <div className="space-y-1.5">
+                {groups.map((group) => (
+                  <label
+                    key={`group-${group.id}`}
+                    className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 hover:bg-slate-50"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 text-xs text-slate-700">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: group.color ?? "#94a3b8" }}
+                      />
+                      <span className="truncate">{group.name}</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={selectedGroups.has(group.id)}
+                      onChange={(event) => toggleGroup(group.id, event.target.checked)}
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                Group members are auto-added as assignees when saved.
+              </p>
+            </div>
+          ) : null}
+          <div className="max-h-72 space-y-1 overflow-y-auto rounded border bg-white p-2">
+            {groupedUsers.length === 0 ? <p className="text-xs text-slate-500">No users available</p> : groupedUsers.map((section) => {
+              const userIds = section.users.map((user) => user.id);
+              const selectedCount = userIds.filter((id) => selected.has(id)).length;
+              const allSelected = userIds.length > 0 && selectedCount === userIds.length;
+              return (
+                <div key={section.group.id} className="rounded-md border bg-slate-50/50 p-2">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: section.group.color ?? "#94a3b8" }} />
+                      <span className="truncate text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        {section.group.name}
                       </span>
+                      <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-slate-500">
+                        {section.users.length}
+                      </span>
+                    </div>
+                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-slate-600">
                       <input
                         type="checkbox"
-                        checked={selectedGroups.has(group.id)}
-                        onChange={(event) => toggleGroup(group.id, event.target.checked)}
+                        checked={allSelected}
+                        onChange={(event) => toggleAssigneeGroup(userIds, event.target.checked)}
                       />
+                      All
                     </label>
-                  ))}
-                </div>
-                <p className="mt-2 text-[11px] text-slate-500">
-                  Group members are auto-added as assignees when saved.
-                </p>
-              </div>
-            ) : null}
-            <div className="max-h-72 space-y-1 overflow-y-auto rounded border bg-white p-2">
-              {groupedUsers.length === 0 ? <p className="text-xs text-slate-500">No users available</p> : groupedUsers.map((section) => {
-                const userIds = section.users.map((user) => user.id);
-                const selectedCount = userIds.filter((id) => selected.has(id)).length;
-                const allSelected = userIds.length > 0 && selectedCount === userIds.length;
-                return (
-                  <div key={section.group.id} className="rounded-md border bg-slate-50/50 p-2">
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: section.group.color ?? "#94a3b8" }} />
-                        <span className="truncate text-xs font-semibold uppercase tracking-wide text-slate-600">
-                          {section.group.name}
-                        </span>
-                        <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-slate-500">
-                          {section.users.length}
-                        </span>
-                      </div>
-                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-slate-600">
-                        <input
-                          type="checkbox"
-                          checked={allSelected}
-                          onChange={(event) => toggleAssigneeGroup(userIds, event.target.checked)}
-                        />
-                        All
-                      </label>
-                    </div>
-                    <div className="space-y-1">
-                      {section.users.map((u) => {
-                        const isCreate = !form.id;
-                        const forceCreatorAssigned = isCreate && u.id === meId;
-                        const isSelected = selected.has(u.id) || forceCreatorAssigned;
-                        return (
+                  </div>
+                  <div className="space-y-1">
+                    {section.users.map((u) => {
+                      const isCreate = !form.id;
+                      const forceCreatorAssigned = isCreate && u.id === meId;
+                      const isSelected = selected.has(u.id) || forceCreatorAssigned;
+                      return (
                         <div key={u.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-white">
                           <input
                             type="checkbox"
@@ -742,26 +950,83 @@ function TaskModal({
                         </div>
                       );
                     })}
-                    </div>
                   </div>
-                );
-              })}
-            </div>
-            <p className="rounded border bg-white px-3 py-2 text-xs text-slate-600">
-              Assignee comment access is controlled per person.
+                </div>
+              );
+            })}
+          </div>
+          <p className="rounded border bg-white px-3 py-2 text-xs text-slate-600">
+            Assignee comment access is controlled per person.
+          </p>
+          {!form.id ? (
+            <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Creator is auto-assigned and cannot be removed while creating a task.
             </p>
-            {!form.id ? (
-              <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Creator is auto-assigned and cannot be removed while creating a task.
-              </p>
-            ) : null}
-            <label className="flex items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
-              <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm((p) => ({ ...p, isPrivate: e.target.checked }))} />
-              Private task
-            </label>
-          </div>
-          </div>
+          ) : null}
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
 
+    if (field.coreKey === "privateTask") {
+      return (
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
+            <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm((p) => ({ ...p, isPrivate: e.target.checked }))} />
+            {field.label}
+          </label>
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
+
+    return null;
+  }
+
+  function renderPane(pane: TaskFormPane) {
+    const rows = paneRows[pane];
+    if (rows.length === 0) {
+      return <p className="text-xs text-slate-500">No fields configured for this section.</p>;
+    }
+    return rows.map((row) => (
+      <div
+        key={`${pane}-row-${row.row}`}
+        className="grid gap-3"
+        style={{ gridTemplateColumns: `repeat(${row.columns}, minmax(0, 1fr))` }}
+      >
+        {row.fields.map((field) => {
+          const span = Math.max(1, Math.min(row.columns, field.layoutColSpan));
+          return (
+            <div key={field.id} style={{ gridColumn: `span ${span} / span ${span}` }}>
+              {renderField(field)}
+            </div>
+          );
+        })}
+      </div>
+    ));
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
+      <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-[1180px]">
+        <DialogHeader className="border-b bg-gradient-to-r from-slate-50 via-red-50 to-slate-50 px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-2xl">
+            {titleIcon}
+            <span>{form.id ? "Edit Task" : "Create New Task"}</span>
+          </DialogTitle>
+          <DialogDescription>Subject, responsible users, status, deadline, rich text, and attachments.</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden px-6 py-4 lg:grid-cols-[1fr_0.95fr]">
+            <div className="space-y-4 overflow-auto pr-1">
+              {renderPane("main")}
+            </div>
+
+            <div className="space-y-3 overflow-auto rounded border bg-slate-50 p-3">
+              {renderPane("side")}
+            </div>
+          </div>
           <DialogFooter className="border-t px-6 py-3">
             <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
             <Button className="bg-[#AA8038] text-white hover:bg-[#D48A00]" onClick={() => void submit()} disabled={saving}>
@@ -1283,7 +1548,7 @@ function TaskDetailDialog({
           <div className="shrink-0 space-y-3 border-b bg-white px-6 py-4 text-sm">
             <div className="flex flex-wrap gap-4 text-xs text-slate-600">
               <span className="flex items-center gap-1"><User className="h-3.5 w-3.5 text-slate-400" />Author: <span className="font-medium text-slate-800">{nameOf(task.creator)}</span></span>
-              <span className="flex items-center gap-1">Assigned: <span className="font-medium text-slate-800">{task.assignees.length > 0 ? task.assignees.map((e) => nameOf(e.user)).join(", ") : "—"}</span></span>
+              <span className="flex items-center gap-1">Assigned: <span className="font-medium text-slate-800">{task.assignees.length > 0 ? task.assignees.map((e) => nameOf(e.user)).join(", ") : "â€”"}</span></span>
               {Array.isArray(task.assignedGroups) && task.assignedGroups.length > 0 ? (
                 <span className="flex items-center gap-1">
                   Groups:
@@ -1456,6 +1721,7 @@ export default function TasksPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [formInitial, setFormInitial] = useState<TaskFormState>(EMPTY_FORM);
+  const [taskFormFields, setTaskFormFields] = useState<TaskFormConfigField[]>(DEFAULT_TASK_FORM_FIELDS);
   const [deleteTarget, setDeleteTarget] = useState<TaskItem | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [moveBucketTarget, setMoveBucketTarget] = useState<TaskItem | null>(null);
@@ -1481,6 +1747,17 @@ export default function TasksPage() {
       setMeId(data.currentUserId ?? "");
     } catch {
       toast.error("Failed to load task metadata");
+    }
+  }, []);
+
+  const loadTaskFormConfig = useCallback(async () => {
+    try {
+      const response = await fetch("/api/tasks/form-config", { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      const payload = (await response.json().catch(() => null)) as { fields?: unknown } | null;
+      setTaskFormFields(normalizeTaskFormFields(payload?.fields));
+    } catch {
+      setTaskFormFields(DEFAULT_TASK_FORM_FIELDS);
     }
   }, []);
 
@@ -1528,6 +1805,7 @@ export default function TasksPage() {
   }, [category, filterApplied, search, statusScope, view]);
 
   useEffect(() => { void loadMeta(); }, [loadMeta]);
+  useEffect(() => { void loadTaskFormConfig(); }, [loadTaskFormConfig]);
   useEffect(() => { void loadTasks(); }, [loadTasks, refreshToken]);
   useEffect(() => () => {
     const preview = dragPreviewRef.current;
@@ -1558,7 +1836,7 @@ export default function TasksPage() {
       if (buckets[task.status]) {
         buckets[task.status].push(task);
       } else {
-        // Unknown status — put in first bucket
+        // Unknown status â€” put in first bucket
         const firstKey = stages[0]?.key;
         if (firstKey) buckets[firstKey] = [...(buckets[firstKey] ?? []), task];
       }
@@ -2334,6 +2612,7 @@ export default function TasksPage() {
         initial={formInitial}
         stages={stages}
         meId={meId}
+        formFields={taskFormFields}
       />
       <ConfirmDialog
         open={Boolean(deleteTarget)}

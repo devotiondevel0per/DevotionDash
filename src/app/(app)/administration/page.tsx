@@ -18,6 +18,7 @@ import { BarChart3, Blocks, Building2, ClipboardList, Copy, Eye, EyeOff, FileClo
 import { DEFAULT_SECURITY_POLICY, parseListFromText, parseSecurityPolicy, serializeSecurityPolicy, type SecurityPolicy } from "@/lib/security-policy";
 import { BRANDING_UPDATED_EVENT, DEFAULT_APP_NAME, DEFAULT_APP_TAGLINE, RUNTIME_SETTINGS_STORAGE_KEY } from "@/lib/branding";
 import { ProjectFormBuilder } from "@/components/administration/project-form-builder";
+import { TaskFormBuilder } from "@/components/administration/task-form-builder";
 import { toast } from "sonner";
 
 type RoleSummary = { id: string; name: string; color: string; memberCount: number; permissions: RolePermissionConfig | null };
@@ -89,6 +90,7 @@ type AdminSection =
   | "roles"
   | "settings"
   | "companyForm"
+  | "taskForm"
   | "leadConfig"
   | "workflowConfig"
   | "modules"
@@ -694,6 +696,7 @@ export default function AdministrationPage() {
     { id: "roles" as AdminSection, label: "Roles", icon: Shield, visible: canReadSection("roles") },
     { id: "settings" as AdminSection, label: "Settings", icon: Palette, visible: canReadSection("settings") },
     { id: "companyForm" as AdminSection, label: "Company Form", icon: Building2, visible: canReadSection("companyForm") },
+    { id: "taskForm" as AdminSection, label: "Task Form", icon: ClipboardList, visible: canReadSection("taskForm") },
     { id: "leadConfig" as AdminSection, label: "Leads Config", icon: ClipboardList, visible: canReadSection("leadConfig") },
     { id: "workflowConfig" as AdminSection, label: "Workflow Stages", icon: GitBranch, visible: canReadSection("workflowConfig") },
     { id: "modules" as AdminSection, label: "Modules", icon: Blocks, visible: canReadSection("modules") },
@@ -1984,6 +1987,12 @@ export default function AdministrationPage() {
           {section === "companyForm" ? (
             <div className="space-y-4">
               <ProjectFormBuilder canManage={canManage} />
+            </div>
+          ) : null}
+
+          {section === "taskForm" ? (
+            <div className="space-y-4">
+              <TaskFormBuilder canManage={canManage} />
             </div>
           ) : null}
 
