@@ -50,6 +50,7 @@ import {
   Search,
   FolderOpen,
   FolderKanban,
+  Building2,
   Archive,
   CheckCircle2,
   CheckSquare,
@@ -360,6 +361,38 @@ function toText(value: string | null | undefined) {
     .replace(/&nbsp;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeMetaKey(key: string) {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function readRecordTextValue(record: Record<string, unknown>, keys: string[]) {
+  const normalizedWanted = new Set(keys.map(normalizeMetaKey));
+  for (const [rawKey, rawValue] of Object.entries(record)) {
+    if (!normalizedWanted.has(normalizeMetaKey(rawKey))) continue;
+    if (typeof rawValue === "string" && rawValue.trim()) return rawValue.trim();
+    if (typeof rawValue === "number") return String(rawValue);
+  }
+  return "";
+}
+
+function getCompanyMeta(project: Project) {
+  const rootRecord = project as unknown as Record<string, unknown>;
+  const customRecord =
+    project.customData && typeof project.customData === "object" && !Array.isArray(project.customData)
+      ? (project.customData as Record<string, unknown>)
+      : {};
+
+  const symbolKeys = ["companySymbol", "symbol", "ticker", "companyTicker", "shortSymbol"];
+  const codeKeys = ["companyCode", "code", "companyId", "companyNumber", "shortCode"];
+
+  const symbol =
+    readRecordTextValue(rootRecord, symbolKeys) || readRecordTextValue(customRecord, symbolKeys);
+  const code =
+    readRecordTextValue(rootRecord, codeKeys) || readRecordTextValue(customRecord, codeKeys);
+
+  return { symbol, code };
 }
 
 function isWithinCommentWindow(createdAt: string, windowMinutes: number) {
@@ -2925,6 +2958,8 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
     .filter((member) => member.role === "manager")
     .map((member) => displayName(member.user))
     .filter(Boolean);
+  const { symbol, code } = getCompanyMeta(project);
+  const companyMonogram = (symbol || code || initials(project.name)).slice(0, 3).toUpperCase();
 
   return (
     <Card
@@ -2945,13 +2980,24 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
           <Pencil className="h-3.5 w-3.5" />
         </Button>
       ) : null}
-      <CardContent className="p-5">
+      <CardContent className="p-4">
         <div className="mb-2 flex items-start justify-between gap-2 pr-10">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 truncate">{project.name}</h3>
-            {details && (
-              <p className="mt-1 line-clamp-2 text-xs text-gray-500">{details}</p>
-            )}
+          <div className="min-w-0 flex flex-1 items-start gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#AA8038]/30 bg-[#AA8038]/10 text-[11px] font-semibold text-[#8f682d]">
+              {companyMonogram}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-sm font-semibold text-gray-900">{project.name}</h3>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600">
+                  <Building2 className="h-3 w-3" />
+                  {symbol || "No symbol"}
+                </span>
+                <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600">
+                  {code || "No code"}
+                </span>
+              </div>
+            </div>
           </div>
           <Badge
             variant="secondary"
@@ -2961,10 +3007,13 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
           </Badge>
         </div>
 
-        {/* Meta row */}
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+        {details && (
+          <p className="mb-2 line-clamp-2 text-[11px] text-gray-500">{details}</p>
+        )}
+
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
           {project.category && (
-            <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
+            <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary">
               {project.category.name}
             </Badge>
           )}
@@ -2978,55 +3027,50 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
           </span>
         </div>
 
-        <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] text-slate-600">
-          <div className="grid grid-cols-1 gap-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-slate-500">Managers</span>
-              <span className="truncate text-right font-medium text-slate-700">
-                {managers.length > 0 ? managers.slice(0, 2).join(", ") : "Unassigned"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1 text-slate-500">
-                <CalendarDays className="h-3 w-3" />
-                Start
-              </span>
-              <span className="font-medium text-slate-700">
-                {project.startDate ? formatDate(project.startDate) : "-"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-slate-500">Created</span>
-              <span className="font-medium text-slate-700">
-                {project.createdAt ? formatDate(project.createdAt) : "-"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-slate-500">Updated</span>
-              <span className="font-medium text-slate-700">
-                {project.updatedAt ? formatDate(project.updatedAt) : "-"}
-              </span>
-            </div>
+        <div className="mb-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[10.5px] text-slate-600">
+          <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+            <span className="text-slate-500">Manager</span>
+            <span className="truncate text-right font-medium text-slate-700">
+              {managers.length > 0 ? managers.slice(0, 2).join(", ") : "Unassigned"}
+            </span>
+
+            <span className="inline-flex items-center gap-1 text-slate-500">
+              <CalendarDays className="h-3 w-3" />
+              Start
+            </span>
+            <span className="text-right font-medium text-slate-700">
+              {project.startDate ? formatDateTime(project.startDate) : "-"}
+            </span>
+
+            <span className="text-slate-500">Created</span>
+            <span className="text-right font-medium text-slate-700">
+              {project.createdAt ? formatDateTime(project.createdAt) : "-"}
+            </span>
+
+            <span className="text-slate-500">Updated</span>
+            <span className="text-right font-medium text-slate-700">
+              {project.updatedAt ? formatDateTime(project.updatedAt) : "-"}
+            </span>
           </div>
         </div>
 
         <div className="flex items-center">
           <div className="flex -space-x-1.5">
             {project.members.slice(0, 4).map((m, idx) => (
-              <Avatar key={m.id} className="h-7 w-7 border-2 border-white">
-                <AvatarFallback className={cn("text-xs font-medium", MEMBER_COLORS[idx % MEMBER_COLORS.length])}>
+              <Avatar key={m.id} className="h-6 w-6 border-2 border-white">
+                <AvatarFallback className={cn("text-[10px] font-medium", MEMBER_COLORS[idx % MEMBER_COLORS.length])}>
                   {initials(displayName(m.user))}
                 </AvatarFallback>
               </Avatar>
             ))}
             {membersCount > 4 && (
-              <div className="h-7 min-w-7 px-1 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-xs text-gray-600">
+              <div className="flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-gray-100 px-1 text-[10px] text-gray-600">
                 +{membersCount - 4}
               </div>
             )}
             {membersCount === 0 && (
-              <div className="h-7 w-7 rounded-full border-2 border-white bg-gray-50 flex items-center justify-center">
-                <Users className="h-3.5 w-3.5 text-gray-400" />
+              <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-gray-50">
+                <Users className="h-3 w-3 text-gray-400" />
               </div>
             )}
           </div>
