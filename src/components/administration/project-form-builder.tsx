@@ -191,7 +191,15 @@ export function ProjectFormBuilder({ canManage }: Props) {
       if (fromIndex < 0 || toIndex < 0) return prev;
       const next = [...prev];
       const [item] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, item);
+      const target = next[toIndex];
+      const targetRow = target ? normalizeRow(target.layoutRow, target.order) : normalizeRow(item.layoutRow, item.order);
+      const targetColumns = target ? clampRowColumns(target.layoutColumns) : clampRowColumns(item.layoutColumns);
+      next.splice(toIndex, 0, {
+        ...item,
+        layoutRow: targetRow,
+        layoutColumns: targetColumns,
+        layoutColSpan: clampSpan(item.layoutColSpan, targetColumns),
+      });
       return normalizeLayoutFields(next);
     });
     setDirty(true);
@@ -234,8 +242,10 @@ export function ProjectFormBuilder({ canManage }: Props) {
     setDirty(true);
   }
 
-  function addCustomField() {
+  function addCustomField(targetRow?: number) {
     const id = `custom_${Date.now().toString(36)}`;
+    const row = targetRow ?? (rows.length > 0 ? rows[rows.length - 1].row + 1 : 1);
+    const rowColumns = rows.find((entry) => entry.row === row)?.columns ?? 1;
     const newField: ProjectFormField = {
       id,
       key: normalizeKey(id, id),
@@ -248,8 +258,8 @@ export function ProjectFormBuilder({ canManage }: Props) {
       order: nextFieldOrder(fields),
       placeholder: "",
       helpText: "",
-      layoutRow: rows.length > 0 ? rows[rows.length - 1].row + 1 : 1,
-      layoutColumns: 1,
+      layoutRow: row,
+      layoutColumns: rowColumns,
       layoutColSpan: 1,
       options: [],
       multiple: false,
@@ -258,6 +268,28 @@ export function ProjectFormBuilder({ canManage }: Props) {
     };
     setFields((prev) => normalizeLayoutFields([...prev, newField]));
     setSelectedId(id);
+    setDirty(true);
+  }
+
+  function moveFieldToRowEnd(fieldId: string, row: number) {
+    setFields((prev) => {
+      const fromIndex = prev.findIndex((entry) => entry.id === fieldId);
+      if (fromIndex < 0) return prev;
+      const next = [...prev];
+      const [item] = next.splice(fromIndex, 1);
+      const rowFields = next.filter((entry) => normalizeRow(entry.layoutRow, entry.order) === row);
+      const rowColumns =
+        rowFields.length > 0
+          ? clampRowColumns(rowFields[0].layoutColumns)
+          : (rows.find((entry) => entry.row === row)?.columns ?? clampRowColumns(item.layoutColumns));
+      next.push({
+        ...item,
+        layoutRow: row,
+        layoutColumns: rowColumns,
+        layoutColSpan: clampSpan(item.layoutColSpan, rowColumns),
+      });
+      return normalizeLayoutFields(next);
+    });
     setDirty(true);
   }
 
@@ -377,7 +409,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Company Form Builder</CardTitle>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={addCustomField} disabled={!canManage || saving}>
+          <Button type="button" variant="outline" size="sm" onClick={() => addCustomField()} disabled={!canManage || saving}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             Add Field
           </Button>
@@ -393,56 +425,141 @@ export function ProjectFormBuilder({ canManage }: Props) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-[320px_1fr]">
-        <div className="space-y-2 rounded-lg border bg-slate-50 p-2">
-          {fields.map((field) => (
-            <div
-              key={field.id}
-              draggable={canManage}
-              onDragStart={() => setDraggingId(field.id)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => {
-                if (!draggingId) return;
-                reorder(draggingId, field.id);
-                setDraggingId(null);
-              }}
-              className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${
-                selectedId === field.id
-                  ? "border-[#AA8038] bg-white"
-                  : "border-transparent bg-white/70 hover:border-slate-200"
-              }`}
-              onClick={() => setSelectedId(field.id)}
-            >
-              <GripVertical className="h-4 w-4 text-slate-400" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-slate-700">{field.label}</p>
-                <p className="text-[11px] text-slate-500">
-                  {field.source === "core" ? "Core" : "Custom"} • {field.type}
-                </p>
-              </div>
-              {!field.enabled ? (
-                <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-700">Off</span>
-              ) : null}
-              {field.required ? (
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">Req</span>
-              ) : null}
-              {field.source === "custom" ? (
-                <button
-                  type="button"
-                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void removeField(field.id);
-                  }}
-                  disabled={!canManage || deletingFieldId === field.id}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
+      <CardContent className="grid gap-4 lg:grid-cols-[420px_1fr]">
+        <div className="space-y-3 rounded-lg border bg-slate-50 p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Layout Canvas</p>
+              <p className="text-xs text-slate-500">Drag fields between rows and adjust column layout.</p>
             </div>
-          ))}
-        </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => addCustomField()}
+              disabled={!canManage || saving}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Add Field
+            </Button>
+          </div>
 
+          {rows.length === 0 ? (
+            <div className="rounded-md border border-dashed bg-white p-4 text-sm text-slate-500">
+              No fields configured yet.
+            </div>
+          ) : null}
+
+          <div className="max-h-[70vh] space-y-3 overflow-auto pr-1">
+            {rows.map((row) => (
+              <div
+                key={`row-${row.row}`}
+                className="rounded-md border bg-white p-2"
+                onDragOver={(event) => {
+                  if (!canManage) return;
+                  event.preventDefault();
+                }}
+                onDrop={() => {
+                  if (!canManage || !draggingId) return;
+                  moveFieldToRowEnd(draggingId, row.row);
+                  setDraggingId(null);
+                }}
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Row {row.row}</p>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={String(row.columns)}
+                      onValueChange={(value) => setRowColumns(row.row, clampRowColumns(value))}
+                      disabled={!canManage}
+                    >
+                      <SelectTrigger className="h-8 w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 Column</SelectItem>
+                        <SelectItem value="2">2 Columns</SelectItem>
+                        <SelectItem value="3">3 Columns</SelectItem>
+                        <SelectItem value="4">4 Columns</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => addCustomField(row.row)}
+                      disabled={!canManage || saving}
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      Field
+                    </Button>
+                  </div>
+                </div>
+
+                <div
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: `repeat(${row.columns}, minmax(0, 1fr))` }}
+                >
+                  {row.fields.map((field) => {
+                    const span = clampSpan(field.layoutColSpan, row.columns);
+                    return (
+                      <div
+                        key={field.id}
+                        draggable={canManage}
+                        onDragStart={() => setDraggingId(field.id)}
+                        onDragEnd={() => setDraggingId(null)}
+                        onDragOver={(event) => {
+                          if (!canManage) return;
+                          event.preventDefault();
+                        }}
+                        onDrop={() => {
+                          if (!canManage || !draggingId) return;
+                          reorder(draggingId, field.id);
+                          setDraggingId(null);
+                        }}
+                        onClick={() => setSelectedId(field.id)}
+                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${
+                          selectedId === field.id
+                            ? "border-[#AA8038] bg-[#fff9ee]"
+                            : "border-slate-200 bg-white hover:border-[#AA8038]/40"
+                        }`}
+                        style={{ gridColumn: `span ${span} / span ${span}` }}
+                      >
+                        <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-slate-700">{field.label}</p>
+                          <p className="text-[11px] text-slate-500">
+                            {field.source === "core" ? "Core" : "Custom"} | {field.type} | span {span}
+                          </p>
+                        </div>
+                        {!field.enabled ? (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-700">Off</span>
+                        ) : null}
+                        {field.required ? (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">Req</span>
+                        ) : null}
+                        {field.source === "custom" ? (
+                          <button
+                            type="button"
+                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void removeField(field.id);
+                            }}
+                            disabled={!canManage || deletingFieldId === field.id}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
         {selectedField ? (
           <div className="space-y-4 rounded-lg border p-4">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -480,7 +597,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
                   value={normalizeRow(selectedField.layoutRow, selectedField.order)}
                   onChange={(event) => {
                     const nextRow = normalizeRow(event.target.value, selectedField.order);
-                    mutateField(selectedField.id, (field) => ({ ...field, layoutRow: nextRow }));
+                    moveFieldToRow(selectedField.id, nextRow);
                   }}
                   disabled={!canManage}
                 />
