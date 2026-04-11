@@ -73,6 +73,33 @@ function asOptionLines(lines: string) {
     .map((line) => line.trim());
 }
 
+function clampRowColumns(value: unknown): 1 | 2 | 3 | 4 {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(4, Math.round(parsed))) as 1 | 2 | 3 | 4;
+}
+
+function clampSpan(value: unknown, columns: 1 | 2 | 3 | 4) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(columns, Math.round(parsed)));
+}
+
+function normalizeRow(value: unknown, fallback: number) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(500, Math.round(parsed)));
+}
+
 export function ProjectFormBuilder({ canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -82,6 +109,26 @@ export function ProjectFormBuilder({ canManage }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
+  function normalizeLayoutFields(nextFields: ProjectFormField[]) {
+    return nextFields
+      .map((field, index) => {
+        const row = normalizeRow(field.layoutRow, field.order || index + 1);
+        const columns = clampRowColumns(field.layoutColumns);
+        const span = clampSpan(field.layoutColSpan, columns);
+        return {
+          ...field,
+          layoutRow: row,
+          layoutColumns: columns,
+          layoutColSpan: span,
+        };
+      })
+      .sort((a, b) => {
+        if (a.layoutRow !== b.layoutRow) return a.layoutRow - b.layoutRow;
+        return a.order - b.order;
+      })
+      .map((field, index) => ({ ...field, order: index + 1 }));
+  }
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -90,7 +137,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
         if (!res.ok) throw new Error("Failed to load company form config");
         const data = (await res.json()) as { fields?: ProjectFormField[] };
         if (!mounted) return;
-        const list = Array.isArray(data.fields) ? data.fields : [];
+        const list = normalizeLayoutFields(Array.isArray(data.fields) ? data.fields : []);
         setFields(list);
         setSelectedId(list[0]?.id ?? null);
       } catch (error) {
@@ -111,10 +158,28 @@ export function ProjectFormBuilder({ canManage }: Props) {
     [fields, selectedId]
   );
 
+  const rows = useMemo(() => {
+    const rowMap = new Map<number, { row: number; columns: 1 | 2 | 3 | 4; fields: ProjectFormField[] }>();
+    for (const field of fields) {
+      const row = normalizeRow(field.layoutRow, field.order);
+      const columns = clampRowColumns(field.layoutColumns);
+      const existing = rowMap.get(row);
+      if (!existing) {
+        rowMap.set(row, { row, columns, fields: [field] });
+      } else {
+        existing.fields.push(field);
+      }
+    }
+    return Array.from(rowMap.values())
+      .sort((a, b) => a.row - b.row)
+      .map((row) => ({
+        ...row,
+        fields: row.fields.sort((a, b) => a.order - b.order),
+      }));
+  }, [fields]);
+
   function mutateField(id: string, updater: (field: ProjectFormField) => ProjectFormField) {
-    setFields((prev) =>
-      prev.map((field) => (field.id === id ? updater(field) : field)).map((field, index) => ({ ...field, order: index + 1 }))
-    );
+    setFields((prev) => normalizeLayoutFields(prev.map((field) => (field.id === id ? updater(field) : field))));
     setDirty(true);
   }
 
@@ -127,8 +192,45 @@ export function ProjectFormBuilder({ canManage }: Props) {
       const next = [...prev];
       const [item] = next.splice(fromIndex, 1);
       next.splice(toIndex, 0, item);
-      return next.map((field, index) => ({ ...field, order: index + 1 }));
+      return normalizeLayoutFields(next);
     });
+    setDirty(true);
+  }
+
+  function setRowColumns(row: number, columns: 1 | 2 | 3 | 4) {
+    setFields((prev) =>
+      normalizeLayoutFields(
+        prev.map((field) => {
+          if (normalizeRow(field.layoutRow, field.order) !== row) return field;
+          return {
+            ...field,
+            layoutColumns: columns,
+            layoutColSpan: clampSpan(field.layoutColSpan, columns),
+          };
+        })
+      )
+    );
+    setDirty(true);
+  }
+
+  function moveFieldToRow(fieldId: string, row: number) {
+    setFields((prev) =>
+      normalizeLayoutFields(
+        prev.map((field) => {
+          if (field.id !== fieldId) return field;
+          const normalizedRow = normalizeRow(row, field.order);
+          const rowColumns =
+            rows.find((entry) => entry.row === normalizedRow)?.columns ??
+            clampRowColumns(field.layoutColumns);
+          return {
+            ...field,
+            layoutRow: normalizedRow,
+            layoutColumns: rowColumns,
+            layoutColSpan: clampSpan(field.layoutColSpan, rowColumns),
+          };
+        })
+      )
+    );
     setDirty(true);
   }
 
@@ -146,12 +248,15 @@ export function ProjectFormBuilder({ canManage }: Props) {
       order: nextFieldOrder(fields),
       placeholder: "",
       helpText: "",
+      layoutRow: rows.length > 0 ? rows[rows.length - 1].row + 1 : 1,
+      layoutColumns: 1,
+      layoutColSpan: 1,
       options: [],
       multiple: false,
       accept: "",
       metadataFields: [],
     };
-    setFields((prev) => [...prev, newField]);
+    setFields((prev) => normalizeLayoutFields([...prev, newField]));
     setSelectedId(id);
     setDirty(true);
   }
@@ -182,9 +287,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
       if (!window.confirm(hasDataMsg)) return;
 
       setFields((prev) => {
-        const next = prev
-          .filter((entry) => entry.id !== id)
-          .map((entry, index) => ({ ...entry, order: index + 1 }));
+        const next = normalizeLayoutFields(prev.filter((entry) => entry.id !== id));
         if (selectedId === id) {
           setSelectedId(next[0]?.id ?? null);
         }
@@ -247,7 +350,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
       });
       const data = (await res.json().catch(() => null)) as { error?: string; fields?: ProjectFormField[] } | null;
       if (!res.ok) throw new Error(data?.error ?? "Failed to save company form");
-      const updated = Array.isArray(data?.fields) ? data.fields : fields;
+      const updated = normalizeLayoutFields(Array.isArray(data?.fields) ? data.fields : fields);
       setFields(updated);
       setDirty(false);
       toast.success("Company form settings saved");
@@ -365,6 +468,77 @@ export function ProjectFormBuilder({ canManage }: Props) {
                   }
                   disabled={!canManage || selectedField.source === "core"}
                 />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>Row</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={normalizeRow(selectedField.layoutRow, selectedField.order)}
+                  onChange={(event) => {
+                    const nextRow = normalizeRow(event.target.value, selectedField.order);
+                    mutateField(selectedField.id, (field) => ({ ...field, layoutRow: nextRow }));
+                  }}
+                  disabled={!canManage}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Columns In Row</Label>
+                <Select
+                  value={String(clampRowColumns(selectedField.layoutColumns))}
+                  onValueChange={(value) =>
+                    setRowColumns(
+                      normalizeRow(selectedField.layoutRow, selectedField.order),
+                      clampRowColumns(value)
+                    )
+                  }
+                  disabled={!canManage}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 Column</SelectItem>
+                    <SelectItem value="2">2 Columns</SelectItem>
+                    <SelectItem value="3">3 Columns</SelectItem>
+                    <SelectItem value="4">4 Columns</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Field Span</Label>
+                <Select
+                  value={String(
+                    clampSpan(selectedField.layoutColSpan, clampRowColumns(selectedField.layoutColumns))
+                  )}
+                  onValueChange={(value) =>
+                    mutateField(selectedField.id, (field) => {
+                      const rowColumns = clampRowColumns(field.layoutColumns);
+                      return {
+                        ...field,
+                        layoutColSpan: clampSpan(value, rowColumns),
+                      };
+                    })
+                  }
+                  disabled={!canManage}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from(
+                      { length: clampRowColumns(selectedField.layoutColumns) },
+                      (_, index) => index + 1
+                    ).map((span) => (
+                      <SelectItem key={`span-${span}`} value={String(span)}>
+                        Span {span}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

@@ -7,13 +7,19 @@ import {
   sanitizeProjectFormFields,
 } from "@/lib/project-form-config";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   const accessResult = await requireModuleAccess("administration", "read");
   if (!accessResult.ok) return accessResult.response;
 
   try {
     const fields = await loadProjectFormFields();
-    return NextResponse.json({ fields });
+    return NextResponse.json(
+      { fields },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error) {
     console.error("[GET /api/administration/project-form-config]", error);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

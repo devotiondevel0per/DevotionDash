@@ -18,6 +18,8 @@ export type ProjectFormFieldType =
   | "email"
   | "phone";
 
+export type ProjectFormRowColumns = 1 | 2 | 3 | 4;
+
 export type ProjectCoreFieldKey =
   | "name"
   | "description"
@@ -48,6 +50,9 @@ export type ProjectFormField = {
   order: number;
   placeholder: string;
   helpText: string;
+  layoutRow: number;
+  layoutColumns: ProjectFormRowColumns;
+  layoutColSpan: number;
   options: string[];
   multiple: boolean;
   accept: string;
@@ -91,6 +96,39 @@ const VALID_META_TYPES: Array<ProjectFileMetadataField["type"]> = [
   "phone",
 ];
 
+const VALID_LAYOUT_COLUMNS: ProjectFormRowColumns[] = [1, 2, 3, 4];
+
+function sanitizeLayoutRow(value: unknown, fallback: number): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(500, Math.round(parsed)));
+}
+
+function sanitizeLayoutColumns(value: unknown, fallback: ProjectFormRowColumns): ProjectFormRowColumns {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  const normalized = Math.max(1, Math.min(4, Math.round(parsed)));
+  if (VALID_LAYOUT_COLUMNS.includes(normalized as ProjectFormRowColumns)) {
+    return normalized as ProjectFormRowColumns;
+  }
+  return fallback;
+}
+
+function sanitizeLayoutColSpan(value: unknown, columns: ProjectFormRowColumns): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(columns, Math.round(parsed)));
+}
+
 const CORE_FIELD_DEFAULTS: ReadonlyArray<ProjectFormField> = [
   {
     id: "core_name",
@@ -104,6 +142,9 @@ const CORE_FIELD_DEFAULTS: ReadonlyArray<ProjectFormField> = [
     order: 1,
     placeholder: "Enter company name",
     helpText: "",
+    layoutRow: 1,
+    layoutColumns: 2,
+    layoutColSpan: 2,
     options: [],
     multiple: false,
     accept: "",
@@ -121,6 +162,9 @@ const CORE_FIELD_DEFAULTS: ReadonlyArray<ProjectFormField> = [
     order: 2,
     placeholder: "Describe your company",
     helpText: "",
+    layoutRow: 2,
+    layoutColumns: 1,
+    layoutColSpan: 1,
     options: [],
     multiple: false,
     accept: "",
@@ -138,6 +182,9 @@ const CORE_FIELD_DEFAULTS: ReadonlyArray<ProjectFormField> = [
     order: 3,
     placeholder: "",
     helpText: "",
+    layoutRow: 3,
+    layoutColumns: 2,
+    layoutColSpan: 1,
     options: [],
     multiple: false,
     accept: "",
@@ -155,6 +202,9 @@ const CORE_FIELD_DEFAULTS: ReadonlyArray<ProjectFormField> = [
     order: 4,
     placeholder: "",
     helpText: "",
+    layoutRow: 3,
+    layoutColumns: 2,
+    layoutColSpan: 1,
     options: ["active", "inactive"],
     multiple: false,
     accept: "",
@@ -172,6 +222,9 @@ const CORE_FIELD_DEFAULTS: ReadonlyArray<ProjectFormField> = [
     order: 5,
     placeholder: "",
     helpText: "",
+    layoutRow: 4,
+    layoutColumns: 2,
+    layoutColSpan: 1,
     options: [],
     multiple: false,
     accept: "",
@@ -189,6 +242,9 @@ const CORE_FIELD_DEFAULTS: ReadonlyArray<ProjectFormField> = [
     order: 6,
     placeholder: "",
     helpText: "",
+    layoutRow: 4,
+    layoutColumns: 2,
+    layoutColSpan: 1,
     options: [],
     multiple: false,
     accept: "",
@@ -306,6 +362,9 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
         : 100 + result.length;
       const resolvedCoreKey = source === "core" ? (coreKey ?? defaultCore?.coreKey ?? null) : null;
       const isCoreStatusField = source === "core" && resolvedCoreKey === "status";
+      const layoutRow = sanitizeLayoutRow(src.layoutRow, order);
+      const layoutColumns = sanitizeLayoutColumns(src.layoutColumns, defaultCore?.layoutColumns ?? 1);
+      const layoutColSpan = sanitizeLayoutColSpan(src.layoutColSpan, layoutColumns);
       const fieldOptions =
         type === "select" || type === "multiselect" ? dedupeOptions(src.options) : [];
 
@@ -321,6 +380,9 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
         order,
         placeholder: (typeof src.placeholder === "string" ? src.placeholder.trim() : "").slice(0, 200),
         helpText: (typeof src.helpText === "string" ? src.helpText.trim() : "").slice(0, 300),
+        layoutRow,
+        layoutColumns,
+        layoutColSpan,
         options: isCoreStatusField ? ["active", "inactive"] : fieldOptions,
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",
@@ -336,7 +398,10 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
   }
 
   return result
-    .sort((a, b) => a.order - b.order)
+    .sort((a, b) => {
+      if (a.layoutRow !== b.layoutRow) return a.layoutRow - b.layoutRow;
+      return a.order - b.order;
+    })
     .map((field, index) => ({ ...field, order: index + 1 }));
 }
 

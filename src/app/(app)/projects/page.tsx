@@ -204,6 +204,9 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
     order: 1,
     placeholder: "Enter company name",
     helpText: "",
+    layoutRow: 1,
+    layoutColumns: 2,
+    layoutColSpan: 2,
     options: [],
     multiple: false,
     accept: "",
@@ -221,6 +224,9 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
     order: 2,
     placeholder: "Describe your company",
     helpText: "",
+    layoutRow: 2,
+    layoutColumns: 1,
+    layoutColSpan: 1,
     options: [],
     multiple: false,
     accept: "",
@@ -238,6 +244,9 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
     order: 3,
     placeholder: "",
     helpText: "",
+    layoutRow: 3,
+    layoutColumns: 2,
+    layoutColSpan: 1,
     options: [],
     multiple: false,
     accept: "",
@@ -255,6 +264,9 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
     order: 4,
     placeholder: "",
     helpText: "",
+    layoutRow: 3,
+    layoutColumns: 2,
+    layoutColSpan: 1,
     options: ["active", "inactive"],
     multiple: false,
     accept: "",
@@ -272,6 +284,9 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
     order: 5,
     placeholder: "",
     helpText: "",
+    layoutRow: 4,
+    layoutColumns: 2,
+    layoutColSpan: 1,
     options: [],
     multiple: false,
     accept: "",
@@ -289,6 +304,9 @@ const DEFAULT_PROJECT_FORM_FIELDS: ProjectFormField[] = [
     order: 6,
     placeholder: "",
     helpText: "",
+    layoutRow: 4,
+    layoutColumns: 2,
+    layoutColSpan: 1,
     options: [],
     multiple: false,
     accept: "",
@@ -335,6 +353,57 @@ function normalizeProject<T extends { status: string }>(project: T): T {
     ...project,
     status: normalizeCompanyStatus(project.status),
   };
+}
+
+function clampLayoutColumns(value: unknown): 1 | 2 | 3 | 4 {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(4, Math.round(parsed))) as 1 | 2 | 3 | 4;
+}
+
+function clampLayoutSpan(span: unknown, columns: 1 | 2 | 3 | 4): number {
+  const parsed =
+    typeof span === "number"
+      ? span
+      : Number.parseInt(String(span ?? ""), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(columns, Math.round(parsed)));
+}
+
+function normalizeLayoutRow(value: unknown, fallback: number) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(500, Math.round(parsed)));
+}
+
+function getGridColumnsClass(columns: 1 | 2 | 3 | 4) {
+  if (columns === 1) return "grid-cols-1";
+  if (columns === 2) return "grid-cols-1 md:grid-cols-2";
+  if (columns === 3) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
+  return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
+}
+
+function getFieldSpanClass(columns: 1 | 2 | 3 | 4, spanRaw: unknown) {
+  const span = clampLayoutSpan(spanRaw, columns);
+  if (columns === 1) return "col-span-1";
+  if (columns === 2) {
+    return span >= 2 ? "col-span-1 md:col-span-2" : "col-span-1 md:col-span-1";
+  }
+  if (columns === 3) {
+    if (span >= 3) return "col-span-1 md:col-span-2 lg:col-span-3";
+    if (span === 2) return "col-span-1 md:col-span-2 lg:col-span-2";
+    return "col-span-1 md:col-span-1 lg:col-span-1";
+  }
+  if (span >= 4) return "col-span-1 md:col-span-2 lg:col-span-4";
+  if (span === 3) return "col-span-1 md:col-span-2 lg:col-span-3";
+  if (span === 2) return "col-span-1 md:col-span-2 lg:col-span-2";
+  return "col-span-1 md:col-span-1 lg:col-span-1";
 }
 
 function formatDate(iso?: string | null): string {
@@ -552,9 +621,37 @@ function ProjectFormDialog({
   const [uploadingFieldKey, setUploadingFieldKey] = useState<string | null>(null);
 
   const enabledFields = useMemo(
-    () => [...formFields].filter((field) => field.enabled).sort((a, b) => a.order - b.order),
+    () =>
+      [...formFields]
+        .filter((field) => field.enabled)
+        .sort((a, b) => {
+          const rowA = normalizeLayoutRow(a.layoutRow, a.order);
+          const rowB = normalizeLayoutRow(b.layoutRow, b.order);
+          if (rowA !== rowB) return rowA - rowB;
+          return a.order - b.order;
+        }),
     [formFields]
   );
+
+  const formRows = useMemo(() => {
+    const rows = new Map<number, { row: number; columns: 1 | 2 | 3 | 4; fields: ProjectFormField[] }>();
+    for (const field of enabledFields) {
+      const row = normalizeLayoutRow(field.layoutRow, field.order);
+      const columns = clampLayoutColumns(field.layoutColumns);
+      const existing = rows.get(row);
+      if (!existing) {
+        rows.set(row, { row, columns, fields: [field] });
+      } else {
+        existing.fields.push(field);
+      }
+    }
+    return Array.from(rows.values())
+      .sort((a, b) => a.row - b.row)
+      .map((row) => ({
+        ...row,
+        fields: row.fields.sort((a, b) => a.order - b.order),
+      }));
+  }, [enabledFields]);
 
   useEffect(() => {
     if (open) {
@@ -737,19 +834,22 @@ function ProjectFormDialog({
           <DialogDescription>Define timeline, category, and scope clearly before execution.</DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 px-6 py-5">
-          {enabledFields.map((field) => {
-            const isRequired = field.required;
-            const label = (
-              <Label className="text-sm">
-                {field.label}
-                {isRequired ? <span className="ml-1 text-red-500">*</span> : null}
-              </Label>
-            );
+          {formRows.map((row) => (
+            <div key={`row-${row.row}`} className={cn("grid gap-4", getGridColumnsClass(row.columns))}>
+              {row.fields.map((field) => {
+                const spanClass = getFieldSpanClass(row.columns, field.layoutColSpan);
+                const isRequired = field.required;
+                const label = (
+                  <Label className="text-sm">
+                    {field.label}
+                    {isRequired ? <span className="ml-1 text-red-500">*</span> : null}
+                  </Label>
+                );
 
-            if (field.source === "core") {
-              if (field.coreKey === "name") {
-                return (
-                  <div key={field.id} className="space-y-1.5">
+                if (field.source === "core") {
+                  if (field.coreKey === "name") {
+                    return (
+                      <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                     {label}
                     <Input
                       placeholder={field.placeholder || "Company name"}
@@ -758,13 +858,13 @@ function ProjectFormDialog({
                       autoFocus
                     />
                     {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
-                  </div>
-                );
-              }
+                      </div>
+                    );
+                  }
 
-              if (field.coreKey === "description") {
-                return (
-                  <div key={field.id} className="space-y-1.5">
+                  if (field.coreKey === "description") {
+                    return (
+                      <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                     {label}
                     {field.type === "rich_text" ? (
                       <RichTextEditor
@@ -789,13 +889,13 @@ function ProjectFormDialog({
                       />
                     )}
                     {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
-                  </div>
-                );
-              }
+                      </div>
+                    );
+                  }
 
-              if (field.coreKey === "categoryId") {
-                return (
-                  <div key={field.id} className="space-y-1.5">
+                  if (field.coreKey === "categoryId") {
+                    return (
+                      <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                     {label}
                     <Select
                       value={categoryId || "none"}
@@ -814,13 +914,13 @@ function ProjectFormDialog({
                       </SelectContent>
                     </Select>
                     {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
-                  </div>
-                );
-              }
+                      </div>
+                    );
+                  }
 
-              if (field.coreKey === "status") {
-                return (
-                  <div key={field.id} className="space-y-1.5">
+                  if (field.coreKey === "status") {
+                    return (
+                      <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                     {label}
                     <Select value={status} onValueChange={(value) => setStatus(value ?? "active")}>
                       <SelectTrigger className="w-full">
@@ -835,14 +935,14 @@ function ProjectFormDialog({
                       </SelectContent>
                     </Select>
                     {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
-                  </div>
-                );
-              }
+                      </div>
+                    );
+                  }
 
-              if (field.coreKey === "startDate" || field.coreKey === "endDate") {
-                const isStart = field.coreKey === "startDate";
-                return (
-                  <div key={field.id} className="space-y-1.5">
+                  if (field.coreKey === "startDate" || field.coreKey === "endDate") {
+                    const isStart = field.coreKey === "startDate";
+                    return (
+                      <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                     {label}
                     <Input
                       type="date"
@@ -852,19 +952,19 @@ function ProjectFormDialog({
                       }
                     />
                     {field.helpText ? <p className="text-xs text-slate-500">{field.helpText}</p> : null}
-                  </div>
-                );
-              }
-            }
+                      </div>
+                    );
+                  }
+                }
 
-            const value = customData[field.key];
-            const descriptionText = field.helpText ? (
-              <p className="text-xs text-slate-500">{field.helpText}</p>
-            ) : null;
+                const value = customData[field.key];
+                const descriptionText = field.helpText ? (
+                  <p className="text-xs text-slate-500">{field.helpText}</p>
+                ) : null;
 
-            if (field.type === "rich_text") {
-              return (
-                <div key={field.id} className="space-y-1.5">
+                if (field.type === "rich_text") {
+                  return (
+                    <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                   {label}
                   <RichTextEditor
                     value={typeof value === "string" ? value : ""}
@@ -874,13 +974,13 @@ function ProjectFormDialog({
                     disabled={submitting}
                   />
                   {descriptionText}
-                </div>
-              );
-            }
+                    </div>
+                  );
+                }
 
-            if (field.type === "textarea") {
-              return (
-                <div key={field.id} className="space-y-1.5">
+                if (field.type === "textarea") {
+                  return (
+                    <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                   {label}
                   <Textarea
                     rows={4}
@@ -889,13 +989,13 @@ function ProjectFormDialog({
                     placeholder={field.placeholder || ""}
                   />
                   {descriptionText}
-                </div>
-              );
-            }
+                    </div>
+                  );
+                }
 
-            if (field.type === "select") {
-              return (
-                <div key={field.id} className="space-y-1.5">
+                if (field.type === "select") {
+                  return (
+                    <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                   {label}
                   <Select
                     value={typeof value === "string" && value ? value : "none"}
@@ -917,14 +1017,14 @@ function ProjectFormDialog({
                     </SelectContent>
                   </Select>
                   {descriptionText}
-                </div>
-              );
-            }
+                    </div>
+                  );
+                }
 
-            if (field.type === "multiselect") {
-              const selected = Array.isArray(value) ? value.map((item) => String(item)) : [];
-              return (
-                <div key={field.id} className="space-y-1.5">
+                if (field.type === "multiselect") {
+                  const selected = Array.isArray(value) ? value.map((item) => String(item)) : [];
+                  return (
+                    <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                   {label}
                   <div className="grid gap-1 rounded-md border p-2 sm:grid-cols-2">
                     {field.options.map((option) => {
@@ -948,13 +1048,13 @@ function ProjectFormDialog({
                     })}
                   </div>
                   {descriptionText}
-                </div>
-              );
-            }
+                    </div>
+                  );
+                }
 
-            if (field.type === "checkbox") {
-              return (
-                <div key={field.id} className="space-y-1.5">
+                if (field.type === "checkbox") {
+                  return (
+                    <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                   <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
                     <input
                       type="checkbox"
@@ -965,16 +1065,16 @@ function ProjectFormDialog({
                     {isRequired ? <span className="text-red-500">*</span> : null}
                   </label>
                   {descriptionText}
-                </div>
-              );
-            }
+                    </div>
+                  );
+                }
 
-            if (field.type === "file") {
-              const files = Array.isArray(value)
-                ? (value as Array<Record<string, unknown>>)
-                : [];
-              return (
-                <div key={field.id} className="space-y-1.5 rounded-lg border p-3">
+                if (field.type === "file") {
+                  const files = Array.isArray(value)
+                    ? (value as Array<Record<string, unknown>>)
+                    : [];
+                  return (
+                    <div key={field.id} className={cn(spanClass, "space-y-1.5 rounded-lg border p-3")}>
                   {label}
                   <Input
                     type="file"
@@ -1102,25 +1202,25 @@ function ProjectFormDialog({
                     </div>
                   ) : null}
                   {descriptionText}
-                </div>
-              );
-            }
+                    </div>
+                  );
+                }
 
-            const inputType =
-              field.type === "number"
-                ? "number"
-                : field.type === "date"
-                ? "date"
-                : field.type === "datetime"
-                ? "datetime-local"
-                : field.type === "email"
-                ? "email"
-                : field.type === "url"
-                ? "url"
-                : "text";
+                const inputType =
+                  field.type === "number"
+                    ? "number"
+                    : field.type === "date"
+                    ? "date"
+                    : field.type === "datetime"
+                    ? "datetime-local"
+                    : field.type === "email"
+                    ? "email"
+                    : field.type === "url"
+                    ? "url"
+                    : "text";
 
-            return (
-              <div key={field.id} className="space-y-1.5">
+                return (
+                  <div key={field.id} className={cn(spanClass, "space-y-1.5")}>
                 {label}
                 <Input
                   type={inputType}
@@ -1129,9 +1229,11 @@ function ProjectFormDialog({
                   placeholder={field.placeholder || ""}
                 />
                 {descriptionText}
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
 
           {isEdit && canManageProject ? (
             <div className="pt-1 border-t">
@@ -3229,6 +3331,21 @@ export default function ProjectsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [projectFormFields, setProjectFormFields] = useState<ProjectFormField[]>(DEFAULT_PROJECT_FORM_FIELDS);
 
+  const loadProjectFormConfig = useCallback(async () => {
+    try {
+      const res = await fetch("/api/projects/form-config", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load company form config");
+      const data = (await res.json()) as { fields?: ProjectFormField[] };
+      setProjectFormFields(
+        Array.isArray(data.fields) && data.fields.length > 0
+          ? data.fields
+          : DEFAULT_PROJECT_FORM_FIELDS
+      );
+    } catch {
+      setProjectFormFields(DEFAULT_PROJECT_FORM_FIELDS);
+    }
+  }, []);
+
   const loadProjects = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = options?.silent ?? false;
@@ -3254,27 +3371,13 @@ export default function ProjectsPage() {
   }, [loadProjects]);
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/projects/form-config", { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to load company form config");
-        const data = (await res.json()) as { fields?: ProjectFormField[] };
-        if (!mounted) return;
-        setProjectFormFields(
-          Array.isArray(data.fields) && data.fields.length > 0
-            ? data.fields
-            : DEFAULT_PROJECT_FORM_FIELDS
-        );
-      } catch {
-        if (!mounted) return;
-        setProjectFormFields(DEFAULT_PROJECT_FORM_FIELDS);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    void loadProjectFormConfig();
+  }, [loadProjectFormConfig]);
+
+  useEffect(() => {
+    if (!createOpen && !editOpen) return;
+    void loadProjectFormConfig();
+  }, [createOpen, editOpen, loadProjectFormConfig]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
