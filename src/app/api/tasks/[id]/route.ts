@@ -14,6 +14,11 @@ import {
 } from "@/lib/task-access";
 import { isClosedStage, loadTaskStages } from "@/lib/workflow-config";
 import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
+import {
+  loadTaskFormFields,
+  sanitizeTaskCustomData,
+  type TaskFormField,
+} from "@/lib/task-form-config";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -381,6 +386,33 @@ function mergeAssigneesWithGroupMembers(
   return Array.from(map.entries()).map(([userId, canComment]) => ({ userId, canComment }));
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function mergeTaskCustomDataPreservingUnknown(
+  existing: unknown,
+  incoming: Record<string, unknown>,
+  fields: TaskFormField[]
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...asRecord(existing) };
+  const editableFieldKeys = new Set(
+    fields
+      .filter((field) => field.source === "custom" && field.enabled)
+      .map((field) => field.key)
+  );
+
+  for (const key of editableFieldKeys) {
+    delete merged[key];
+  }
+  for (const [key, value] of Object.entries(incoming)) {
+    merged[key] = value;
+  }
+
+  return merged;
+}
+
 async function loadExistingAssigneesForUpdate(taskId: string): Promise<TaskAssigneePermission[]> {
   try {
     const result = await prisma.task.findUnique({
@@ -528,6 +560,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
         status: true,
         priority: true,
         completedAt: true,
+        customData: true,
       },
     });
     if (!existing) {
@@ -547,6 +580,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       assignees,
       assigneeIds,
       groupIds: rawGroupIds,
+      customData,
     } = body as {
       title?: string;
       description?: string;
@@ -558,6 +592,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       assignees?: Array<{ userId?: string; canComment?: boolean }>;
       assigneeIds?: string[];
       groupIds?: string[];
+      customData?: unknown;
     };
 
     const hasAssigneePayload = assignees !== undefined || assigneeIds !== undefined;
@@ -614,6 +649,18 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       }
     }
 
+    let mergedCustomData: Prisma.InputJsonValue | undefined;
+    if (customData !== undefined) {
+      const fields = await loadTaskFormFields();
+      const normalizedCustomData = sanitizeTaskCustomData(customData, fields);
+      const merged = mergeTaskCustomDataPreservingUnknown(
+        existing.customData,
+        normalizedCustomData,
+        fields
+      );
+      mergedCustomData = merged as Prisma.InputJsonValue;
+    }
+
     const runUpdate = async (options: { includeCanComment: boolean; includeTaskGroups: boolean }) => {
       const { includeCanComment, includeTaskGroups } = options;
       await prisma.$transaction(async (tx) => {
@@ -634,6 +681,7 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
             ...(completedAt !== undefined && { completedAt }),
             ...(priority !== undefined && { priority }),
             ...(isPrivate !== undefined && { isPrivate }),
+            ...(mergedCustomData !== undefined && { customData: mergedCustomData }),
             ...(dueDate !== undefined && {
               dueDate: dueDate ? new Date(dueDate) : null,
             }),

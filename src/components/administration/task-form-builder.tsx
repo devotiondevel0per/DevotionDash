@@ -13,14 +13,74 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { GripVertical, Save } from "lucide-react";
-import type { TaskFormField, TaskFormPane, TaskFormRowColumns } from "@/lib/task-form-config";
+import { GripVertical, Plus, Save, Trash2 } from "lucide-react";
+import type {
+  TaskFileMetadataField,
+  TaskFormField,
+  TaskFormFieldType,
+  TaskFormPane,
+  TaskFormRowColumns,
+} from "@/lib/task-form-config";
 
 type Props = {
   canManage: boolean;
 };
 
-type TaskPaneRows = Record<TaskFormPane, Array<{ row: number; columns: TaskFormRowColumns; fields: TaskFormField[] }>>;
+const FIELD_TYPE_OPTIONS: Array<{ value: TaskFormFieldType; label: string }> = [
+  { value: "text", label: "Text" },
+  { value: "textarea", label: "Textarea" },
+  { value: "rich_text", label: "Rich Text" },
+  { value: "number", label: "Number" },
+  { value: "date", label: "Date" },
+  { value: "datetime", label: "Date & Time" },
+  { value: "checkbox", label: "Checkbox" },
+  { value: "select", label: "Dropdown (Single)" },
+  { value: "multiselect", label: "Dropdown (Multiple)" },
+  { value: "file", label: "File Upload" },
+  { value: "url", label: "URL" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+];
+
+const META_TYPE_OPTIONS: Array<{ value: TaskFileMetadataField["type"]; label: string }> = [
+  { value: "text", label: "Text" },
+  { value: "textarea", label: "Textarea" },
+  { value: "number", label: "Number" },
+  { value: "date", label: "Date" },
+  { value: "datetime", label: "Date & Time" },
+  { value: "checkbox", label: "Checkbox" },
+  { value: "select", label: "Dropdown" },
+  { value: "url", label: "URL" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+];
+
+const CUSTOM_TYPE_SET = new Set<TaskFormFieldType>(FIELD_TYPE_OPTIONS.map((entry) => entry.value));
+
+type PaneRows = Record<
+  TaskFormPane,
+  Array<{ row: number; columns: TaskFormRowColumns; fields: TaskFormField[] }>
+>;
+
+function normalizeKey(value: string, fallback: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "") || fallback
+  );
+}
+
+function nextFieldOrder(fields: TaskFormField[]) {
+  return fields.length > 0 ? Math.max(...fields.map((f) => f.order)) + 1 : 1;
+}
+
+function asOptionLines(lines: string) {
+  return lines
+    .split(/\r?\n/)
+    .map((line) => line.trim());
+}
 
 function clampRowColumns(value: unknown): TaskFormRowColumns {
   const parsed =
@@ -50,32 +110,51 @@ function normalizeRow(value: unknown, fallback: number) {
 }
 
 function normalizePane(value: unknown, fallback: TaskFormPane): TaskFormPane {
-  return value === "side" ? "side" : fallback;
+  if (value === "main" || value === "side") return value;
+  return fallback;
+}
+
+function isCoreTitleField(field: TaskFormField) {
+  return field.source === "core" && field.coreKey === "title";
 }
 
 export function TaskFormBuilder({ canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [deletingFieldId, setDeletingFieldId] = useState<string | null>(null);
   const [fields, setFields] = useState<TaskFormField[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   function normalizeLayoutFields(nextFields: TaskFormField[]) {
     return nextFields
       .map((field, index) => {
+        const pane = normalizePane(field.pane, "main");
         const row = normalizeRow(field.layoutRow, field.order || index + 1);
         const columns = clampRowColumns(field.layoutColumns);
         const span = clampSpan(field.layoutColSpan, columns);
-        const pane = normalizePane(field.pane, "main");
+        const isTitle = isCoreTitleField(field);
+        const type =
+          field.source === "custom"
+            ? CUSTOM_TYPE_SET.has(field.type)
+              ? field.type
+              : "text"
+            : field.type;
         return {
           ...field,
           pane,
+          type,
           layoutRow: row,
           layoutColumns: columns,
           layoutColSpan: span,
-          required: field.coreKey === "title" ? true : field.required,
-          enabled: field.coreKey === "title" ? true : field.enabled,
+          enabled: isTitle ? true : field.enabled,
+          required: isTitle ? true : field.required,
+          options:
+            type === "select" || type === "multiselect" ? field.options : [],
+          multiple: type === "file" ? field.multiple : false,
+          accept: type === "file" ? field.accept : "",
+          metadataFields: type === "file" ? field.metadataFields : [],
         };
       })
       .sort((a, b) => {
@@ -115,9 +194,12 @@ export function TaskFormBuilder({ canManage }: Props) {
     [fields, selectedId]
   );
 
-  const paneRows = useMemo<TaskPaneRows>(() => {
-    const buildPaneRows = (pane: TaskFormPane) => {
-      const rowMap = new Map<number, { row: number; columns: TaskFormRowColumns; fields: TaskFormField[] }>();
+  const paneRows = useMemo<PaneRows>(() => {
+    const buildRows = (pane: TaskFormPane) => {
+      const rowMap = new Map<
+        number,
+        { row: number; columns: TaskFormRowColumns; fields: TaskFormField[] }
+      >();
       for (const field of fields.filter((entry) => entry.pane === pane)) {
         const row = normalizeRow(field.layoutRow, field.order);
         const columns = clampRowColumns(field.layoutColumns);
@@ -135,10 +217,9 @@ export function TaskFormBuilder({ canManage }: Props) {
           fields: row.fields.sort((a, b) => a.order - b.order),
         }));
     };
-
     return {
-      main: buildPaneRows("main"),
-      side: buildPaneRows("side"),
+      main: buildRows("main"),
+      side: buildRows("side"),
     };
   }, [fields]);
 
@@ -188,19 +269,79 @@ export function TaskFormBuilder({ canManage }: Props) {
     setDirty(true);
   }
 
-  function moveFieldToPaneRowEnd(fieldId: string, pane: TaskFormPane, row: number) {
+  function moveFieldToRow(fieldId: string, pane: TaskFormPane, row: number) {
+    setFields((prev) =>
+      normalizeLayoutFields(
+        prev.map((field) => {
+          if (field.id !== fieldId) return field;
+          const normalizedRow = normalizeRow(row, field.order);
+          const rowColumns =
+            paneRows[pane].find((entry) => entry.row === normalizedRow)?.columns ??
+            clampRowColumns(field.layoutColumns);
+          return {
+            ...field,
+            pane,
+            layoutRow: normalizedRow,
+            layoutColumns: rowColumns,
+            layoutColSpan: clampSpan(field.layoutColSpan, rowColumns),
+          };
+        })
+      )
+    );
+    setDirty(true);
+  }
+
+  function addCustomField(targetPane: TaskFormPane = "main", targetRow?: number) {
+    const id = `custom_${Date.now().toString(36)}`;
+    const paneRowsForTarget = paneRows[targetPane];
+    const row =
+      targetRow ??
+      (paneRowsForTarget.length > 0 ? paneRowsForTarget[paneRowsForTarget.length - 1].row + 1 : 1);
+    const rowColumns = paneRowsForTarget.find((entry) => entry.row === row)?.columns ?? 1;
+    const newField: TaskFormField = {
+      id,
+      key: normalizeKey(id, id),
+      label: "New Field",
+      type: "text",
+      source: "custom",
+      coreKey: null,
+      enabled: true,
+      required: false,
+      order: nextFieldOrder(fields),
+      placeholder: "",
+      helpText: "",
+      pane: targetPane,
+      layoutRow: row,
+      layoutColumns: rowColumns,
+      layoutColSpan: 1,
+      options: [],
+      multiple: false,
+      accept: "",
+      metadataFields: [],
+    };
+    setFields((prev) => normalizeLayoutFields([...prev, newField]));
+    setSelectedId(id);
+    setDirty(true);
+  }
+
+  function moveFieldToRowEnd(fieldId: string, pane: TaskFormPane, row: number) {
     setFields((prev) => {
       const fromIndex = prev.findIndex((entry) => entry.id === fieldId);
       if (fromIndex < 0) return prev;
       const next = [...prev];
       const [item] = next.splice(fromIndex, 1);
       const rowFields = next.filter(
-        (entry) => normalizePane(entry.pane, "main") === pane && normalizeRow(entry.layoutRow, entry.order) === row
+        (entry) =>
+          normalizePane(entry.pane, "main") === pane &&
+          normalizeRow(entry.layoutRow, entry.order) === row
       );
       const rowColumns =
         rowFields.length > 0
           ? clampRowColumns(rowFields[0].layoutColumns)
-          : clampRowColumns(item.layoutColumns);
+          : (
+              paneRows[pane].find((entry) => entry.row === row)?.columns ??
+              clampRowColumns(item.layoutColumns)
+            );
       next.push({
         ...item,
         pane,
@@ -211,6 +352,69 @@ export function TaskFormBuilder({ canManage }: Props) {
       return normalizeLayoutFields(next);
     });
     setDirty(true);
+  }
+
+  async function removeField(id: string) {
+    const item = fields.find((entry) => entry.id === id);
+    if (!item || item.source === "core" || !canManage) return;
+
+    setDeletingFieldId(id);
+    try {
+      const prompt = `Remove "${item.label}" from task form? Existing saved values will stay preserved in records.`;
+      if (!window.confirm(prompt)) return;
+
+      setFields((prev) => {
+        const next = normalizeLayoutFields(prev.filter((entry) => entry.id !== id));
+        if (selectedId === id) {
+          setSelectedId(next[0]?.id ?? null);
+        }
+        return next;
+      });
+      setDirty(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove field");
+    } finally {
+      setDeletingFieldId(null);
+    }
+  }
+
+  function addMetaField(targetId: string) {
+    mutateField(targetId, (field) => {
+      const metaId = `meta_${Date.now().toString(36)}`;
+      return {
+        ...field,
+        metadataFields: [
+          ...field.metadataFields,
+          {
+            id: metaId,
+            key: normalizeKey(metaId, metaId),
+            label: "Metadata Field",
+            type: "text",
+            required: false,
+            placeholder: "",
+            options: [],
+          },
+        ],
+      };
+    });
+  }
+
+  function mutateMetaField(
+    targetId: string,
+    metaId: string,
+    updater: (field: TaskFileMetadataField) => TaskFileMetadataField
+  ) {
+    mutateField(targetId, (field) => ({
+      ...field,
+      metadataFields: field.metadataFields.map((meta) => (meta.id === metaId ? updater(meta) : meta)),
+    }));
+  }
+
+  function removeMetaField(targetId: string, metaId: string) {
+    mutateField(targetId, (field) => ({
+      ...field,
+      metadataFields: field.metadataFields.filter((meta) => meta.id !== metaId),
+    }));
   }
 
   async function save() {
@@ -234,99 +438,6 @@ export function TaskFormBuilder({ canManage }: Props) {
     }
   }
 
-  function renderPaneCanvas(pane: TaskFormPane, title: string, subtitle: string) {
-    const rows = paneRows[pane];
-    return (
-      <div className="space-y-2 rounded-md border bg-white p-2">
-        <div className="px-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</p>
-          <p className="text-[11px] text-slate-500">{subtitle}</p>
-        </div>
-        {rows.length === 0 ? (
-          <div className="rounded border border-dashed px-3 py-4 text-xs text-slate-500">
-            No fields in this pane.
-          </div>
-        ) : (
-          rows.map((row) => (
-            <div
-              key={`${pane}-row-${row.row}`}
-              className="rounded border bg-slate-50 p-2"
-              onDragOver={(event) => {
-                if (!canManage) return;
-                event.preventDefault();
-              }}
-              onDrop={() => {
-                if (!canManage || !draggingId) return;
-                moveFieldToPaneRowEnd(draggingId, pane, row.row);
-                setDraggingId(null);
-              }}
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-slate-600">Row {row.row}</p>
-                <Select
-                  value={String(row.columns)}
-                  onValueChange={(value) => setRowColumns(pane, row.row, clampRowColumns(value))}
-                  disabled={!canManage}
-                >
-                  <SelectTrigger className="h-8 w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 Column</SelectItem>
-                    <SelectItem value="2">2 Columns</SelectItem>
-                    <SelectItem value="3">3 Columns</SelectItem>
-                    <SelectItem value="4">4 Columns</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div
-                className="grid gap-2"
-                style={{ gridTemplateColumns: `repeat(${row.columns}, minmax(0, 1fr))` }}
-              >
-                {row.fields.map((field) => {
-                  const span = clampSpan(field.layoutColSpan, row.columns);
-                  return (
-                    <div
-                      key={field.id}
-                      draggable={canManage}
-                      onDragStart={() => setDraggingId(field.id)}
-                      onDragEnd={() => setDraggingId(null)}
-                      onDragOver={(event) => {
-                        if (!canManage) return;
-                        event.preventDefault();
-                      }}
-                      onDrop={() => {
-                        if (!canManage || !draggingId) return;
-                        reorder(draggingId, field.id);
-                        setDraggingId(null);
-                      }}
-                      onClick={() => setSelectedId(field.id)}
-                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${
-                        selectedId === field.id
-                          ? "border-[#AA8038] bg-[#fff9ee]"
-                          : "border-slate-200 bg-white hover:border-[#AA8038]/40"
-                      }`}
-                      style={{ gridColumn: `span ${span} / span ${span}` }}
-                    >
-                      <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-slate-700">{field.label}</p>
-                        <p className="text-[11px] text-slate-500">{field.coreKey} | span {span}</p>
-                      </div>
-                      {!field.enabled ? (
-                        <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-700">Off</span>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <Card>
@@ -342,26 +453,172 @@ export function TaskFormBuilder({ canManage }: Props) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Task Form Builder</CardTitle>
-        <Button
-          type="button"
-          size="sm"
-          className="bg-[#AA8038] text-white hover:bg-[#8f682d]"
-          onClick={() => void save()}
-          disabled={!canManage || saving || !dirty}
-        >
-          <Save className="mr-1 h-3.5 w-3.5" />
-          {saving ? "Saving..." : "Save"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => addCustomField()} disabled={!canManage || saving}>
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Add Field
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="bg-[#AA8038] text-white hover:bg-[#8f682d]"
+            onClick={() => void save()}
+            disabled={!canManage || saving || !dirty}
+          >
+            <Save className="mr-1 h-3.5 w-3.5" />
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="grid gap-4 lg:grid-cols-[460px_1fr]">
         <div className="space-y-3 rounded-lg border bg-slate-50 p-3">
           <p className="text-xs text-slate-500">
-            Drag fields between Main Form and Side Panel, then adjust rows/columns.
+            Drag fields between Main Form and Side Panel, then adjust row/column layout.
           </p>
-          {renderPaneCanvas("main", "Main Form", "Primary task fields and editor blocks")}
-          {renderPaneCanvas("side", "Side Panel", "Assignees and visibility controls")}
+          {(["main", "side"] as const).map((pane) => {
+            const rows = paneRows[pane];
+            const paneTitle = pane === "main" ? "Main Form" : "Side Panel";
+            const paneSubtitle =
+              pane === "main"
+                ? "Subject, details, and custom fields"
+                : "Assignees, privacy, and side controls";
+            return (
+              <div key={pane} className="space-y-2 rounded-md border bg-white p-2">
+                <div className="flex items-start justify-between gap-2 px-1">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{paneTitle}</p>
+                    <p className="text-[11px] text-slate-500">{paneSubtitle}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => addCustomField(pane)}
+                    disabled={!canManage || saving}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Field
+                  </Button>
+                </div>
+                {rows.length === 0 ? (
+                  <div className="rounded border border-dashed px-3 py-4 text-xs text-slate-500">
+                    No fields in this pane.
+                  </div>
+                ) : (
+                  <div className="max-h-[34vh] space-y-3 overflow-auto pr-1">
+                    {rows.map((row) => (
+                      <div
+                        key={`${pane}-row-${row.row}`}
+                        className="rounded-md border bg-slate-50 p-2"
+                        onDragOver={(event) => {
+                          if (!canManage) return;
+                          event.preventDefault();
+                        }}
+                        onDrop={() => {
+                          if (!canManage || !draggingId) return;
+                          moveFieldToRowEnd(draggingId, pane, row.row);
+                          setDraggingId(null);
+                        }}
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Row {row.row}</p>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={String(row.columns)}
+                              onValueChange={(value) => setRowColumns(pane, row.row, clampRowColumns(value))}
+                              disabled={!canManage}
+                            >
+                              <SelectTrigger className="h-8 w-32">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">1 Column</SelectItem>
+                                <SelectItem value="2">2 Columns</SelectItem>
+                                <SelectItem value="3">3 Columns</SelectItem>
+                                <SelectItem value="4">4 Columns</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8"
+                              onClick={() => addCustomField(pane, row.row)}
+                              disabled={!canManage || saving}
+                            >
+                              <Plus className="mr-1 h-3.5 w-3.5" />
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+                        <div
+                          className="grid gap-2"
+                          style={{ gridTemplateColumns: `repeat(${row.columns}, minmax(0, 1fr))` }}
+                        >
+                          {row.fields.map((field) => {
+                            const span = clampSpan(field.layoutColSpan, row.columns);
+                            return (
+                              <div
+                                key={field.id}
+                                draggable={canManage}
+                                onDragStart={() => setDraggingId(field.id)}
+                                onDragEnd={() => setDraggingId(null)}
+                                onDragOver={(event) => {
+                                  if (!canManage) return;
+                                  event.preventDefault();
+                                }}
+                                onDrop={() => {
+                                  if (!canManage || !draggingId) return;
+                                  reorder(draggingId, field.id);
+                                  setDraggingId(null);
+                                }}
+                                onClick={() => setSelectedId(field.id)}
+                                className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${
+                                  selectedId === field.id
+                                    ? "border-[#AA8038] bg-[#fff9ee]"
+                                    : "border-slate-200 bg-white hover:border-[#AA8038]/40"
+                                }`}
+                                style={{ gridColumn: `span ${span} / span ${span}` }}
+                              >
+                                <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-medium text-slate-700">{field.label}</p>
+                                  <p className="text-[11px] text-slate-500">
+                                    {field.source === "core" ? "Core" : "Custom"} | {field.type} | span {span}
+                                  </p>
+                                </div>
+                                {!field.enabled ? (
+                                  <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-700">Off</span>
+                                ) : null}
+                                {field.required ? (
+                                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">Req</span>
+                                ) : null}
+                                {field.source === "custom" ? (
+                                  <button
+                                    type="button"
+                                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void removeField(field.id);
+                                    }}
+                                    disabled={!canManage || deletingFieldId === field.id}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-
         {selectedField ? (
           <div className="space-y-4 rounded-lg border p-4">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -377,7 +634,16 @@ export function TaskFormBuilder({ canManage }: Props) {
               </div>
               <div className="space-y-1.5">
                 <Label>Field Key</Label>
-                <Input value={selectedField.key} disabled />
+                <Input
+                  value={selectedField.key}
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      key: normalizeKey(event.target.value, field.key),
+                    }))
+                  }
+                  disabled={!canManage || selectedField.source === "core"}
+                />
               </div>
             </div>
 
@@ -409,35 +675,23 @@ export function TaskFormBuilder({ canManage }: Props) {
                   type="number"
                   min={1}
                   value={normalizeRow(selectedField.layoutRow, selectedField.order)}
-                  onChange={(event) =>
-                    mutateField(selectedField.id, (field) => ({
-                      ...field,
-                      layoutRow: normalizeRow(event.target.value, field.order),
-                    }))
-                  }
+                  onChange={(event) => {
+                    const nextRow = normalizeRow(event.target.value, selectedField.order);
+                    moveFieldToRow(selectedField.id, selectedField.pane, nextRow);
+                  }}
                   disabled={!canManage}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>Type</Label>
-                <Input value={selectedField.type} disabled />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Columns In Row</Label>
                 <Select
                   value={String(clampRowColumns(selectedField.layoutColumns))}
                   onValueChange={(value) =>
-                    mutateField(selectedField.id, (field) => {
-                      const rowColumns = clampRowColumns(value);
-                      return {
-                        ...field,
-                        layoutColumns: rowColumns,
-                        layoutColSpan: clampSpan(field.layoutColSpan, rowColumns),
-                      };
-                    })
+                    setRowColumns(
+                      selectedField.pane,
+                      normalizeRow(selectedField.layoutRow, selectedField.order),
+                      clampRowColumns(value)
+                    )
                   }
                   disabled={!canManage}
                 >
@@ -455,7 +709,9 @@ export function TaskFormBuilder({ canManage }: Props) {
               <div className="space-y-1.5">
                 <Label>Field Span</Label>
                 <Select
-                  value={String(clampSpan(selectedField.layoutColSpan, clampRowColumns(selectedField.layoutColumns)))}
+                  value={String(
+                    clampSpan(selectedField.layoutColSpan, clampRowColumns(selectedField.layoutColumns))
+                  )}
                   onValueChange={(value) =>
                     mutateField(selectedField.id, (field) => {
                       const rowColumns = clampRowColumns(field.layoutColumns);
@@ -485,6 +741,53 @@ export function TaskFormBuilder({ canManage }: Props) {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Type</Label>
+                {selectedField.source === "custom" ? (
+                  <Select
+                    value={selectedField.type}
+                    onValueChange={(value) =>
+                      mutateField(selectedField.id, (field) => ({
+                        ...field,
+                        type: value as TaskFormFieldType,
+                        options:
+                          value === "select" || value === "multiselect" ? field.options : [],
+                        metadataFields: value === "file" ? field.metadataFields : [],
+                      }))
+                    }
+                    disabled={!canManage}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIELD_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={selectedField.type} disabled />
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Placeholder</Label>
+                <Input
+                  value={selectedField.placeholder}
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      placeholder: event.target.value,
+                    }))
+                  }
+                  disabled={!canManage}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
               <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
                 <input
                   type="checkbox"
@@ -492,16 +795,16 @@ export function TaskFormBuilder({ canManage }: Props) {
                   onChange={(event) =>
                     mutateField(selectedField.id, (field) => ({
                       ...field,
-                      enabled: field.coreKey === "title" ? true : event.target.checked,
+                      enabled: isCoreTitleField(field) ? true : event.target.checked,
                       required:
-                        field.coreKey === "title"
+                        isCoreTitleField(field)
                           ? true
                           : event.target.checked
                             ? field.required
                             : false,
                     }))
                   }
-                  disabled={!canManage || selectedField.coreKey === "title"}
+                  disabled={!canManage || isCoreTitleField(selectedField)}
                 />
                 Enabled
               </label>
@@ -512,14 +815,37 @@ export function TaskFormBuilder({ canManage }: Props) {
                   onChange={(event) =>
                     mutateField(selectedField.id, (field) => ({
                       ...field,
-                      required: field.coreKey === "title" ? true : event.target.checked,
-                      enabled: field.coreKey === "title" ? true : (event.target.checked ? true : field.enabled),
+                      required: isCoreTitleField(field) ? true : event.target.checked,
+                      enabled:
+                        isCoreTitleField(field)
+                          ? true
+                          : event.target.checked
+                            ? true
+                            : field.enabled,
                     }))
                   }
-                  disabled={!canManage || selectedField.coreKey === "title"}
+                  disabled={!canManage || isCoreTitleField(selectedField)}
                 />
                 Required
               </label>
+              {selectedField.type === "file" ? (
+                <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedField.multiple}
+                    onChange={(event) =>
+                      mutateField(selectedField.id, (field) => ({
+                        ...field,
+                        multiple: event.target.checked,
+                      }))
+                    }
+                    disabled={!canManage}
+                  />
+                  Multi Upload
+                </label>
+              ) : (
+                <div />
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -532,14 +858,157 @@ export function TaskFormBuilder({ canManage }: Props) {
                 disabled={!canManage}
               />
             </div>
+
+            {(selectedField.type === "select" || selectedField.type === "multiselect") && (
+              <div className="space-y-1.5">
+                <Label>Options (one per line)</Label>
+                <textarea
+                  className="min-h-28 w-full rounded-md border px-2 py-2 text-sm"
+                  value={selectedField.options.join("\n")}
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      options: asOptionLines(event.target.value),
+                    }))
+                  }
+                  disabled={!canManage}
+                />
+              </div>
+            )}
+
+            {selectedField.type === "file" && (
+              <div className="space-y-3 rounded-lg border bg-slate-50 p-3">
+                <div className="space-y-1.5">
+                  <Label>Accepted file types (optional)</Label>
+                  <Input
+                    value={selectedField.accept}
+                    onChange={(event) =>
+                      mutateField(selectedField.id, (field) => ({ ...field, accept: event.target.value }))
+                    }
+                    placeholder="e.g. .pdf,.docx,image/*"
+                    disabled={!canManage}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-slate-700">File Metadata Fields</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addMetaField(selectedField.id)}
+                    disabled={!canManage}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add Metadata Field
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {selectedField.metadataFields.length === 0 ? (
+                    <p className="text-xs text-slate-500">No metadata fields configured.</p>
+                  ) : (
+                    selectedField.metadataFields.map((meta) => (
+                      <div key={meta.id} className="space-y-2 rounded border bg-white p-2">
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <Input
+                            value={meta.label}
+                            onChange={(event) =>
+                              mutateMetaField(selectedField.id, meta.id, (entry) => ({
+                                ...entry,
+                                label: event.target.value,
+                              }))
+                            }
+                            placeholder="Label"
+                            disabled={!canManage}
+                          />
+                          <Input
+                            value={meta.key}
+                            onChange={(event) =>
+                              mutateMetaField(selectedField.id, meta.id, (entry) => ({
+                                ...entry,
+                                key: normalizeKey(event.target.value, entry.key),
+                              }))
+                            }
+                            placeholder="Key"
+                            disabled={!canManage}
+                          />
+                          <Select
+                            value={meta.type}
+                            onValueChange={(value) =>
+                              mutateMetaField(selectedField.id, meta.id, (entry) => ({
+                                ...entry,
+                                type: value as TaskFileMetadataField["type"],
+                                options: value === "select" ? entry.options : [],
+                              }))
+                            }
+                            disabled={!canManage}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {META_TYPE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="flex items-center gap-2 text-xs text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={meta.required}
+                              onChange={(event) =>
+                                mutateMetaField(selectedField.id, meta.id, (entry) => ({
+                                  ...entry,
+                                  required: event.target.checked,
+                                }))
+                              }
+                              disabled={!canManage}
+                            />
+                            Required
+                          </label>
+                          <button
+                            type="button"
+                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            onClick={() => removeMetaField(selectedField.id, meta.id)}
+                            disabled={!canManage}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {meta.type === "select" ? (
+                          <textarea
+                            className="min-h-20 w-full rounded border px-2 py-2 text-xs"
+                            value={meta.options.join("\n")}
+                            onChange={(event) =>
+                              mutateMetaField(selectedField.id, meta.id, (entry) => ({
+                                ...entry,
+                                options: asOptionLines(event.target.value),
+                              }))
+                            }
+                            placeholder="Options (one per line)"
+                            disabled={!canManage}
+                          />
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-lg border p-4 text-sm text-slate-500">
-            Select a field from the canvas to edit configuration.
+            Select a field from the left panel to edit configuration.
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
+
 

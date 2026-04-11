@@ -84,6 +84,7 @@ type TaskItem = {
   id: string;
   title: string;
   description: string | null;
+  customData?: Record<string, unknown> | null;
   type: TaskType;
   status: TaskStatus;
   priority: TaskPriority;
@@ -154,9 +155,26 @@ type TaskFormState = {
   dueDate: string;
   isPrivate: boolean;
   descriptionHtml: string;
+  customData: Record<string, unknown>;
 };
 
 type TaskFormPane = "main" | "side";
+type TaskFormFieldType =
+  | "text"
+  | "textarea"
+  | "rich_text"
+  | "number"
+  | "date"
+  | "datetime"
+  | "checkbox"
+  | "select"
+  | "multiselect"
+  | "file"
+  | "url"
+  | "email"
+  | "phone"
+  | "actions"
+  | "assignees";
 type TaskFormCoreFieldKey =
   | "title"
   | "type"
@@ -169,21 +187,36 @@ type TaskFormCoreFieldKey =
   | "assignees"
   | "privateTask";
 
+type TaskFileMetadataField = {
+  id: string;
+  key: string;
+  label: string;
+  type: Exclude<TaskFormFieldType, "file" | "rich_text" | "multiselect" | "actions" | "assignees">;
+  required: boolean;
+  placeholder: string;
+  options: string[];
+};
+
 type TaskFormConfigField = {
   id: string;
   key: string;
   label: string;
-  type: string;
-  source: "core";
-  coreKey: TaskFormCoreFieldKey;
+  type: TaskFormFieldType;
+  source: "core" | "custom";
+  coreKey: TaskFormCoreFieldKey | null;
   enabled: boolean;
   required: boolean;
   order: number;
+  placeholder: string;
   helpText: string;
   pane: TaskFormPane;
   layoutRow: number;
   layoutColumns: 1 | 2 | 3 | 4;
   layoutColSpan: number;
+  options: string[];
+  multiple: boolean;
+  accept: string;
+  metadataFields: TaskFileMetadataField[];
 };
 
 const VIEW_TABS: Array<{ id: TaskView; label: string }> = [
@@ -266,60 +299,186 @@ const EMPTY_FORM: TaskFormState = {
   dueDate: "",
   isPrivate: false,
   descriptionHtml: "",
+  customData: {},
 };
 
 const DEFAULT_TASK_FORM_FIELDS: TaskFormConfigField[] = [
-  { id: "core_title", key: "title", label: "Subject", type: "text", source: "core", coreKey: "title", enabled: true, required: true, order: 1, helpText: "", pane: "main", layoutRow: 1, layoutColumns: 1, layoutColSpan: 1 },
-  { id: "core_type", key: "type", label: "Type", type: "select", source: "core", coreKey: "type", enabled: true, required: true, order: 2, helpText: "", pane: "main", layoutRow: 2, layoutColumns: 2, layoutColSpan: 1 },
-  { id: "core_status", key: "status", label: "Status", type: "select", source: "core", coreKey: "status", enabled: true, required: true, order: 3, helpText: "", pane: "main", layoutRow: 2, layoutColumns: 2, layoutColSpan: 1 },
-  { id: "core_priority", key: "priority", label: "Priority", type: "select", source: "core", coreKey: "priority", enabled: true, required: true, order: 4, helpText: "", pane: "main", layoutRow: 3, layoutColumns: 2, layoutColSpan: 1 },
-  { id: "core_due_date", key: "dueDate", label: "Deadline", type: "date", source: "core", coreKey: "dueDate", enabled: true, required: false, order: 5, helpText: "", pane: "main", layoutRow: 3, layoutColumns: 2, layoutColSpan: 1 },
-  { id: "core_due_presets", key: "duePresets", label: "Deadline Presets", type: "actions", source: "core", coreKey: "duePresets", enabled: true, required: false, order: 6, helpText: "", pane: "main", layoutRow: 4, layoutColumns: 1, layoutColSpan: 1 },
-  { id: "core_description", key: "description", label: "Description", type: "rich_text", source: "core", coreKey: "description", enabled: true, required: false, order: 7, helpText: "", pane: "main", layoutRow: 5, layoutColumns: 1, layoutColSpan: 1 },
-  { id: "core_attachments", key: "attachments", label: "Attachments", type: "file", source: "core", coreKey: "attachments", enabled: true, required: false, order: 8, helpText: "", pane: "main", layoutRow: 6, layoutColumns: 1, layoutColSpan: 1 },
-  { id: "core_assignees", key: "assignees", label: "Assigned to", type: "assignees", source: "core", coreKey: "assignees", enabled: true, required: false, order: 9, helpText: "", pane: "side", layoutRow: 1, layoutColumns: 1, layoutColSpan: 1 },
-  { id: "core_private", key: "privateTask", label: "Private task", type: "checkbox", source: "core", coreKey: "privateTask", enabled: true, required: false, order: 10, helpText: "", pane: "side", layoutRow: 2, layoutColumns: 1, layoutColSpan: 1 },
+  { id: "core_title", key: "title", label: "Subject", type: "text", source: "core", coreKey: "title", enabled: true, required: true, order: 1, placeholder: "", helpText: "", pane: "main", layoutRow: 1, layoutColumns: 1, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
+  { id: "core_type", key: "type", label: "Type", type: "select", source: "core", coreKey: "type", enabled: true, required: true, order: 2, placeholder: "", helpText: "", pane: "main", layoutRow: 2, layoutColumns: 2, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
+  { id: "core_status", key: "status", label: "Status", type: "select", source: "core", coreKey: "status", enabled: true, required: true, order: 3, placeholder: "", helpText: "", pane: "main", layoutRow: 2, layoutColumns: 2, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
+  { id: "core_priority", key: "priority", label: "Priority", type: "select", source: "core", coreKey: "priority", enabled: true, required: true, order: 4, placeholder: "", helpText: "", pane: "main", layoutRow: 3, layoutColumns: 2, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
+  { id: "core_due_date", key: "dueDate", label: "Deadline", type: "date", source: "core", coreKey: "dueDate", enabled: true, required: false, order: 5, placeholder: "", helpText: "", pane: "main", layoutRow: 3, layoutColumns: 2, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
+  { id: "core_due_presets", key: "duePresets", label: "Deadline Presets", type: "actions", source: "core", coreKey: "duePresets", enabled: true, required: false, order: 6, placeholder: "", helpText: "", pane: "main", layoutRow: 4, layoutColumns: 1, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
+  { id: "core_description", key: "description", label: "Description", type: "rich_text", source: "core", coreKey: "description", enabled: true, required: false, order: 7, placeholder: "", helpText: "", pane: "main", layoutRow: 5, layoutColumns: 1, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
+  { id: "core_attachments", key: "attachments", label: "Attachments", type: "file", source: "core", coreKey: "attachments", enabled: true, required: false, order: 8, placeholder: "", helpText: "", pane: "main", layoutRow: 6, layoutColumns: 1, layoutColSpan: 1, options: [], multiple: true, accept: "", metadataFields: [] },
+  { id: "core_assignees", key: "assignees", label: "Assigned to", type: "assignees", source: "core", coreKey: "assignees", enabled: true, required: false, order: 9, placeholder: "", helpText: "", pane: "side", layoutRow: 1, layoutColumns: 1, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
+  { id: "core_private", key: "privateTask", label: "Private task", type: "checkbox", source: "core", coreKey: "privateTask", enabled: true, required: false, order: 10, placeholder: "", helpText: "", pane: "side", layoutRow: 2, layoutColumns: 1, layoutColSpan: 1, options: [], multiple: false, accept: "", metadataFields: [] },
 ];
 
+function normalizeFieldKey(input: unknown, fallback: string) {
+  const raw = typeof input === "string" ? input : fallback;
+  const normalized = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
+  return normalized || fallback;
+}
+
+function normalizeFieldOptions(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const options: string[] = [];
+  for (const item of input) {
+    if (typeof item !== "string") continue;
+    const value = item.trim().slice(0, 120);
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push(value);
+  }
+  return options;
+}
+
+function normalizeTaskMetadataFields(input: unknown): TaskFileMetadataField[] {
+  if (!Array.isArray(input)) return [];
+  const list: TaskFileMetadataField[] = [];
+  const seen = new Set<string>();
+  for (const entry of input) {
+    if (!entry || typeof entry !== "object") continue;
+    const src = entry as Record<string, unknown>;
+    const id = normalizeFieldKey(src.id, `meta_${list.length + 1}`);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const typeRaw = String(src.type ?? "text") as TaskFileMetadataField["type"];
+    const allowedMetaTypes: TaskFileMetadataField["type"][] = [
+      "text",
+      "textarea",
+      "number",
+      "date",
+      "datetime",
+      "checkbox",
+      "select",
+      "url",
+      "email",
+      "phone",
+    ];
+    const type = allowedMetaTypes.includes(typeRaw) ? typeRaw : "text";
+    list.push({
+      id,
+      key: normalizeFieldKey(src.key, id),
+      label: (typeof src.label === "string" ? src.label.trim() : "").slice(0, 120) || "Metadata",
+      type,
+      required: Boolean(src.required),
+      placeholder: (typeof src.placeholder === "string" ? src.placeholder.trim() : "").slice(0, 200),
+      options: type === "select" ? normalizeFieldOptions(src.options) : [],
+    });
+  }
+  return list;
+}
+
 function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
-  const allowedCoreKeys = new Set<TaskFormCoreFieldKey>(DEFAULT_TASK_FORM_FIELDS.map((field) => field.coreKey));
-  const byCore = new Map<TaskFormCoreFieldKey, TaskFormConfigField>();
+  const allowedTypes: TaskFormFieldType[] = [
+    "text",
+    "textarea",
+    "rich_text",
+    "number",
+    "date",
+    "datetime",
+    "checkbox",
+    "select",
+    "multiselect",
+    "file",
+    "url",
+    "email",
+    "phone",
+    "actions",
+    "assignees",
+  ];
+  const coreByKey = new Map(DEFAULT_TASK_FORM_FIELDS.map((field) => [field.coreKey, field]));
+  const seenIds = new Set<string>();
+  const seenKeys = new Set<string>();
+  const list: TaskFormConfigField[] = [];
+
   if (Array.isArray(input)) {
     for (const entry of input) {
       if (!entry || typeof entry !== "object") continue;
       const src = entry as Record<string, unknown>;
-      const coreKey = (src.coreKey ?? src.key)?.toString() as TaskFormCoreFieldKey | undefined;
-      if (!coreKey || !allowedCoreKeys.has(coreKey)) continue;
-      const fallback = DEFAULT_TASK_FORM_FIELDS.find((field) => field.coreKey === coreKey);
-      if (!fallback) continue;
-      const layoutColumnsRaw = Number.parseInt(String(src.layoutColumns ?? fallback.layoutColumns), 10);
-      const layoutColumns = Math.max(1, Math.min(4, Number.isFinite(layoutColumnsRaw) ? layoutColumnsRaw : fallback.layoutColumns)) as 1 | 2 | 3 | 4;
-      const layoutColSpanRaw = Number.parseInt(String(src.layoutColSpan ?? fallback.layoutColSpan), 10);
-      const layoutColSpan = Math.max(1, Math.min(layoutColumns, Number.isFinite(layoutColSpanRaw) ? layoutColSpanRaw : fallback.layoutColSpan));
-      const layoutRowRaw = Number.parseInt(String(src.layoutRow ?? fallback.layoutRow), 10);
-      const layoutRow = Math.max(1, Math.min(500, Number.isFinite(layoutRowRaw) ? layoutRowRaw : fallback.layoutRow));
-      const orderRaw = Number.parseInt(String(src.order ?? fallback.order), 10);
-      const order = Number.isFinite(orderRaw) ? Math.max(1, Math.min(500, orderRaw)) : fallback.order;
+      const source = src.source === "core" ? "core" : "custom";
+      const coreKey = source === "core" ? (src.coreKey as TaskFormCoreFieldKey | null) : null;
+      const fallbackCore = source === "core" ? coreByKey.get(coreKey) : undefined;
+
+      const id = normalizeFieldKey(
+        src.id,
+        source === "core" ? `core_${String(coreKey ?? "field")}` : `field_${list.length + 1}`
+      );
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+
+      const fallbackKey =
+        source === "core"
+          ? String(fallbackCore?.key ?? coreKey ?? id)
+          : `custom_${id}`;
+      const key = normalizeFieldKey(src.key, fallbackKey);
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+
+      const typeRaw = String(src.type ?? fallbackCore?.type ?? "text") as TaskFormFieldType;
+      const type = allowedTypes.includes(typeRaw) ? typeRaw : "text";
+      if (source === "custom" && (type === "actions" || type === "assignees")) continue;
+
+      const layoutColumnsRaw = Number.parseInt(String(src.layoutColumns ?? fallbackCore?.layoutColumns ?? 1), 10);
+      const layoutColumns = Math.max(1, Math.min(4, Number.isFinite(layoutColumnsRaw) ? layoutColumnsRaw : 1)) as 1 | 2 | 3 | 4;
+      const layoutColSpanRaw = Number.parseInt(String(src.layoutColSpan ?? fallbackCore?.layoutColSpan ?? 1), 10);
+      const layoutColSpan = Math.max(1, Math.min(layoutColumns, Number.isFinite(layoutColSpanRaw) ? layoutColSpanRaw : 1));
+      const layoutRowRaw = Number.parseInt(String(src.layoutRow ?? fallbackCore?.layoutRow ?? list.length + 1), 10);
+      const layoutRow = Math.max(1, Math.min(500, Number.isFinite(layoutRowRaw) ? layoutRowRaw : list.length + 1));
+      const orderRaw = Number.parseInt(String(src.order ?? fallbackCore?.order ?? list.length + 1), 10);
+      const order = Number.isFinite(orderRaw) ? Math.max(1, Math.min(500, orderRaw)) : list.length + 1;
       const pane = src.pane === "side" ? "side" : "main";
-      const required = coreKey === "title" ? true : Boolean(src.required);
-      const enabled = coreKey === "title" ? true : src.enabled !== false;
-      byCore.set(coreKey, {
-        ...fallback,
-        label: (typeof src.label === "string" ? src.label.trim() : "") || fallback.label,
+      const resolvedCoreKey = source === "core" ? (coreKey ?? fallbackCore?.coreKey ?? null) : null;
+      const required = resolvedCoreKey === "title" ? true : Boolean(src.required);
+      const enabled = resolvedCoreKey === "title" ? true : src.enabled !== false;
+
+      list.push({
+        id,
+        key,
+        label: (typeof src.label === "string" ? src.label.trim() : "").slice(0, 120) || fallbackCore?.label || "Field",
+        type,
+        source,
+        coreKey: resolvedCoreKey,
+        enabled,
+        required,
+        order,
+        placeholder: (typeof src.placeholder === "string" ? src.placeholder.trim() : "").slice(0, 200),
         helpText: (typeof src.helpText === "string" ? src.helpText.trim() : "").slice(0, 300),
         pane,
         layoutRow,
         layoutColumns,
         layoutColSpan,
-        order,
-        enabled,
-        required,
+        options:
+          type === "select" || type === "multiselect"
+            ? normalizeFieldOptions(src.options)
+            : [],
+        multiple: type === "file" ? Boolean(src.multiple) : false,
+        accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",
+        metadataFields: type === "file" ? normalizeTaskMetadataFields(src.metadataFields) : [],
       });
     }
   }
 
-  const merged = DEFAULT_TASK_FORM_FIELDS.map((field) => byCore.get(field.coreKey) ?? field);
-  return [...merged]
+  for (const coreField of DEFAULT_TASK_FORM_FIELDS) {
+    if (list.some((entry) => entry.source === "core" && entry.coreKey === coreField.coreKey)) continue;
+    list.push({
+      ...coreField,
+      options: [...coreField.options],
+      metadataFields: [],
+    });
+  }
+
+  return list
     .sort((a, b) => {
       if (a.pane !== b.pane) return a.pane === "main" ? -1 : 1;
       if (a.layoutRow !== b.layoutRow) return a.layoutRow - b.layoutRow;
@@ -480,6 +639,7 @@ function TaskModal({
   const [form, setForm] = useState<TaskFormState>(initial);
   const [saving, setSaving] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [uploadingFieldKey, setUploadingFieldKey] = useState<string | null>(null);
 
   function ensureCreatorAssignee(next: TaskFormState): TaskFormState {
     // For new tasks, creator must stay assigned by default.
@@ -495,6 +655,7 @@ function TaskModal({
     if (!open) return;
     setForm(ensureCreatorAssignee(initial));
     setFiles([]);
+    setUploadingFieldKey(null);
   }, [open, initial, meId]);
 
   const activeFormFields = useMemo(
@@ -542,44 +703,126 @@ function TaskModal({
     }
   }
 
-  async function submit() {
-    const preparedForm = ensureCreatorAssignee(form);
+  function updateCustomValue(key: string, value: unknown) {
+    setForm((prev) => ({
+      ...prev,
+      customData: { ...prev.customData, [key]: value },
+    }));
+  }
+
+  function removeCustomValue(key: string) {
+    setForm((prev) => {
+      const next = { ...prev.customData };
+      delete next[key];
+      return { ...prev, customData: next };
+    });
+  }
+
+  async function uploadTaskFormFile(field: TaskFormConfigField, file: File) {
+    setUploadingFieldKey(field.key);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/tasks/uploads", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { url?: string; fileName?: string; size?: number; mimeType?: string; error?: string }
+        | null;
+      if (!response.ok || !data?.url) {
+        throw new Error(data?.error ?? "Upload failed");
+      }
+      const entry = {
+        url: data.url,
+        fileName: data.fileName || file.name,
+        size: data.size ?? file.size,
+        mimeType: data.mimeType || file.type || "application/octet-stream",
+        metadata: {},
+      };
+      setForm((prev) => {
+        const currentRaw = prev.customData[field.key];
+        const current = Array.isArray(currentRaw) ? (currentRaw as Array<Record<string, unknown>>) : [];
+        const next = field.multiple ? [...current, entry] : [entry];
+        return {
+          ...prev,
+          customData: { ...prev.customData, [field.key]: next },
+        };
+      });
+      toast.success("File uploaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "File upload failed");
+    } finally {
+      setUploadingFieldKey(null);
+    }
+  }
+
+  function validateRequiredFields(preparedForm: TaskFormState) {
     const titleField = formFieldByCore.get("title");
     if ((titleField?.required ?? true) && !preparedForm.title.trim()) {
-      toast.error(`${titleField?.label ?? "Subject"} is required`);
-      return;
+      return `${titleField?.label ?? "Subject"} is required`;
     }
     const typeField = formFieldByCore.get("type");
-    if (typeField?.required && !preparedForm.type) {
-      toast.error(`${typeField.label} is required`);
-      return;
-    }
+    if (typeField?.required && !preparedForm.type) return `${typeField.label} is required`;
     const statusField = formFieldByCore.get("status");
-    if (statusField?.required && !preparedForm.status) {
-      toast.error(`${statusField.label} is required`);
-      return;
-    }
+    if (statusField?.required && !preparedForm.status) return `${statusField.label} is required`;
     const priorityField = formFieldByCore.get("priority");
-    if (priorityField?.required && !preparedForm.priority) {
-      toast.error(`${priorityField.label} is required`);
-      return;
-    }
+    if (priorityField?.required && !preparedForm.priority) return `${priorityField.label} is required`;
     const dueDateField = formFieldByCore.get("dueDate");
-    if (dueDateField?.required && !preparedForm.dueDate) {
-      toast.error(`${dueDateField.label} is required`);
-      return;
-    }
+    if (dueDateField?.required && !preparedForm.dueDate) return `${dueDateField.label} is required`;
     const descriptionField = formFieldByCore.get("description");
     if (
       descriptionField?.required &&
       !hasRichTextContent(normalizeRichText(preparedForm.descriptionHtml))
     ) {
-      toast.error(`${descriptionField.label} is required`);
-      return;
+      return `${descriptionField.label} is required`;
     }
     const assigneesField = formFieldByCore.get("assignees");
     if (assigneesField?.required && preparedForm.assignees.length === 0) {
-      toast.error(`${assigneesField.label} is required`);
+      return `${assigneesField.label} is required`;
+    }
+
+    for (const field of activeFormFields) {
+      if (!field.required || field.source !== "custom") continue;
+      const value = preparedForm.customData[field.key];
+      if (value === undefined || value === null || value === "") {
+        return `${field.label} is required`;
+      }
+      if (field.type === "multiselect" && (!Array.isArray(value) || value.length === 0)) {
+        return `${field.label} is required`;
+      }
+      if (field.type === "file" && (!Array.isArray(value) || value.length === 0)) {
+        return `${field.label} is required`;
+      }
+      if (field.type === "file" && Array.isArray(value) && value.length > 0) {
+        for (const [fileIndex, fileEntry] of value.entries()) {
+          const row =
+            fileEntry && typeof fileEntry === "object"
+              ? (fileEntry as Record<string, unknown>)
+              : {};
+          const meta =
+            row.metadata && typeof row.metadata === "object"
+              ? (row.metadata as Record<string, unknown>)
+              : {};
+          for (const metaField of field.metadataFields) {
+            if (!metaField.required) continue;
+            const metaValue = meta[metaField.key];
+            if (metaValue === undefined || metaValue === null || metaValue === "") {
+              return `${field.label}: ${metaField.label} is required for file #${fileIndex + 1}`;
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  async function submit() {
+    const preparedForm = ensureCreatorAssignee(form);
+    const requiredError = validateRequiredFields(preparedForm);
+    if (requiredError) {
+      toast.error(requiredError);
       return;
     }
 
@@ -595,6 +838,7 @@ function TaskModal({
         isPrivate: preparedForm.isPrivate,
         assignees: preparedForm.assignees,
         groupIds: preparedForm.groupIds,
+        customData: preparedForm.customData,
       };
 
       const response = await fetch(form.id ? `/api/tasks/${form.id}` : "/api/tasks", {
@@ -975,6 +1219,275 @@ function TaskModal({
             <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm((p) => ({ ...p, isPrivate: e.target.checked }))} />
             {field.label}
           </label>
+          {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+        </div>
+      );
+    }
+
+    if (field.source === "custom") {
+      const value = form.customData[field.key];
+
+      if (field.type === "rich_text") {
+        return (
+          <div className="space-y-1.5">
+            <Label>{label}</Label>
+            <RichTextEditor
+              value={typeof value === "string" ? value : ""}
+              onChange={(next) => updateCustomValue(field.key, normalizeRichText(next))}
+              placeholder={field.placeholder || "Enter details..."}
+              minHeight={180}
+              disabled={saving}
+            />
+            {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+          </div>
+        );
+      }
+
+      if (field.type === "textarea") {
+        return (
+          <div className="space-y-1.5">
+            <Label>{label}</Label>
+            <textarea
+              rows={4}
+              value={typeof value === "string" ? value : ""}
+              onChange={(event) => updateCustomValue(field.key, event.target.value)}
+              placeholder={field.placeholder || ""}
+              className="w-full rounded-md border px-3 py-2 text-sm"
+            />
+            {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+          </div>
+        );
+      }
+
+      if (field.type === "select") {
+        return (
+          <div className="space-y-1.5">
+            <Label>{label}</Label>
+            <Select
+              value={typeof value === "string" && value ? value : "none"}
+              onValueChange={(next) => {
+                if (next === "none") removeCustomValue(field.key);
+                else updateCustomValue(field.key, next);
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={field.placeholder || "Select option"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {field.options.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+          </div>
+        );
+      }
+
+      if (field.type === "multiselect") {
+        const selectedValues = Array.isArray(value) ? value.map((entry) => String(entry)) : [];
+        return (
+          <div className="space-y-1.5">
+            <Label>{label}</Label>
+            <div className="grid gap-1 rounded-md border p-2 sm:grid-cols-2">
+              {field.options.map((option) => {
+                const checked = selectedValues.includes(option);
+                return (
+                  <label key={option} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => {
+                        const next = event.target.checked
+                          ? [...selectedValues, option]
+                          : selectedValues.filter((item) => item !== option);
+                        if (next.length === 0) removeCustomValue(field.key);
+                        else updateCustomValue(field.key, next);
+                      }}
+                    />
+                    {option}
+                  </label>
+                );
+              })}
+            </div>
+            {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+          </div>
+        );
+      }
+
+      if (field.type === "checkbox") {
+        return (
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(value)}
+                onChange={(event) => updateCustomValue(field.key, event.target.checked)}
+              />
+              {field.label}
+              {field.required ? <span className="text-red-500">*</span> : null}
+            </label>
+            {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+          </div>
+        );
+      }
+
+      if (field.type === "file") {
+        const fileRows = Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [];
+        return (
+          <div className="space-y-1.5 rounded-lg border p-3">
+            <Label>{label}</Label>
+            <Input
+              type="file"
+              multiple={field.multiple}
+              accept={field.accept || undefined}
+              onChange={(event) => {
+                const picked = Array.from(event.target.files ?? []);
+                if (picked.length === 0) return;
+                void Promise.all(picked.map((file) => uploadTaskFormFile(field, file)));
+                event.currentTarget.value = "";
+              }}
+              disabled={uploadingFieldKey === field.key}
+            />
+            {uploadingFieldKey === field.key ? (
+              <p className="text-xs text-slate-500">Uploading...</p>
+            ) : null}
+            {fileRows.length > 0 ? (
+              <div className="space-y-2">
+                {fileRows.map((fileRow, fileIndex) => {
+                  const fileName = String(fileRow.fileName ?? "Uploaded file");
+                  const fileUrl = String(fileRow.url ?? "#");
+                  const metadata =
+                    fileRow.metadata && typeof fileRow.metadata === "object"
+                      ? (fileRow.metadata as Record<string, unknown>)
+                      : {};
+                  return (
+                    <div key={`${field.key}-${fileIndex}`} className="rounded border bg-slate-50 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <a className="truncate text-sm text-[#AA8038] hover:underline" href={fileUrl} target="_blank" rel="noreferrer">
+                          {fileName}
+                        </a>
+                        <button
+                          type="button"
+                          className="text-xs text-red-600 hover:underline"
+                          onClick={() => {
+                            const next = [...fileRows];
+                            next.splice(fileIndex, 1);
+                            if (next.length === 0) removeCustomValue(field.key);
+                            else updateCustomValue(field.key, next);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      {field.metadataFields.length > 0 ? (
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {field.metadataFields.map((metaField) => {
+                            const metaValue = metadata[metaField.key];
+                            const updateMeta = (nextValue: unknown) => {
+                              const nextFiles = [...fileRows];
+                              const current = { ...(nextFiles[fileIndex] ?? {}) };
+                              const currentMeta =
+                                current.metadata && typeof current.metadata === "object"
+                                  ? { ...(current.metadata as Record<string, unknown>) }
+                                  : {};
+                              if (nextValue === "" || nextValue === undefined || nextValue === null) {
+                                delete currentMeta[metaField.key];
+                              } else {
+                                currentMeta[metaField.key] = nextValue;
+                              }
+                              current.metadata = currentMeta;
+                              nextFiles[fileIndex] = current;
+                              updateCustomValue(field.key, nextFiles);
+                            };
+                            return (
+                              <div key={metaField.id} className="space-y-1">
+                                <Label className="text-xs">
+                                  {metaField.label}
+                                  {metaField.required ? <span className="ml-1 text-red-500">*</span> : null}
+                                </Label>
+                                {metaField.type === "checkbox" ? (
+                                  <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(metaValue)}
+                                      onChange={(event) => updateMeta(event.target.checked)}
+                                    />
+                                    Yes
+                                  </label>
+                                ) : metaField.type === "select" ? (
+                                  <Select
+                                    value={typeof metaValue === "string" && metaValue ? metaValue : "none"}
+                                    onValueChange={(next) => updateMeta(next === "none" ? "" : next)}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Select" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">None</SelectItem>
+                                      {metaField.options.map((option) => (
+                                        <SelectItem key={option} value={option}>
+                                          {option}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Input
+                                    type={
+                                      metaField.type === "number"
+                                        ? "number"
+                                        : metaField.type === "date"
+                                          ? "date"
+                                          : metaField.type === "datetime"
+                                            ? "datetime-local"
+                                            : "text"
+                                    }
+                                    value={typeof metaValue === "string" || typeof metaValue === "number" ? String(metaValue) : ""}
+                                    onChange={(event) => updateMeta(event.target.value)}
+                                    placeholder={metaField.placeholder || ""}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+            {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
+          </div>
+        );
+      }
+
+      const inputType =
+        field.type === "number"
+          ? "number"
+          : field.type === "date"
+            ? "date"
+            : field.type === "datetime"
+              ? "datetime-local"
+              : field.type === "email"
+                ? "email"
+                : field.type === "url"
+                  ? "url"
+                  : "text";
+
+      return (
+        <div className="space-y-1.5">
+          <Label>{label}</Label>
+          <Input
+            type={inputType}
+            value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
+            onChange={(event) => updateCustomValue(field.key, event.target.value)}
+            placeholder={field.placeholder || ""}
+          />
           {helpText ? <p className="text-xs text-slate-500">{helpText}</p> : null}
         </div>
       );
@@ -1890,6 +2403,10 @@ export default function TasksPage() {
         dueDate: toDateInput(detailedTask.dueDate),
         isPrivate: detailedTask.isPrivate,
         descriptionHtml: toHtml(detailedTask.description),
+        customData:
+          detailedTask.customData && typeof detailedTask.customData === "object"
+            ? (detailedTask.customData as Record<string, unknown>)
+            : {},
       });
       setFormOpen(true);
     } catch (error) {

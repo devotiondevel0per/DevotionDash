@@ -11,6 +11,7 @@ import { notifyTaskChange } from "@/lib/task-notifications";
 import { isMissingTaskAssigneeCanCommentColumn } from "@/lib/task-access";
 import { loadTaskStages, getDefaultStage, isClosedStage } from "@/lib/workflow-config";
 import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
+import { loadTaskFormFields, sanitizeTaskCustomData } from "@/lib/task-form-config";
 
 function isMissingTaskGroupAssignmentsTable(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -473,6 +474,7 @@ export async function POST(req: NextRequest) {
       assignees,
       assigneeIds,
       groupIds: rawGroupIds,
+      customData,
     } = body as {
       title: string;
       description?: string;
@@ -484,6 +486,7 @@ export async function POST(req: NextRequest) {
       assignees?: Array<{ userId?: string; canComment?: boolean }>;
       assigneeIds?: string[];
       groupIds?: string[];
+      customData?: unknown;
     };
 
     if (!title || typeof title !== "string" || title.trim() === "") {
@@ -501,6 +504,12 @@ export async function POST(req: NextRequest) {
       assignees,
       assigneeIds,
     });
+    const taskFormFields = await loadTaskFormFields();
+    const normalizedCustomData = sanitizeTaskCustomData(customData, taskFormFields);
+    const customDataValue: Prisma.InputJsonValue | undefined =
+      Object.keys(normalizedCustomData).length > 0
+        ? (normalizedCustomData as Prisma.InputJsonValue)
+        : undefined;
     const requestedGroupIds = normalizeTaskGroupIds(rawGroupIds);
 
     let resolvedGroupIds: string[] = [];
@@ -537,6 +546,7 @@ export async function POST(req: NextRequest) {
       status: statusToUse,
       priority: priority ?? "normal",
       isPrivate: isPrivate ?? false,
+      ...(customDataValue !== undefined ? { customData: customDataValue } : {}),
       dueDate: dueDate ? new Date(dueDate) : undefined,
       completedAt: isClosedStage(stages, statusToUse) ? new Date() : null,
       creatorId: accessResult.ctx.userId,

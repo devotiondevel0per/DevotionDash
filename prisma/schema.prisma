@@ -149,6 +149,7 @@ model Task {
   id          String         @id @default(cuid())
   title       String
   description String?        @db.Text
+  customData  Json?
   type        String         @default("task") // task, event, note
   status      String         @default("opened") // opened, completed, closed
   priority    String         @default("normal") // low, normal, high
