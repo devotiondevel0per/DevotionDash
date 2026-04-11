@@ -98,6 +98,8 @@ type Project = {
   status: string;
   startDate: string | null;
   endDate: string | null;
+  createdAt?: string;
+  updatedAt?: string;
   category: ProjectCategory | null;
   members: ProjectMember[];
   tasks?: Array<{ status: string }>;
@@ -2919,6 +2921,10 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
   const tasksCount = project.tasks?.length ?? project._count.tasks;
   const membersCount = project.members.length;
   const details = toText(project.description ?? "");
+  const managers = project.members
+    .filter((member) => member.role === "manager")
+    .map((member) => displayName(member.user))
+    .filter(Boolean);
 
   return (
     <Card
@@ -2967,13 +2973,41 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
             {tasksCount} task{tasksCount !== 1 ? "s" : ""}
           </span>
           <span className="flex items-center gap-1">
-            <List className="h-3 w-3" />
-            {project._count.phases} phase{project._count.phases !== 1 ? "s" : ""}
-          </span>
-          <span className="flex items-center gap-1">
             <Users className="h-3 w-3" />
             {membersCount} member{membersCount !== 1 ? "s" : ""}
           </span>
+        </div>
+
+        <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] text-slate-600">
+          <div className="grid grid-cols-1 gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-500">Managers</span>
+              <span className="truncate text-right font-medium text-slate-700">
+                {managers.length > 0 ? managers.slice(0, 2).join(", ") : "Unassigned"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1 text-slate-500">
+                <CalendarDays className="h-3 w-3" />
+                Start
+              </span>
+              <span className="font-medium text-slate-700">
+                {project.startDate ? formatDate(project.startDate) : "-"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-500">Created</span>
+              <span className="font-medium text-slate-700">
+                {project.createdAt ? formatDate(project.createdAt) : "-"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-500">Updated</span>
+              <span className="font-medium text-slate-700">
+                {project.updatedAt ? formatDate(project.updatedAt) : "-"}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center">
