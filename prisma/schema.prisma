@@ -72,6 +72,7 @@ model User {
   serviceDeskComments   ServiceDeskComment[]
   projects              ProjectMember[]
   projectTasks          ProjectTask[]
+  projectTaskAssignees  ProjectTaskAssignee[]
   projectTaskComments   ProjectTaskComment[]
   notifications         Notification[]
   groupMembers          GroupMember[]
@@ -854,9 +855,24 @@ model ProjectTask {
   project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   phase       ProjectPhase? @relation(fields: [phaseId], references: [id])
   assignee    User?         @relation(fields: [assigneeId], references: [id])
+  assignees   ProjectTaskAssignee[]
   comments    ProjectTaskComment[]
 
   @@map("project_tasks")
+}
+
+model ProjectTaskAssignee {
+  id            String      @id @default(cuid())
+  projectTaskId String
+  userId        String
+  canComment    Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  projectTask   ProjectTask @relation(fields: [projectTaskId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectTaskId, userId])
+  @@index([userId])
+  @@map("project_task_assignees")
 }
 
 model ProjectTaskComment {

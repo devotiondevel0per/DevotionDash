@@ -130,6 +130,11 @@ type ProjectTask = {
   canChangeStatus?: boolean;
   canDelete?: boolean;
   conversationAuthorEditDeleteWindowMinutes?: number;
+  assignees?: Array<{
+    userId: string;
+    canComment?: boolean;
+    user: { id: string; name: string; fullname: string; photoUrl: string | null };
+  }>;
   assignee: { id: string; name: string; fullname: string; photoUrl: string | null } | null;
   phase: { id: string; name: string } | null;
 };
@@ -467,11 +472,38 @@ function getNextTaskStageKey(stages: WorkflowStage[], status?: string | null): s
 }
 
 function normalizeProjectTask(task: ProjectTask): ProjectTask {
+  const normalizedAssignees = Array.isArray(task.assignees)
+    ? task.assignees
+        .map((entry) => ({
+          userId: entry.userId,
+          canComment: entry.canComment !== false,
+          user: entry.user,
+        }))
+        .filter((entry) => Boolean(entry.userId && entry.user?.id))
+    : [];
+  const primaryAssignee = normalizedAssignees[0]?.user ?? task.assignee ?? null;
   return {
     ...task,
     status: normalizeTaskStatus(task.status),
     allowAssigneeComments: task.allowAssigneeComments ?? true,
+    assignees: normalizedAssignees,
+    assignee: primaryAssignee,
   };
+}
+
+function getProjectTaskAssigneeUsers(task: ProjectTask) {
+  if (Array.isArray(task.assignees) && task.assignees.length > 0) {
+    return task.assignees.map((entry) => entry.user).filter(Boolean);
+  }
+  return task.assignee ? [task.assignee] : [];
+}
+
+function getProjectTaskAssigneeSummary(task: ProjectTask) {
+  const users = getProjectTaskAssigneeUsers(task);
+  if (users.length === 0) return "Unassigned";
+  const names = users.map((user) => displayName(user));
+  if (names.length === 1) return names[0];
+  return `${names[0]} +${names.length - 1}`;
 }
 
 function calcProgress(tasks: ProjectTask[], stages: WorkflowStage[]): number {
@@ -1158,12 +1190,18 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
   const [description, setDescription] = useState(normalizeRichText(existing?.description ?? ""));
   const [status, setStatus] = useState(resolveStatus(existing?.status));
   const [priority, setPriority] = useState(existing?.priority ?? "normal");
-  const [assigneeId, setAssigneeId] = useState(existing?.assignee?.id ?? "");
+  const [assignees, setAssignees] = useState<Array<{ userId: string; canComment: boolean }>>(
+    existing?.assignees?.length
+      ? existing.assignees.map((entry) => ({
+          userId: entry.userId,
+          canComment: entry.canComment !== false,
+        }))
+      : existing?.assignee
+        ? [{ userId: existing.assignee.id, canComment: existing.allowAssigneeComments ?? true }]
+        : []
+  );
   const [phaseId, setPhaseId] = useState(existing?.phase?.id ?? "");
   const [dueDate, setDueDate] = useState(existing?.dueDate ? existing.dueDate.slice(0, 10) : "");
-  const [allowAssigneeComments, setAllowAssigneeComments] = useState(
-    existing?.allowAssigneeComments ?? true
-  );
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1174,13 +1212,45 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
       setDescription(normalizeRichText(existing?.description ?? ""));
       setStatus(resolveStatus(existing?.status));
       setPriority(existing?.priority ?? "normal");
-      setAssigneeId(existing?.assignee?.id ?? "");
+      setAssignees(
+        existing?.assignees?.length
+          ? existing.assignees.map((entry) => ({
+              userId: entry.userId,
+              canComment: entry.canComment !== false,
+            }))
+          : existing?.assignee
+            ? [{ userId: existing.assignee.id, canComment: existing.allowAssigneeComments ?? true }]
+            : []
+      );
       setPhaseId(existing?.phase?.id ?? "");
       setDueDate(existing?.dueDate ? existing.dueDate.slice(0, 10) : "");
-      setAllowAssigneeComments(existing?.allowAssigneeComments ?? true);
       setConfirmDelete(false);
     }
   }, [open, existing, resolveStatus]);
+
+  const assigneeSet = useMemo(() => new Set(assignees.map((entry) => entry.userId)), [assignees]);
+  const assigneeCanCommentMap = useMemo(
+    () => new Map(assignees.map((entry) => [entry.userId, entry.canComment])),
+    [assignees]
+  );
+
+  function toggleAssignee(userId: string, checked: boolean) {
+    setAssignees((prev) => {
+      if (checked) {
+        if (prev.some((entry) => entry.userId === userId)) return prev;
+        return [...prev, { userId, canComment: true }];
+      }
+      return prev.filter((entry) => entry.userId !== userId);
+    });
+  }
+
+  function setAssigneeCommentAccess(userId: string, canComment: boolean) {
+    setAssignees((prev) =>
+      prev.map((entry) =>
+        entry.userId === userId ? { ...entry, canComment } : entry
+      )
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1192,10 +1262,9 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
         description: hasRichTextContent(description) ? normalizeRichText(description) : null,
         status,
         priority,
-        assigneeId: assigneeId || null,
+        assignees,
         phaseId: phaseId || null,
         dueDate: dueDate || null,
-        allowAssigneeComments,
       };
       const url = isEdit
         ? `/api/projects/${projectId}/tasks/${existing!.id}`
@@ -1295,18 +1364,6 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Assignee</Label>
-              <Select value={assigneeId || "unassigned"} onValueChange={(v) => setAssigneeId(v === "unassigned" ? "" : (v ?? ""))} items={{ "unassigned": "Unassigned", ...Object.fromEntries(members.map((m) => [m.user.id, displayName(m.user)])) }}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {members.map((m) => (
-                    <SelectItem key={m.user.id} value={m.user.id}>{displayName(m.user)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
               <Label>Phase</Label>
               <Select value={phaseId || "none"} onValueChange={(v) => setPhaseId(v === "none" ? "" : (v ?? ""))} items={{ "none": "No phase", ...Object.fromEntries(phases.map((p) => [p.id, p.name])) }}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="No phase" /></SelectTrigger>
@@ -1319,20 +1376,58 @@ function TaskDialog({ open, onClose, onSaved, onDeleted, projectId, stages, phas
               </Select>
             </div>
           </div>
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Assigned To</Label>
+              <span className="text-xs text-slate-500">
+                {assignees.length} selected
+              </span>
+            </div>
+            <div className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
+              {members.map((member) => {
+                const user = member.user;
+                const selected = assigneeSet.has(user.id);
+                return (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5"
+                  >
+                    <label className="flex min-w-0 flex-1 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[#AA8038]"
+                        checked={selected}
+                        onChange={(event) => toggleAssignee(user.id, event.target.checked)}
+                        disabled={submitting}
+                      />
+                      <span className="truncate text-sm text-slate-700">{displayName(user)}</span>
+                    </label>
+                    {selected ? (
+                      <Select
+                        value={assigneeCanCommentMap.get(user.id) === false ? "view" : "comment"}
+                        onValueChange={(value) => setAssigneeCommentAccess(user.id, value !== "view")}
+                      >
+                        <SelectTrigger className="h-7 w-[130px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="comment">Can Comment</SelectItem>
+                          <SelectItem value="view">View Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-slate-500">
+              Comment access is configured per assignee.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="t-due" className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />Due Date</Label>
             <Input id="t-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
-          <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-[#AA8038]"
-              checked={allowAssigneeComments}
-              onChange={(e) => setAllowAssigneeComments(e.target.checked)}
-              disabled={submitting}
-            />
-            Allow assignee to comment
-          </label>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(0)}>Today</Button>
             <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDuePreset(1)}>Tomorrow</Button>
@@ -1789,7 +1884,7 @@ function ProjectTaskDetailDialog({
           <div className="shrink-0 space-y-3 border-b bg-white px-6 py-4 text-sm">
             <div className="flex flex-wrap gap-4 text-xs text-slate-600">
               <span>Created: <span className="font-medium text-slate-800">{formatDate(task.createdAt)}</span></span>
-              <span>Assigned: <span className="font-medium text-slate-800">{task.assignee ? displayName(task.assignee) : "Unassigned"}</span></span>
+              <span>Assigned: <span className="font-medium text-slate-800">{getProjectTaskAssigneeSummary(task)}</span></span>
               <span>Phase: <span className="font-medium text-slate-800">{task.phase?.name ?? "—"}</span></span>
             </div>
             {task.description ? (
@@ -2469,7 +2564,7 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                         <TableHead className="w-28">Status</TableHead>
                         <TableHead className="w-24">Priority</TableHead>
                         <TableHead className="w-28">Created</TableHead>
-                        <TableHead className="w-36">Assignee</TableHead>
+                        <TableHead className="w-44">Assignees</TableHead>
                         <TableHead className="w-28">Phase</TableHead>
                         <TableHead className="w-28">Due Date</TableHead>
                         <TableHead className="w-10 pr-4"></TableHead>
@@ -2477,7 +2572,8 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                     </TableHeader>
                     <TableBody>
                       {tasks.map((task) => {
-                        const assigneeName = task.assignee ? displayName(task.assignee) : "Unassigned";
+                        const assigneeUsers = getProjectTaskAssigneeUsers(task);
+                        const assigneeName = getProjectTaskAssigneeSummary(task);
                         const canEditTaskItem = canEditProjectTask(task);
                         const canChangeStatusItem = canChangeProjectTaskStatus(task);
                         return (
@@ -2524,12 +2620,26 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                             </TableCell>
                             <TableCell className="text-xs text-gray-500">{formatDateTime(task.createdAt)}</TableCell>
                             <TableCell>
-                              {task.assignee ? (
+                              {assigneeUsers.length > 0 ? (
                                 <div className="flex items-center gap-1.5">
-                                  <Avatar className="h-6 w-6">
-                                    <AvatarFallback className="text-xs bg-gray-100 text-gray-600">{initials(assigneeName)}</AvatarFallback>
-                                  </Avatar>
-                                  <span className="text-sm text-gray-700 truncate max-w-20">{assigneeName}</span>
+                                  <div className="flex -space-x-1">
+                                    {assigneeUsers.slice(0, 3).map((assigneeUser) => {
+                                      const name = displayName(assigneeUser);
+                                      return (
+                                        <Avatar key={assigneeUser.id} className="h-6 w-6 border border-white">
+                                          <AvatarFallback className="text-[10px] bg-gray-100 text-gray-600">
+                                            {initials(name)}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      );
+                                    })}
+                                    {assigneeUsers.length > 3 ? (
+                                      <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border border-white bg-gray-200 px-1 text-[10px] font-medium text-gray-600">
+                                        +{assigneeUsers.length - 3}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <span className="text-sm text-gray-700 truncate max-w-24">{assigneeName}</span>
                                 </div>
                               ) : (
                                 <span className="text-xs text-gray-400">Unassigned</span>
@@ -2558,7 +2668,8 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                 ) : taskLayout === "grid" ? (
                   <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">
                     {tasks.map((task) => {
-                      const assigneeName = task.assignee ? displayName(task.assignee) : "Unassigned";
+                      const assigneeUsers = getProjectTaskAssigneeUsers(task);
+                      const assigneeName = getProjectTaskAssigneeSummary(task);
                       const canEditTaskItem = canEditProjectTask(task);
                       const canChangeStatusItem = canChangeProjectTaskStatus(task);
                       return (
@@ -2615,12 +2726,24 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                           </div>
                           <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
                             <div className="flex min-w-0 items-center gap-1.5">
-                              {task.assignee ? (
-                                <Avatar className="h-5 w-5">
-                                  <AvatarFallback className="text-[10px] bg-gray-100 text-gray-600">
-                                    {initials(assigneeName)}
-                                  </AvatarFallback>
-                                </Avatar>
+                              {assigneeUsers.length > 0 ? (
+                                <div className="flex -space-x-1">
+                                  {assigneeUsers.slice(0, 2).map((assigneeUser) => {
+                                    const name = displayName(assigneeUser);
+                                    return (
+                                      <Avatar key={assigneeUser.id} className="h-5 w-5 border border-white">
+                                        <AvatarFallback className="text-[9px] bg-gray-100 text-gray-600">
+                                          {initials(name)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                    );
+                                  })}
+                                  {assigneeUsers.length > 2 ? (
+                                    <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full border border-white bg-gray-200 px-1 text-[9px] font-medium text-gray-600">
+                                      +{assigneeUsers.length - 2}
+                                    </span>
+                                  ) : null}
+                                </div>
                               ) : null}
                               <span className="truncate">{assigneeName}</span>
                             </div>
@@ -2688,7 +2811,8 @@ function ProjectDetailView({ projectId, onBack, onEdit }: ProjectDetailViewProps
                                   Drop task here
                                 </p>
                               ) : stageTasks.map((task) => {
-                                const assigneeName = task.assignee ? displayName(task.assignee) : "Unassigned";
+                                const assigneeUsers = getProjectTaskAssigneeUsers(task);
+                                const assigneeName = getProjectTaskAssigneeSummary(task);
                                 const canEditTaskItem = canEditProjectTask(task);
                                 const canChangeStatusItem = canChangeProjectTaskStatus(task);
                                 return (
@@ -2966,45 +3090,49 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
       className="relative overflow-hidden hover:shadow-lg transition-all duration-200 cursor-pointer"
       onClick={onOpen}
     >
-      {canEditProject ? (
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="absolute right-3 top-3 z-10 h-8 w-8 bg-white/90"
-          onClick={(event) => {
-            event.stopPropagation();
-            onEdit();
-          }}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-      ) : null}
       <CardContent className="p-4">
-        <div className="mb-2 flex items-start justify-between gap-2 pr-10">
-          <div className="min-w-0 flex flex-1 items-start gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#AA8038]/30 bg-[#AA8038]/10 text-[11px] font-semibold text-[#8f682d]">
-              {companyMonogram}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="truncate text-sm font-semibold text-gray-900">{project.name}</h3>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600">
-                  <Building2 className="h-3 w-3" />
-                  {symbol || "No symbol"}
-                </span>
-                <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600">
-                  {code || "No code"}
-                </span>
+        <div className="mb-2 flex items-start gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#AA8038]/30 bg-[#AA8038]/10 text-[11px] font-semibold text-[#8f682d]">
+            {companyMonogram}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="line-clamp-2 break-words text-sm font-semibold leading-5 text-gray-900">
+                {project.name}
+              </h3>
+              <div className="flex shrink-0 items-center gap-1">
+                <Badge
+                  variant="secondary"
+                  className={cn("text-xs", STATUS_CONFIG[project.status]?.className ?? "bg-gray-100 text-gray-600")}
+                >
+                  {STATUS_CONFIG[project.status]?.label ?? project.status}
+                </Badge>
+                {canEditProject ? (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8 bg-white/90"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onEdit();
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                ) : null}
               </div>
             </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600">
+                <Building2 className="h-3 w-3" />
+                {symbol || "No symbol"}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600">
+                {code || "No code"}
+              </span>
+            </div>
           </div>
-          <Badge
-            variant="secondary"
-            className={cn("text-xs shrink-0", STATUS_CONFIG[project.status]?.className ?? "bg-gray-100 text-gray-600")}
-          >
-            {STATUS_CONFIG[project.status]?.label ?? project.status}
-          </Badge>
         </div>
 
         {details && (

@@ -8,7 +8,10 @@ import { loadProjectFormFields, sanitizeProjectCustomData } from "@/lib/project-
 import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
 import {
   canCurrentUserCommentOnProjectTask,
+  canCurrentUserViewProjectTask,
   isMissingProjectTaskAllowAssigneeCommentsColumn,
+  isMissingProjectTaskAssigneeCanCommentColumn,
+  isMissingProjectTaskAssigneesTable,
 } from "@/lib/project-task-access";
 import type { ProjectFormField } from "@/lib/project-form-config";
 
@@ -48,7 +51,13 @@ function mergeProjectCustomDataPreservingUnknown(
   return merged;
 }
 
-function projectTaskSelect(includeAllowAssigneeComments: boolean) {
+type TaskQueryFlags = {
+  includeAllowAssigneeComments: boolean;
+  includeTaskAssignees: boolean;
+  includeTaskAssigneeCanComment: boolean;
+};
+
+function projectTaskSelect(flags: TaskQueryFlags) {
   return {
     id: true,
     projectId: true,
@@ -61,23 +70,21 @@ function projectTaskSelect(includeAllowAssigneeComments: boolean) {
     dueDate: true,
     createdAt: true,
     updatedAt: true,
-    ...(includeAllowAssigneeComments ? { allowAssigneeComments: true } : {}),
+    ...(flags.includeAllowAssigneeComments ? { allowAssigneeComments: true } : {}),
     assignee: { select: { id: true, name: true, fullname: true, photoUrl: true } },
     phase: { select: { id: true, name: true } },
+    ...(flags.includeTaskAssignees
+      ? {
+          assignees: {
+            select: {
+              userId: true,
+              ...(flags.includeTaskAssigneeCanComment ? { canComment: true } : {}),
+              user: { select: { id: true, name: true, fullname: true, photoUrl: true } },
+            },
+          },
+        }
+      : {}),
   };
-}
-
-function canViewProjectTask(
-  task: { assigneeId: string | null },
-  userId: string,
-  access: {
-    isAdmin: boolean;
-    permissions: { projects: { manage: boolean } };
-  },
-  scope: { isManager: boolean }
-) {
-  if (access.isAdmin || access.permissions.projects.manage || scope.isManager) return true;
-  return task.assigneeId === userId;
 }
 
 export async function GET(
@@ -113,22 +120,42 @@ export async function GET(
     const conversationAuthorEditDeleteWindowMinutes =
       await getTaskConversationAuthorEditWindowMinutes();
 
-    let includeAllowAssigneeComments = true;
+    const flags: TaskQueryFlags = {
+      includeAllowAssigneeComments: true,
+      includeTaskAssignees: true,
+      includeTaskAssigneeCanComment: true,
+    };
     let tasks: Array<Record<string, unknown>> = [];
-    try {
-      tasks = await prisma.projectTask.findMany({
-        where: { projectId: id },
-        orderBy: { createdAt: "desc" },
-        select: projectTaskSelect(true),
-      });
-    } catch (error) {
-      if (!isMissingProjectTaskAllowAssigneeCommentsColumn(error)) throw error;
-      includeAllowAssigneeComments = false;
-      tasks = await prisma.projectTask.findMany({
-        where: { projectId: id },
-        orderBy: { createdAt: "desc" },
-        select: projectTaskSelect(false),
-      });
+    while (true) {
+      try {
+        tasks = await prisma.projectTask.findMany({
+          where: { projectId: id },
+          orderBy: { createdAt: "desc" },
+          select: projectTaskSelect(flags),
+        });
+        break;
+      } catch (error) {
+        if (
+          flags.includeAllowAssigneeComments &&
+          isMissingProjectTaskAllowAssigneeCommentsColumn(error)
+        ) {
+          flags.includeAllowAssigneeComments = false;
+          continue;
+        }
+        if (
+          flags.includeTaskAssigneeCanComment &&
+          isMissingProjectTaskAssigneeCanCommentColumn(error)
+        ) {
+          flags.includeTaskAssigneeCanComment = false;
+          continue;
+        }
+        if (isMissingProjectTaskAssigneesTable(error)) {
+          flags.includeTaskAssignees = false;
+          flags.includeTaskAssigneeCanComment = false;
+          continue;
+        }
+        throw error;
+      }
     }
 
     const canWriteTask = Boolean(
@@ -142,34 +169,70 @@ export async function GET(
     );
 
     const normalizedTasks = tasks
-      .filter((task) =>
-        canViewProjectTask(
-          { assigneeId: (task as { assigneeId: string | null }).assigneeId },
+      .filter((task) => {
+        const rawTask = task as {
+          assigneeId: string | null;
+          assignees?: Array<{ userId: string; canComment?: boolean }>;
+        };
+        const normalizedAssignees = Array.isArray(rawTask.assignees)
+          ? rawTask.assignees.map((entry) => ({
+              userId: entry.userId,
+              canComment: flags.includeTaskAssigneeCanComment ? entry.canComment !== false : true,
+            }))
+          : [];
+        return canCurrentUserViewProjectTask(
+          { assigneeId: rawTask.assigneeId, assignees: normalizedAssignees },
           accessResult.ctx.userId,
           accessResult.ctx.access,
           projectAccess.scope
-        )
-      )
+        );
+      })
       .map((task) => {
       const taskRecord = task as {
         id: string;
         assigneeId: string | null;
         allowAssigneeComments?: boolean;
+        assignees?: Array<{
+          userId: string;
+          canComment?: boolean;
+          user: { id: string; name: string; fullname: string; photoUrl: string | null };
+        }>;
+        assignee?: { id: string; name: string; fullname: string; photoUrl: string | null } | null;
       };
-      const canViewTask = canViewProjectTask(
-        { assigneeId: taskRecord.assigneeId },
+      const assignees = Array.isArray(taskRecord.assignees)
+        ? taskRecord.assignees.map((entry) => ({
+            userId: entry.userId,
+            canComment: flags.includeTaskAssigneeCanComment ? entry.canComment !== false : true,
+            user: entry.user,
+          }))
+        : taskRecord.assignee
+          ? [{
+              userId: taskRecord.assignee.id,
+              canComment: flags.includeAllowAssigneeComments
+                ? Boolean(taskRecord.allowAssigneeComments)
+                : true,
+              user: taskRecord.assignee,
+            }]
+          : [];
+      const assigneeId = assignees[0]?.userId ?? taskRecord.assigneeId;
+      const allowAssigneeComments = flags.includeAllowAssigneeComments
+        ? Boolean(taskRecord.allowAssigneeComments)
+        : true;
+      const canViewTask = canCurrentUserViewProjectTask(
+        { assigneeId, assignees },
         accessResult.ctx.userId,
         accessResult.ctx.access,
         projectAccess.scope
       );
-      const allowAssigneeComments = includeAllowAssigneeComments
-        ? Boolean(taskRecord.allowAssigneeComments)
-        : true;
       const canComment = canCurrentUserCommentOnProjectTask(
         {
           id: taskRecord.id,
-          assigneeId: taskRecord.assigneeId,
+          assigneeId,
           allowAssigneeComments,
+          assignees: assignees.map((entry) => ({
+            userId: entry.userId,
+            canComment: entry.canComment,
+          })),
         },
         accessResult.ctx.userId,
         accessResult.ctx.access
@@ -177,6 +240,9 @@ export async function GET(
 
       return {
         ...task,
+        assigneeId,
+        assignee: assignees[0]?.user ?? taskRecord.assignee ?? null,
+        assignees,
         allowAssigneeComments,
         canComment,
         canEditTask: canWriteTask && canViewTask,

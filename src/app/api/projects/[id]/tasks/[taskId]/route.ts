@@ -5,23 +5,22 @@ import { requireProjectWriteAccess, type ProjectScope } from "@/lib/project-acce
 import { loadProjectTaskStages } from "@/lib/workflow-config";
 import {
   canCurrentUserCommentOnProjectTask,
+  canCurrentUserViewProjectTask,
   isMissingProjectTaskAllowAssigneeCommentsColumn,
+  isMissingProjectTaskAssigneeCanCommentColumn,
+  isMissingProjectTaskAssigneesTable,
+  normalizeProjectTaskAssigneePermissions,
 } from "@/lib/project-task-access";
 import { getTaskConversationAuthorEditWindowMinutes } from "@/lib/task-conversation-policy";
 import type { UserAccess } from "@/lib/rbac";
 
 const VALID_TASK_PRIORITIES = new Set(["low", "normal", "high"]);
 
-async function buildTaskStatusNormalizer() {
-  const stages = await loadProjectTaskStages();
-  const validKeys = new Set(stages.map((s) => s.key));
-  return (value?: string | null): string | undefined => {
-    if (typeof value !== "string") return undefined;
-    const normalized = value.trim().toLowerCase().replace("-", "_");
-    if (!normalized) return undefined;
-    return validKeys.has(normalized) ? normalized : undefined;
-  };
-}
+type TaskQueryFlags = {
+  includeAllowAssigneeComments: boolean;
+  includeTaskAssignees: boolean;
+  includeTaskAssigneeCanComment: boolean;
+};
 
 function normalizeTaskPriority(value?: string | null): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -39,7 +38,18 @@ function normalizeOptionalId(value?: string | null): string | null | undefined {
   return normalized;
 }
 
-function projectTaskSelect(includeAllowAssigneeComments: boolean) {
+async function buildTaskStatusNormalizer() {
+  const stages = await loadProjectTaskStages();
+  const validKeys = new Set(stages.map((s) => s.key));
+  return (value?: string | null): string | undefined => {
+    if (typeof value !== "string") return undefined;
+    const normalized = value.trim().toLowerCase().replace("-", "_");
+    if (!normalized) return undefined;
+    return validKeys.has(normalized) ? normalized : undefined;
+  };
+}
+
+function projectTaskSelect(flags: TaskQueryFlags) {
   return {
     id: true,
     projectId: true,
@@ -52,11 +62,28 @@ function projectTaskSelect(includeAllowAssigneeComments: boolean) {
     dueDate: true,
     createdAt: true,
     updatedAt: true,
-    ...(includeAllowAssigneeComments ? { allowAssigneeComments: true } : {}),
+    ...(flags.includeAllowAssigneeComments ? { allowAssigneeComments: true } : {}),
     assignee: { select: { id: true, name: true, fullname: true, photoUrl: true } },
     phase: { select: { id: true, name: true } },
+    ...(flags.includeTaskAssignees
+      ? {
+          assignees: {
+            select: {
+              userId: true,
+              ...(flags.includeTaskAssigneeCanComment ? { canComment: true } : {}),
+              user: { select: { id: true, name: true, fullname: true, photoUrl: true } },
+            },
+          },
+        }
+      : {}),
   };
 }
+
+type RawTaskAssignee = {
+  userId: string;
+  canComment?: boolean;
+  user?: { id: string; name: string; fullname: string; photoUrl: string | null };
+};
 
 type ProjectTaskRow = {
   id: string;
@@ -73,16 +100,50 @@ type ProjectTaskRow = {
   allowAssigneeComments?: boolean;
   assignee: { id: string; name: string; fullname: string; photoUrl: string | null } | null;
   phase: { id: string; name: string } | null;
+  assignees?: RawTaskAssignee[];
 };
 
-type ProjectTaskNormalized = ProjectTaskRow & { allowAssigneeComments: boolean };
+type ProjectTaskNormalized = Omit<ProjectTaskRow, "allowAssigneeComments" | "assignees"> & {
+  allowAssigneeComments: boolean;
+  assignees: Array<{
+    userId: string;
+    canComment: boolean;
+    user: { id: string; name: string; fullname: string; photoUrl: string | null };
+  }>;
+};
 
-function toKnownProjectTask(raw: ProjectTaskRow, includeAllowAssigneeComments: boolean): ProjectTaskNormalized {
+function toKnownProjectTask(raw: ProjectTaskRow, flags: TaskQueryFlags): ProjectTaskNormalized {
+  const allowAssigneeComments = flags.includeAllowAssigneeComments
+    ? Boolean(raw.allowAssigneeComments)
+    : true;
+  const assignees = flags.includeTaskAssignees
+    ? (raw.assignees ?? [])
+        .map((entry) => {
+          const fallbackUser =
+            raw.assignee && raw.assignee.id === entry.userId ? raw.assignee : null;
+          const user = entry.user ?? fallbackUser;
+          if (!user) return null;
+          return {
+            userId: entry.userId,
+            canComment: flags.includeTaskAssigneeCanComment ? entry.canComment !== false : true,
+            user,
+          };
+        })
+        .filter((entry): entry is {
+          userId: string;
+          canComment: boolean;
+          user: { id: string; name: string; fullname: string; photoUrl: string | null };
+        } => entry !== null)
+    : raw.assignee
+      ? [{ userId: raw.assignee.id, canComment: allowAssigneeComments, user: raw.assignee }]
+      : [];
+
   return {
     ...raw,
-    allowAssigneeComments: includeAllowAssigneeComments
-      ? Boolean(raw.allowAssigneeComments)
-      : true,
+    allowAssigneeComments,
+    assignees,
+    assignee: assignees[0]?.user ?? raw.assignee,
+    assigneeId: assignees[0]?.userId ?? raw.assigneeId,
   };
 }
 
@@ -92,10 +153,12 @@ function computeTaskPermissions(
   access: UserAccess,
   scope: ProjectScope
 ) {
-  const canViewAllTasks = Boolean(
-    access.isAdmin || access.permissions.projects.manage || scope.isManager
+  const canViewTask = canCurrentUserViewProjectTask(
+    { assigneeId: task.assigneeId, assignees: task.assignees },
+    userId,
+    access,
+    scope
   );
-  const canViewTask = canViewAllTasks || task.assigneeId === userId;
   const canWriteTask = Boolean(
     (access.isAdmin || access.permissions.projects.write) &&
       scope.isMember &&
@@ -107,17 +170,24 @@ function computeTaskPermissions(
       id: task.id,
       assigneeId: task.assigneeId,
       allowAssigneeComments: task.allowAssigneeComments,
+      assignees: task.assignees.map((entry) => ({
+        userId: entry.userId,
+        canComment: entry.canComment,
+      })),
     },
     userId,
     access
   );
-
   return {
     canComment,
     canEditTask: canWriteTask,
     canChangeStatus: canWriteTask,
     canDelete,
   };
+}
+
+function isAllowAssigneeCommentsMissing(error: unknown) {
+  return isMissingProjectTaskAllowAssigneeCommentsColumn(error);
 }
 
 export async function PUT(
@@ -132,32 +202,35 @@ export async function PUT(
     const projectAccess = await requireProjectWriteAccess(accessResult.ctx, projectId);
     if (!projectAccess.ok) return projectAccess.response;
 
-    const existingTask = await prisma.projectTask.findFirst({
-      where: { id: taskId, projectId },
-      select: { id: true, assigneeId: true },
-    });
-    if (!existingTask) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-    const canViewAllTasks = Boolean(
-      accessResult.ctx.access.isAdmin ||
-        accessResult.ctx.access.permissions.projects.manage ||
-        projectAccess.scope.isManager
-    );
-    if (!canViewAllTasks && existingTask.assigneeId !== accessResult.ctx.userId) {
-      return NextResponse.json({ error: "Forbidden: task access denied" }, { status: 403 });
-    }
-
     const body = (await req.json()) as {
       title?: string;
       description?: string | null;
       status?: string;
       priority?: string;
       assigneeId?: string | null;
+      assignees?: unknown;
+      assigneeIds?: unknown;
       phaseId?: string | null;
       dueDate?: string | null;
       allowAssigneeComments?: boolean;
     };
+
+    const hasAssigneePayload =
+      body.assignees !== undefined ||
+      body.assigneeIds !== undefined ||
+      body.assigneeId !== undefined;
+    const normalizedAssignees = hasAssigneePayload
+      ? normalizeProjectTaskAssigneePermissions({
+          assignees: body.assignees,
+          assigneeIds: body.assigneeIds,
+          assigneeId: body.assigneeId ?? undefined,
+          allowAssigneeComments: body.allowAssigneeComments,
+        })
+      : [];
+    const primaryAssigneeId = hasAssigneePayload ? (normalizedAssignees[0]?.userId ?? null) : undefined;
+    const legacyAllowAssigneeComments = hasAssigneePayload
+      ? (normalizedAssignees[0]?.canComment ?? (body.allowAssigneeComments ?? true))
+      : body.allowAssigneeComments;
 
     if (body.title !== undefined) {
       if (typeof body.title !== "string" || body.title.trim() === "") {
@@ -172,17 +245,12 @@ export async function PUT(
       return NextResponse.json({ error: "allowAssigneeComments must be a boolean" }, { status: 400 });
     }
 
-    const normalizedAssigneeId = normalizeOptionalId(body.assigneeId);
     const normalizedPhaseId = normalizeOptionalId(body.phaseId);
     const statusNormalizer = await buildTaskStatusNormalizer();
     const normalizedStatus =
       body.status !== undefined ? statusNormalizer(body.status) : undefined;
     const normalizedPriority =
       body.priority !== undefined ? normalizeTaskPriority(body.priority) : undefined;
-
-    if (body.assigneeId !== undefined && normalizedAssigneeId === undefined) {
-      return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
-    }
 
     if (body.phaseId !== undefined && normalizedPhaseId === undefined) {
       return NextResponse.json({ error: "Invalid phase" }, { status: 400 });
@@ -196,14 +264,21 @@ export async function PUT(
       return NextResponse.json({ error: "Invalid task priority" }, { status: 400 });
     }
 
-    if (normalizedAssigneeId) {
-      const assigneeMembership = await prisma.projectMember.findUnique({
-        where: { projectId_userId: { projectId, userId: normalizedAssigneeId } },
-        select: { id: true },
+    if (normalizedAssignees.length > 0) {
+      const membershipRows = await prisma.projectMember.findMany({
+        where: {
+          projectId,
+          userId: { in: normalizedAssignees.map((entry) => entry.userId) },
+        },
+        select: { userId: true },
       });
-      if (!assigneeMembership) {
+      const memberIds = new Set(membershipRows.map((row) => row.userId));
+      const invalid = normalizedAssignees
+        .map((entry) => entry.userId)
+        .filter((userId) => !memberIds.has(userId));
+      if (invalid.length > 0) {
         return NextResponse.json(
-          { error: "Assignee must be a project member" },
+          { error: "All assignees must be company members" },
           { status: 400 }
         );
       }
@@ -224,52 +299,108 @@ export async function PUT(
       return NextResponse.json({ error: "Invalid due date" }, { status: 400 });
     }
 
-    let includeAllowAssigneeComments = true;
-    try {
-      await prisma.projectTask.update({
-        where: { id: taskId },
-        data: {
-          ...(body.title !== undefined && { title: body.title.trim() }),
-          ...(body.description !== undefined && { description: body.description }),
-          ...(body.status !== undefined && { status: normalizedStatus }),
-          ...(body.priority !== undefined && { priority: normalizedPriority }),
-          ...(body.assigneeId !== undefined && { assigneeId: normalizedAssigneeId }),
-          ...(body.phaseId !== undefined && { phaseId: normalizedPhaseId }),
-          ...(body.dueDate !== undefined && {
-            dueDate: body.dueDate ? parsedDueDate : null,
-          }),
-          ...(body.allowAssigneeComments !== undefined && {
-            allowAssigneeComments: body.allowAssigneeComments,
-          }),
-        },
-        select: { id: true },
-      });
-    } catch (error) {
-      if (!isMissingProjectTaskAllowAssigneeCommentsColumn(error)) throw error;
-      includeAllowAssigneeComments = false;
-      await prisma.projectTask.update({
-        where: { id: taskId },
-        data: {
-          ...(body.title !== undefined && { title: body.title.trim() }),
-          ...(body.description !== undefined && { description: body.description }),
-          ...(body.status !== undefined && { status: normalizedStatus }),
-          ...(body.priority !== undefined && { priority: normalizedPriority }),
-          ...(body.assigneeId !== undefined && { assigneeId: normalizedAssigneeId }),
-          ...(body.phaseId !== undefined && { phaseId: normalizedPhaseId }),
-          ...(body.dueDate !== undefined && {
-            dueDate: body.dueDate ? parsedDueDate : null,
-          }),
-        },
-        select: { id: true },
-      });
+    const flags: TaskQueryFlags = {
+      includeAllowAssigneeComments: true,
+      includeTaskAssignees: true,
+      includeTaskAssigneeCanComment: true,
+    };
+    let taskRaw: ProjectTaskRow | null = null;
+    while (true) {
+      try {
+        const existingTask = (await prisma.projectTask.findFirst({
+          where: { id: taskId, projectId },
+          select: projectTaskSelect(flags),
+        })) as ProjectTaskRow | null;
+        if (!existingTask) {
+          return NextResponse.json({ error: "Task not found" }, { status: 404 });
+        }
+        const existingNormalized = toKnownProjectTask(existingTask, flags);
+        const canViewAllTasks = Boolean(
+          accessResult.ctx.access.isAdmin ||
+            accessResult.ctx.access.permissions.projects.manage ||
+            projectAccess.scope.isManager
+        );
+        if (
+          !canViewAllTasks &&
+          !canCurrentUserViewProjectTask(
+            { assigneeId: existingNormalized.assigneeId, assignees: existingNormalized.assignees },
+            accessResult.ctx.userId,
+            accessResult.ctx.access,
+            projectAccess.scope
+          )
+        ) {
+          return NextResponse.json({ error: "Forbidden: task access denied" }, { status: 403 });
+        }
+
+        await prisma.$transaction(async (tx) => {
+          await tx.projectTask.update({
+            where: { id: taskId },
+            data: {
+              ...(body.title !== undefined && { title: body.title.trim() }),
+              ...(body.description !== undefined && { description: body.description }),
+              ...(body.status !== undefined && { status: normalizedStatus }),
+              ...(body.priority !== undefined && { priority: normalizedPriority }),
+              ...(hasAssigneePayload && { assigneeId: primaryAssigneeId ?? null }),
+              ...(body.phaseId !== undefined && { phaseId: normalizedPhaseId }),
+              ...(body.dueDate !== undefined && {
+                dueDate: body.dueDate ? parsedDueDate : null,
+              }),
+              ...(legacyAllowAssigneeComments !== undefined && flags.includeAllowAssigneeComments
+                ? { allowAssigneeComments: legacyAllowAssigneeComments }
+                : {}),
+            },
+            select: { id: true },
+          });
+
+          if (hasAssigneePayload && flags.includeTaskAssignees) {
+            await tx.projectTaskAssignee.deleteMany({ where: { projectTaskId: taskId } });
+            if (normalizedAssignees.length > 0) {
+              await tx.projectTaskAssignee.createMany({
+                data: normalizedAssignees.map((entry) => ({
+                  projectTaskId: taskId,
+                  userId: entry.userId,
+                  ...(flags.includeTaskAssigneeCanComment ? { canComment: entry.canComment } : {}),
+                })),
+                skipDuplicates: true,
+              });
+            }
+          }
+        });
+
+        taskRaw = (await prisma.projectTask.findUnique({
+          where: { id: taskId },
+          select: projectTaskSelect(flags),
+        })) as ProjectTaskRow | null;
+        break;
+      } catch (error) {
+        if (flags.includeAllowAssigneeComments && isAllowAssigneeCommentsMissing(error)) {
+          flags.includeAllowAssigneeComments = false;
+          continue;
+        }
+        if (
+          flags.includeTaskAssigneeCanComment &&
+          isMissingProjectTaskAssigneeCanCommentColumn(error)
+        ) {
+          flags.includeTaskAssigneeCanComment = false;
+          continue;
+        }
+        if (isMissingProjectTaskAssigneesTable(error)) {
+          if (hasAssigneePayload && normalizedAssignees.length > 1) {
+            return NextResponse.json(
+              { error: "Multi-assignee requires database update. Run database push/migrate first." },
+              { status: 400 }
+            );
+          }
+          flags.includeTaskAssignees = false;
+          flags.includeTaskAssigneeCanComment = false;
+          continue;
+        }
+        throw error;
+      }
     }
 
-    const taskRaw = await prisma.projectTask.findUnique({
-      where: { id: taskId },
-      select: projectTaskSelect(includeAllowAssigneeComments),
-    });
     if (!taskRaw) return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    const task = toKnownProjectTask(taskRaw as ProjectTaskRow, includeAllowAssigneeComments);
+    const task = toKnownProjectTask(taskRaw, flags);
     const conversationAuthorEditDeleteWindowMinutes =
       await getTaskConversationAuthorEditWindowMinutes();
 
@@ -313,18 +444,10 @@ export async function DELETE(
 
     const existingTask = await prisma.projectTask.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true, assigneeId: true },
+      select: { id: true },
     });
     if (!existingTask) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-    const canViewAllTasks = Boolean(
-      accessResult.ctx.access.isAdmin ||
-        accessResult.ctx.access.permissions.projects.manage ||
-        projectAccess.scope.isManager
-    );
-    if (!canViewAllTasks && existingTask.assigneeId !== accessResult.ctx.userId) {
-      return NextResponse.json({ error: "Forbidden: task access denied" }, { status: 403 });
     }
 
     await prisma.projectTask.delete({ where: { id: taskId } });

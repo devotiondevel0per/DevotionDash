@@ -2,26 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/api-access";
 import { requireProjectReadAccess } from "@/lib/project-access";
-import { isMissingProjectTaskCommentParentColumn } from "@/lib/project-task-access";
+import {
+  canCurrentUserViewProjectTask,
+  isMissingProjectTaskCommentParentColumn,
+  loadProjectTaskCommentAccessInfo,
+} from "@/lib/project-task-access";
 import {
   getTaskConversationAuthorEditWindowMinutes,
   isWithinAuthorConversationWindow,
 } from "@/lib/task-conversation-policy";
 
 type RouteContext = { params: Promise<{ id: string; taskId: string; commentId: string }> };
-
-function canViewProjectTask(
-  assigneeId: string | null,
-  userId: string,
-  access: {
-    isAdmin: boolean;
-    permissions: { projects: { manage: boolean } };
-  },
-  scope: { isManager: boolean }
-) {
-  if (access.isAdmin || access.permissions.projects.manage || scope.isManager) return true;
-  return assigneeId === userId;
-}
 
 function commentSelect(includeParent: boolean) {
   return {
@@ -54,16 +45,26 @@ async function ensureCommentMutationAllowed(
       projectTaskId: true,
       userId: true,
       createdAt: true,
-      projectTask: { select: { projectId: true, assigneeId: true } },
+      projectTask: { select: { projectId: true } },
     },
   });
 
-  if (!existing || existing.projectTaskId !== taskId || existing.projectTask.projectId !== projectId) {
+  if (
+    !existing ||
+    existing.projectTaskId !== taskId ||
+    existing.projectTask.projectId !== projectId
+  ) {
     return NextResponse.json({ error: "Comment not found" }, { status: 404 });
   }
+
+  const taskAccess = await loadProjectTaskCommentAccessInfo(prisma, taskId);
+  if (!taskAccess) {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  }
+
   if (
-    !canViewProjectTask(
-      existing.projectTask.assigneeId,
+    !canCurrentUserViewProjectTask(
+      { assigneeId: taskAccess.assigneeId, assignees: taskAccess.assignees },
       accessResult.ctx.userId,
       accessResult.ctx.access,
       projectAccess.scope
