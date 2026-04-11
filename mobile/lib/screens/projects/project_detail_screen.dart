@@ -10,6 +10,7 @@ import '../../utils/auto_refresh.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/user_avatar.dart';
+import 'project_form_sheet.dart';
 
 class _ProjectDetailData {
   final Map<String, dynamic> project;
@@ -339,114 +340,33 @@ class _ProjectView extends ConsumerWidget {
 
   Future<void> _editProject(BuildContext context, WidgetRef ref) async {
     final api = ref.read(apiClientProvider);
-    final name = TextEditingController(text: _s(project['name']));
-    final description = TextEditingController(text: _s(project['description']));
-    var status = _normalizeProjectStatus(project['status']);
-    DateTime? start = DateTime.tryParse(_s(project['startDate']));
-    DateTime? end = DateTime.tryParse(_s(project['endDate']));
-
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setStateSheet) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            MediaQuery.of(context).viewInsets.bottom + 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'Project name'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: description,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(labelText: 'Description'),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: status,
-                items: projectStatuses
-                    .map((e) => DropdownMenuItem(value: e, child: Text(label(e))))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) setStateSheet(() => status = v);
-                },
-                decoration: const InputDecoration(labelText: 'Status'),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(start == null ? 'Start date' : 'Start ${DateFormat('MMM d, y').format(start!)}'),
-                trailing: const Icon(Icons.calendar_today_rounded),
-                onTap: () async {
-                  final d = await pickDate(start);
-                  if (d != null) setStateSheet(() => start = d);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(end == null ? 'End date' : 'End ${DateFormat('MMM d, y').format(end!)}'),
-                trailing: const Icon(Icons.calendar_today_rounded),
-                onTap: () async {
-                  final d = await pickDate(end);
-                  if (d != null) setStateSheet(() => end = d);
-                },
-              ),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, 'delete'),
-                    child: const Text('Delete'),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, 'cancel'),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context, 'save'),
-                    child: const Text('Save'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (action == null || action == 'cancel') return;
     try {
-      if (action == 'delete') {
-        final ok = await confirm('Delete project?', 'This cannot be undone.', 'Delete');
+      final rawFields = await api.getProjectFormConfig();
+      final fields = parseProjectFormFields(rawFields);
+      final allProjects = await api.getProjects(limit: 200);
+      final categories = extractCompanyCategoriesFromProjects(allProjects);
+      final result = await showProjectFormSheet(
+        context: context,
+        api: api,
+        fields: fields,
+        categories: categories,
+        initialProject: project,
+        allowDelete: true,
+      );
+      if (result == null) return;
+      if (result.action == "delete") {
+        final ok = await confirm('Delete company?', 'This cannot be undone.', 'Delete');
         if (!ok) return;
         await api.deleteProject(projectId);
         if (context.mounted) {
-          snack('Project deleted');
+          snack('Company deleted');
           context.pop();
         }
         return;
       }
-      if (name.text.trim().isEmpty) {
-        snack('Project name is required', error: true);
-        return;
-      }
-      await api.updateProject(projectId, {
-        'name': name.text.trim(),
-        'description': description.text.trim().isEmpty ? null : description.text.trim(),
-        'status': status,
-        'startDate': start?.toIso8601String(),
-        'endDate': end?.toIso8601String(),
-      });
-      snack('Project updated');
+      if (result.action != "save" || result.payload == null) return;
+      await api.updateProject(projectId, result.payload!);
+      snack('Company updated');
       refresh();
     } catch (e) {
       snack(err(e), error: true);

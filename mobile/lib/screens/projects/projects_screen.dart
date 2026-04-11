@@ -7,6 +7,7 @@ import '../../services/api_client.dart';
 import '../../utils/auto_refresh.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/empty_state.dart';
+import 'project_form_sheet.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   final _searchController = TextEditingController();
   String _search = '';
   String _status = 'all';
+  List<Map<String, dynamic>> _latestProjects = const [];
 
   @override
   void initState() {
@@ -109,116 +111,23 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   void _refresh() => ref.invalidate(projectsProvider(_queryKey));
 
   Future<void> _createProject() async {
-    final name = TextEditingController();
-    final description = TextEditingController();
-    DateTime? start;
-    DateTime? end;
-    final payload = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateSheet) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            MediaQuery.of(context).viewInsets.bottom + 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(
-                  labelText: 'Project name',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: description,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(start == null
-                    ? 'Start date'
-                    : 'Start ${DateFormat('MMM d, y').format(start!)}'),
-                trailing: const Icon(Icons.calendar_today_rounded),
-                onTap: () async {
-                  final now = DateTime.now();
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: start ?? now,
-                    firstDate: DateTime(now.year - 10),
-                    lastDate: DateTime(now.year + 10),
-                  );
-                  if (picked != null) setStateSheet(() => start = picked);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(end == null
-                    ? 'End date'
-                    : 'End ${DateFormat('MMM d, y').format(end!)}'),
-                trailing: const Icon(Icons.calendar_today_rounded),
-                onTap: () async {
-                  final now = DateTime.now();
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: end ?? now,
-                    firstDate: DateTime(now.year - 10),
-                    lastDate: DateTime(now.year + 10),
-                  );
-                  if (picked != null) setStateSheet(() => end = picked);
-                },
-              ),
-              Row(
-                children: [
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context, {
-                      'name': name.text.trim(),
-                      'description': description.text.trim().isEmpty
-                          ? null
-                          : description.text.trim(),
-                      'startDate': start?.toIso8601String(),
-                      'endDate': end?.toIso8601String(),
-                    }),
-                    child: const Text('Create'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (payload == null) return;
-    if ((payload['name']?.toString() ?? '').trim().isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Project name is required')),
-      );
-      return;
-    }
+    final api = ref.read(apiClientProvider);
     try {
-      await ref.read(apiClientProvider).createProject(payload);
+      final rawFields = await api.getProjectFormConfig();
+      final fields = parseProjectFormFields(rawFields);
+      final categories = extractCompanyCategoriesFromProjects(_latestProjects);
+      final result = await showProjectFormSheet(
+        context: context,
+        api: api,
+        fields: fields,
+        categories: categories,
+      );
+      if (result == null || result.action != "save" || result.payload == null) return;
+      await api.createProject(result.payload!);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Project created')));
+      ).showSnackBar(const SnackBar(content: Text('Company created')));
       _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -277,6 +186,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
           onRetry: _refresh,
         ),
         data: (list) {
+          _latestProjects = list;
           if (list.isEmpty) {
             return const EmptyState(
               icon: Icons.folder_special_outlined,

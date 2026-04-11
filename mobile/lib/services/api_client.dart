@@ -737,6 +737,50 @@ class ApiClient {
     return res.data as Map<String, dynamic>;
   }
 
+  Future<List<Map<String, dynamic>>> getProjectFormConfig() async {
+    final res = await _dio.get('/projects/form-config');
+    final data = res.data;
+    final fields = data is Map ? data['fields'] : null;
+    if (fields is! List) return const [];
+    return fields
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> uploadProjectFormFile({
+    required String filePath,
+    String? fileName,
+    String? mimeType,
+    int? fileSize,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final inferredName =
+        fileName ?? filePath.split(RegExp(r'[\\\\/]')).last;
+    final inferredMime = (mimeType != null && mimeType.trim().isNotEmpty)
+        ? mimeType.trim()
+        : 'application/octet-stream';
+
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(
+        filePath,
+        filename: inferredName,
+        contentType: DioMediaType.parse(inferredMime),
+      ),
+      if (fileSize != null) 'size': fileSize,
+    });
+
+    final res = await _dio.post(
+      '/projects/uploads',
+      data: formData,
+      options: Options(
+        headers: {'Content-Type': 'multipart/form-data'},
+      ),
+      onSendProgress: onProgress,
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> createProject(Map<String, dynamic> body) async {
     final res = await _dio.post('/projects', data: body);
     return res.data as Map<String, dynamic>;
