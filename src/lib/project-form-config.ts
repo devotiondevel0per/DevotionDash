@@ -55,6 +55,10 @@ export type ProjectFormField = {
   layoutColumns: ProjectFormRowColumns;
   layoutColSpan: number;
   spanMode?: ProjectFormSpanMode;
+  showInList?: boolean;
+  showInGrid?: boolean;
+  filterable?: boolean;
+  sortable?: boolean;
   options: string[];
   multiple: boolean;
   accept: string;
@@ -129,6 +133,46 @@ function sanitizeLayoutColSpan(value: unknown, columns: ProjectFormRowColumns): 
       : Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) return 1;
   return Math.max(1, Math.min(columns, Math.round(parsed)));
+}
+
+function resolveBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function supportsProjectFiltering(type: ProjectFormFieldType): boolean {
+  return type !== "file";
+}
+
+function supportsProjectSorting(type: ProjectFormFieldType): boolean {
+  return type !== "file" && type !== "rich_text" && type !== "textarea";
+}
+
+function defaultProjectShowInList(field: Pick<ProjectFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "name" ||
+      field.coreKey === "status" ||
+      field.coreKey === "categoryId" ||
+      field.coreKey === "startDate" ||
+      field.coreKey === "endDate" ||
+      field.coreKey === "description"
+    );
+  }
+  return field.type !== "file";
+}
+
+function defaultProjectShowInGrid(field: Pick<ProjectFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "name" ||
+      field.coreKey === "status" ||
+      field.coreKey === "categoryId" ||
+      field.coreKey === "startDate" ||
+      field.coreKey === "endDate" ||
+      field.coreKey === "description"
+    );
+  }
+  return field.type !== "file";
 }
 
 const CORE_FIELD_DEFAULTS: ReadonlyArray<ProjectFormField> = [
@@ -315,6 +359,10 @@ function sanitizeMetadataFields(input: unknown): ProjectFileMetadataField[] {
 export function getDefaultProjectFormFields(): ProjectFormField[] {
   return CORE_FIELD_DEFAULTS.map((field) => ({
     ...field,
+    showInList: defaultProjectShowInList(field),
+    showInGrid: defaultProjectShowInGrid(field),
+    filterable: supportsProjectFiltering(field.type),
+    sortable: supportsProjectSorting(field.type),
     options: [...field.options],
     metadataFields: [],
   }));
@@ -370,6 +418,27 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
       const spanMode = src.spanMode === "manual" ? "manual" : "auto";
       const fieldOptions =
         type === "select" || type === "multiselect" ? dedupeOptions(src.options) : [];
+      const fieldDefaults = {
+        source,
+        coreKey: resolvedCoreKey,
+        type,
+      } as Pick<ProjectFormField, "source" | "coreKey" | "type">;
+      const showInList = resolveBoolean(
+        src.showInList,
+        resolveBoolean(defaultCore?.showInList, defaultProjectShowInList(fieldDefaults))
+      );
+      const showInGrid = resolveBoolean(
+        src.showInGrid,
+        resolveBoolean(defaultCore?.showInGrid, defaultProjectShowInGrid(fieldDefaults))
+      );
+      const filterable = resolveBoolean(
+        src.filterable,
+        resolveBoolean(defaultCore?.filterable, supportsProjectFiltering(type))
+      );
+      const sortable = resolveBoolean(
+        src.sortable,
+        resolveBoolean(defaultCore?.sortable, supportsProjectSorting(type))
+      );
 
       result.push({
         id,
@@ -387,6 +456,10 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
         layoutColumns,
         layoutColSpan,
         spanMode,
+        showInList,
+        showInGrid,
+        filterable,
+        sortable,
         options: isCoreStatusField ? ["active", "inactive"] : fieldOptions,
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",

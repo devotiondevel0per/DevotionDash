@@ -146,6 +146,42 @@ function getEffectiveProjectFieldSpan(field: ProjectFormField, columns: 1 | 2 | 
   return getAutoProjectFieldSpan(field, columns);
 }
 
+function supportsProjectFiltering(type: ProjectFormFieldType): boolean {
+  return type !== "file";
+}
+
+function supportsProjectSorting(type: ProjectFormFieldType): boolean {
+  return type !== "file" && type !== "rich_text" && type !== "textarea";
+}
+
+function defaultProjectShowInList(field: Pick<ProjectFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "name" ||
+      field.coreKey === "status" ||
+      field.coreKey === "categoryId" ||
+      field.coreKey === "startDate" ||
+      field.coreKey === "endDate" ||
+      field.coreKey === "description"
+    );
+  }
+  return field.type !== "file";
+}
+
+function defaultProjectShowInGrid(field: Pick<ProjectFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "name" ||
+      field.coreKey === "status" ||
+      field.coreKey === "categoryId" ||
+      field.coreKey === "startDate" ||
+      field.coreKey === "endDate" ||
+      field.coreKey === "description"
+    );
+  }
+  return field.type !== "file";
+}
+
 export function ProjectFormBuilder({ canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -177,12 +213,30 @@ export function ProjectFormBuilder({ canManage }: Props) {
         const columns = clampRowColumns(field.layoutColumns);
         const spanMode = getProjectFieldSpanMode(field);
         const manualSpan = clampSpan(field.layoutColSpan, columns);
+        const showInList =
+          typeof field.showInList === "boolean"
+            ? field.showInList
+            : defaultProjectShowInList({ source: field.source, coreKey: field.coreKey, type: field.type });
+        const showInGrid =
+          typeof field.showInGrid === "boolean"
+            ? field.showInGrid
+            : defaultProjectShowInGrid({ source: field.source, coreKey: field.coreKey, type: field.type });
+        const filterable =
+          supportsProjectFiltering(field.type) &&
+          (typeof field.filterable === "boolean" ? field.filterable : true);
+        const sortable =
+          supportsProjectSorting(field.type) &&
+          (typeof field.sortable === "boolean" ? field.sortable : true);
         return {
           ...field,
           layoutRow: row,
           layoutColumns: columns,
           layoutColSpan: manualSpan,
           spanMode,
+          showInList,
+          showInGrid,
+          filterable,
+          sortable,
         };
       })
       .sort((a, b) => {
@@ -365,6 +419,10 @@ export function ProjectFormBuilder({ canManage }: Props) {
       layoutColumns: rowColumns,
       layoutColSpan: 1,
       spanMode: "auto",
+      showInList: defaultProjectShowInList({ source: "custom", coreKey: null, type: "text" }),
+      showInGrid: defaultProjectShowInGrid({ source: "custom", coreKey: null, type: "text" }),
+      filterable: supportsProjectFiltering("text"),
+      sortable: supportsProjectSorting("text"),
       options: [],
       multiple: false,
       accept: "",
@@ -930,6 +988,81 @@ export function ProjectFormBuilder({ canManage }: Props) {
               ) : (
                 <div />
               )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={
+                    typeof selectedField.showInList === "boolean"
+                      ? selectedField.showInList
+                      : defaultProjectShowInList(selectedField)
+                  }
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      showInList: event.target.checked,
+                    }))
+                  }
+                  disabled={!canManage}
+                />
+                Show In List
+              </label>
+              <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={
+                    typeof selectedField.showInGrid === "boolean"
+                      ? selectedField.showInGrid
+                      : defaultProjectShowInGrid(selectedField)
+                  }
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      showInGrid: event.target.checked,
+                    }))
+                  }
+                  disabled={!canManage}
+                />
+                Show In Grid
+              </label>
+              <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={
+                    typeof selectedField.filterable === "boolean"
+                      ? selectedField.filterable
+                      : supportsProjectFiltering(selectedField.type)
+                  }
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      filterable: event.target.checked,
+                    }))
+                  }
+                  disabled={!canManage || !supportsProjectFiltering(selectedField.type)}
+                />
+                Filterable
+              </label>
+              <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={
+                    typeof selectedField.sortable === "boolean"
+                      ? selectedField.sortable
+                      : supportsProjectSorting(selectedField.type)
+                  }
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      sortable: event.target.checked,
+                    }))
+                  }
+                  disabled={!canManage || !supportsProjectSorting(selectedField.type)}
+                />
+                Sortable
+              </label>
             </div>
 
             <div className="space-y-1.5">

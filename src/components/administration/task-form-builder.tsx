@@ -170,6 +170,44 @@ function getEffectiveTaskFieldSpan(field: TaskFormField, columns: TaskFormRowCol
   return getAutoTaskFieldSpan(field, columns);
 }
 
+function supportsTaskFiltering(type: TaskFormFieldType): boolean {
+  return type !== "actions" && type !== "file";
+}
+
+function supportsTaskSorting(type: TaskFormFieldType): boolean {
+  return type !== "actions" && type !== "file" && type !== "rich_text" && type !== "textarea";
+}
+
+function defaultTaskShowInList(field: Pick<TaskFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "title" ||
+      field.coreKey === "status" ||
+      field.coreKey === "priority" ||
+      field.coreKey === "type" ||
+      field.coreKey === "dueDate" ||
+      field.coreKey === "description" ||
+      field.coreKey === "assignees"
+    );
+  }
+  return field.type !== "file";
+}
+
+function defaultTaskShowInGrid(field: Pick<TaskFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "title" ||
+      field.coreKey === "status" ||
+      field.coreKey === "priority" ||
+      field.coreKey === "type" ||
+      field.coreKey === "dueDate" ||
+      field.coreKey === "description" ||
+      field.coreKey === "assignees"
+    );
+  }
+  return field.type !== "file";
+}
+
 export function TaskFormBuilder({ canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -209,6 +247,20 @@ export function TaskFormBuilder({ canManage }: Props) {
               ? field.type
               : "text"
             : field.type;
+        const showInList =
+          typeof field.showInList === "boolean"
+            ? field.showInList
+            : defaultTaskShowInList({ source: field.source, coreKey: field.coreKey, type });
+        const showInGrid =
+          typeof field.showInGrid === "boolean"
+            ? field.showInGrid
+            : defaultTaskShowInGrid({ source: field.source, coreKey: field.coreKey, type });
+        const filterable =
+          supportsTaskFiltering(type) &&
+          (typeof field.filterable === "boolean" ? field.filterable : true);
+        const sortable =
+          supportsTaskSorting(type) &&
+          (typeof field.sortable === "boolean" ? field.sortable : true);
         return {
           ...field,
           pane,
@@ -219,6 +271,10 @@ export function TaskFormBuilder({ canManage }: Props) {
           spanMode,
           enabled: isTitle ? true : field.enabled,
           required: isTitle ? true : field.required,
+          showInList,
+          showInGrid,
+          filterable,
+          sortable,
           options:
             type === "select" || type === "multiselect" ? field.options : [],
           multiple: type === "file" ? field.multiple : false,
@@ -424,6 +480,10 @@ export function TaskFormBuilder({ canManage }: Props) {
       layoutColumns: rowColumns,
       layoutColSpan: 1,
       spanMode: "auto",
+      showInList: defaultTaskShowInList({ source: "custom", coreKey: null, type: "text" }),
+      showInGrid: defaultTaskShowInGrid({ source: "custom", coreKey: null, type: "text" }),
+      filterable: supportsTaskFiltering("text"),
+      sortable: supportsTaskSorting("text"),
       options: [],
       multiple: false,
       accept: "",
@@ -1031,6 +1091,81 @@ export function TaskFormBuilder({ canManage }: Props) {
               ) : (
                 <div />
               )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={
+                    typeof selectedField.showInList === "boolean"
+                      ? selectedField.showInList
+                      : defaultTaskShowInList(selectedField)
+                  }
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      showInList: event.target.checked,
+                    }))
+                  }
+                  disabled={!canManage || selectedField.type === "actions"}
+                />
+                Show In List
+              </label>
+              <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={
+                    typeof selectedField.showInGrid === "boolean"
+                      ? selectedField.showInGrid
+                      : defaultTaskShowInGrid(selectedField)
+                  }
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      showInGrid: event.target.checked,
+                    }))
+                  }
+                  disabled={!canManage || selectedField.type === "actions"}
+                />
+                Show In Grid
+              </label>
+              <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={
+                    typeof selectedField.filterable === "boolean"
+                      ? selectedField.filterable
+                      : supportsTaskFiltering(selectedField.type)
+                  }
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      filterable: event.target.checked,
+                    }))
+                  }
+                  disabled={!canManage || !supportsTaskFiltering(selectedField.type)}
+                />
+                Filterable
+              </label>
+              <label className="flex items-center gap-2 rounded border px-2 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={
+                    typeof selectedField.sortable === "boolean"
+                      ? selectedField.sortable
+                      : supportsTaskSorting(selectedField.type)
+                  }
+                  onChange={(event) =>
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      sortable: event.target.checked,
+                    }))
+                  }
+                  disabled={!canManage || !supportsTaskSorting(selectedField.type)}
+                />
+                Sortable
+              </label>
             </div>
 
             <div className="space-y-1.5">

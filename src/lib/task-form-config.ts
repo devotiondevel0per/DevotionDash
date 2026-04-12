@@ -64,6 +64,10 @@ export type TaskFormField = {
   layoutColumns: TaskFormRowColumns;
   layoutColSpan: number;
   spanMode?: TaskFormSpanMode;
+  showInList?: boolean;
+  showInGrid?: boolean;
+  filterable?: boolean;
+  sortable?: boolean;
   options: string[];
   multiple: boolean;
   accept: string;
@@ -363,6 +367,48 @@ function sanitizePane(value: unknown, fallback: TaskFormPane): TaskFormPane {
     : fallback;
 }
 
+function resolveBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function supportsTaskFiltering(type: TaskFormFieldType): boolean {
+  return type !== "actions" && type !== "file";
+}
+
+function supportsTaskSorting(type: TaskFormFieldType): boolean {
+  return type !== "actions" && type !== "file" && type !== "rich_text" && type !== "textarea";
+}
+
+function defaultTaskShowInList(field: Pick<TaskFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "title" ||
+      field.coreKey === "status" ||
+      field.coreKey === "priority" ||
+      field.coreKey === "type" ||
+      field.coreKey === "dueDate" ||
+      field.coreKey === "description" ||
+      field.coreKey === "assignees"
+    );
+  }
+  return field.type !== "file";
+}
+
+function defaultTaskShowInGrid(field: Pick<TaskFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "title" ||
+      field.coreKey === "status" ||
+      field.coreKey === "priority" ||
+      field.coreKey === "type" ||
+      field.coreKey === "dueDate" ||
+      field.coreKey === "description" ||
+      field.coreKey === "assignees"
+    );
+  }
+  return field.type !== "file";
+}
+
 function normalizeKey(input: unknown, fallback: string) {
   const raw = typeof input === "string" ? input : fallback;
   const normalized = raw
@@ -423,6 +469,10 @@ function sanitizeMetadataFields(input: unknown): TaskFileMetadataField[] {
 export function getDefaultTaskFormFields(): TaskFormField[] {
   return CORE_FIELD_DEFAULTS.map((field) => ({
     ...field,
+    showInList: defaultTaskShowInList(field),
+    showInGrid: defaultTaskShowInGrid(field),
+    filterable: supportsTaskFiltering(field.type),
+    sortable: supportsTaskSorting(field.type),
     options: [...field.options],
     metadataFields: [],
   }));
@@ -481,6 +531,27 @@ export function sanitizeTaskFormFields(input: unknown): TaskFormField[] {
       const resolvedCoreKey = source === "core" ? (coreKey ?? defaultCore?.coreKey ?? null) : null;
       const fieldOptions =
         type === "select" || type === "multiselect" ? dedupeOptions(src.options) : [];
+      const fieldDefaults = {
+        source,
+        coreKey: resolvedCoreKey,
+        type,
+      } as Pick<TaskFormField, "source" | "coreKey" | "type">;
+      const showInList = resolveBoolean(
+        src.showInList,
+        resolveBoolean(defaultCore?.showInList, defaultTaskShowInList(fieldDefaults))
+      );
+      const showInGrid = resolveBoolean(
+        src.showInGrid,
+        resolveBoolean(defaultCore?.showInGrid, defaultTaskShowInGrid(fieldDefaults))
+      );
+      const filterable = resolveBoolean(
+        src.filterable,
+        resolveBoolean(defaultCore?.filterable, supportsTaskFiltering(type))
+      );
+      const sortable = resolveBoolean(
+        src.sortable,
+        resolveBoolean(defaultCore?.sortable, supportsTaskSorting(type))
+      );
 
       const requiredFromInput = Boolean(src.required);
       const enabledFromInput = src.enabled !== false;
@@ -504,6 +575,10 @@ export function sanitizeTaskFormFields(input: unknown): TaskFormField[] {
         layoutColumns,
         layoutColSpan,
         spanMode,
+        showInList,
+        showInGrid,
+        filterable,
+        sortable,
         options: defaultCore?.coreKey === "status" ? [] : fieldOptions,
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",

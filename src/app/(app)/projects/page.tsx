@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -439,6 +439,74 @@ function getFieldSpanClass(field: ProjectFormField, columns: 1 | 2 | 3 | 4) {
   return "col-span-1 md:col-span-1 lg:col-span-1";
 }
 
+function supportsProjectFiltering(type: ProjectFormField["type"]): boolean {
+  return type !== "file";
+}
+
+function supportsProjectSorting(type: ProjectFormField["type"]): boolean {
+  return type !== "file" && type !== "rich_text" && type !== "textarea";
+}
+
+function defaultProjectShowInList(field: Pick<ProjectFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "name" ||
+      field.coreKey === "status" ||
+      field.coreKey === "categoryId" ||
+      field.coreKey === "startDate" ||
+      field.coreKey === "endDate" ||
+      field.coreKey === "description"
+    );
+  }
+  return field.type !== "file";
+}
+
+function defaultProjectShowInGrid(field: Pick<ProjectFormField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "name" ||
+      field.coreKey === "status" ||
+      field.coreKey === "categoryId" ||
+      field.coreKey === "startDate" ||
+      field.coreKey === "endDate" ||
+      field.coreKey === "description"
+    );
+  }
+  return field.type !== "file";
+}
+
+function resolveProjectFieldBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function normalizeProjectFormFields(input: unknown): ProjectFormField[] {
+  const source = Array.isArray(input) && input.length > 0 ? input : DEFAULT_PROJECT_FORM_FIELDS;
+  return source
+    .map((field) => {
+      const showInList = resolveProjectFieldBoolean(field.showInList, defaultProjectShowInList(field));
+      const showInGrid = resolveProjectFieldBoolean(field.showInGrid, defaultProjectShowInGrid(field));
+      const filterable = supportsProjectFiltering(field.type)
+        ? resolveProjectFieldBoolean(field.filterable, true)
+        : false;
+      const sortable = supportsProjectSorting(field.type)
+        ? resolveProjectFieldBoolean(field.sortable, true)
+        : false;
+      return {
+        ...field,
+        showInList,
+        showInGrid,
+        filterable,
+        sortable,
+      };
+    })
+    .sort((a, b) => {
+      const rowA = normalizeLayoutRow(a.layoutRow, a.order);
+      const rowB = normalizeLayoutRow(b.layoutRow, b.order);
+      if (rowA !== rowB) return rowA - rowB;
+      return a.order - b.order;
+    });
+}
+
 function formatDate(iso?: string | null): string {
   if (!iso) return "-";
   return new Date(iso).toLocaleDateString([], {
@@ -500,6 +568,87 @@ function getCompanyMeta(project: Project) {
     readRecordTextValue(rootRecord, codeKeys) || readRecordTextValue(customRecord, codeKeys);
 
   return { symbol, code };
+}
+
+function getProjectFieldRawValue(project: Project, field: ProjectFormField): unknown {
+  if (field.source === "core") {
+    switch (field.coreKey) {
+      case "name":
+        return project.name;
+      case "description":
+        return toText(project.description);
+      case "categoryId":
+        return project.category?.name ?? "";
+      case "status":
+        return project.status;
+      case "startDate":
+        return project.startDate;
+      case "endDate":
+        return project.endDate;
+      default:
+        return undefined;
+    }
+  }
+  if (!project.customData || typeof project.customData !== "object") return undefined;
+  return project.customData[field.key];
+}
+
+function normalizeProjectFieldToText(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return value.map((entry) => normalizeProjectFieldToText(entry)).filter(Boolean).join(", ");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+  if (typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    if (typeof row.fileName === "string" && row.fileName.trim()) return row.fileName.trim();
+    return "";
+  }
+  return String(value).trim();
+}
+
+function getProjectFieldDisplayValue(project: Project, field: ProjectFormField): string {
+  const raw = getProjectFieldRawValue(project, field);
+  if (field.coreKey === "status") return STATUS_CONFIG[normalizeCompanyStatus(String(raw ?? ""))]?.label ?? normalizeProjectFieldToText(raw);
+  if (field.coreKey === "startDate" || field.coreKey === "endDate" || field.type === "date" || field.type === "datetime") {
+    return formatDateTime(raw ? String(raw) : null);
+  }
+  return normalizeProjectFieldToText(raw);
+}
+
+function getProjectFieldFilterOptions(field: ProjectFormField, projects: Project[]): string[] {
+  if (field.coreKey === "status") return ["active", "inactive"];
+  if (field.type === "select" || field.type === "multiselect") {
+    if (field.options.length > 0) return field.options;
+  }
+  if (field.type === "checkbox") return ["yes", "no"];
+  const set = new Set<string>();
+  for (const project of projects) {
+    const raw = getProjectFieldRawValue(project, field);
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        const text = normalizeProjectFieldToText(entry);
+        if (text) set.add(text);
+      }
+    } else {
+      const text = normalizeProjectFieldToText(raw);
+      if (text) set.add(text);
+    }
+    if (set.size >= 100) break;
+  }
+  return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
+}
+
+function toProjectSortValue(raw: unknown, field: ProjectFormField): number | string {
+  if (field.coreKey === "startDate" || field.coreKey === "endDate" || field.type === "date" || field.type === "datetime") {
+    const time = new Date(String(raw ?? "")).getTime();
+    return Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY;
+  }
+  if (field.type === "number") {
+    const parsed = Number.parseFloat(String(raw ?? ""));
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  }
+  if (typeof raw === "boolean") return raw ? 1 : 0;
+  return normalizeProjectFieldToText(raw).toLowerCase();
 }
 
 function isWithinCommentWindow(createdAt: string, windowMinutes: number) {
@@ -3207,9 +3356,18 @@ type ProjectCardProps = {
   onOpen: () => void;
   onEdit: () => void;
   canEditProject: boolean;
+  gridCoreVisibility: Map<string, boolean>;
+  gridCustomFields: ProjectFormField[];
 };
 
-function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardProps) {
+function ProjectCard({
+  project,
+  onOpen,
+  onEdit,
+  canEditProject,
+  gridCoreVisibility,
+  gridCustomFields,
+}: ProjectCardProps) {
   const tasksCount = project.tasks?.length ?? project._count.tasks;
   const membersCount = project.members.length;
   const details = toText(project.description ?? "");
@@ -3219,6 +3377,11 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
     .filter(Boolean);
   const { symbol, code } = getCompanyMeta(project);
   const companyMonogram = (symbol || code || initials(project.name)).slice(0, 3).toUpperCase();
+  const showStatus = gridCoreVisibility.get("status") !== false;
+  const showDescription = gridCoreVisibility.get("description") !== false;
+  const showCategory = gridCoreVisibility.get("categoryId") !== false;
+  const showStartDate = gridCoreVisibility.get("startDate") !== false;
+  const showEndDate = gridCoreVisibility.get("endDate") !== false;
 
   return (
     <Card
@@ -3236,12 +3399,14 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
                 {project.name}
               </h3>
               <div className="flex shrink-0 items-center gap-1">
-                <Badge
-                  variant="secondary"
-                  className={cn("text-xs", STATUS_CONFIG[project.status]?.className ?? "bg-gray-100 text-gray-600")}
-                >
-                  {STATUS_CONFIG[project.status]?.label ?? project.status}
-                </Badge>
+                {showStatus ? (
+                  <Badge
+                    variant="secondary"
+                    className={cn("text-xs", STATUS_CONFIG[project.status]?.className ?? "bg-gray-100 text-gray-600")}
+                  >
+                    {STATUS_CONFIG[project.status]?.label ?? project.status}
+                  </Badge>
+                ) : null}
                 {canEditProject ? (
                   <Button
                     type="button"
@@ -3270,12 +3435,12 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
           </div>
         </div>
 
-        {details && (
+        {showDescription && details && (
           <p className="mb-2 line-clamp-2 text-[11px] text-gray-500">{details}</p>
         )}
 
         <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
-          {project.category && (
+          {showCategory && project.category && (
             <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary">
               {project.category.name}
             </Badge>
@@ -3302,8 +3467,20 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
               Start
             </span>
             <span className="text-right font-medium text-slate-700">
-              {project.startDate ? formatDateTime(project.startDate) : "-"}
+              {showStartDate ? (project.startDate ? formatDateTime(project.startDate) : "-") : "-"}
             </span>
+
+            {showEndDate ? (
+              <>
+                <span className="inline-flex items-center gap-1 text-slate-500">
+                  <Calendar className="h-3 w-3" />
+                  End
+                </span>
+                <span className="text-right font-medium text-slate-700">
+                  {project.endDate ? formatDateTime(project.endDate) : "-"}
+                </span>
+              </>
+            ) : null}
 
             <span className="text-slate-500">Created</span>
             <span className="text-right font-medium text-slate-700">
@@ -3314,6 +3491,17 @@ function ProjectCard({ project, onOpen, onEdit, canEditProject }: ProjectCardPro
             <span className="text-right font-medium text-slate-700">
               {project.updatedAt ? formatDateTime(project.updatedAt) : "-"}
             </span>
+
+            {gridCustomFields.map((field) => {
+              const value = getProjectFieldDisplayValue(project, field);
+              if (!value) return null;
+              return (
+                <Fragment key={`company-grid-custom-${project.id}-${field.id}`}>
+                  <span className="text-slate-500">{field.label}</span>
+                  <span className="truncate text-right font-medium text-slate-700">{value}</span>
+                </Fragment>
+              );
+            })}
           </div>
         </div>
 
@@ -3357,25 +3545,27 @@ export default function ProjectsPage() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [companyLayout, setCompanyLayout] = useState<"grid" | "list">("grid");
+  const [customFilterFieldKey, setCustomFilterFieldKey] = useState("none");
+  const [customFilterValue, setCustomFilterValue] = useState("");
+  const [customSortFieldKey, setCustomSortFieldKey] = useState("none");
+  const [customSortDirection, setCustomSortDirection] = useState<"asc" | "desc">("asc");
 
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [projectFormFields, setProjectFormFields] = useState<ProjectFormField[]>(DEFAULT_PROJECT_FORM_FIELDS);
+  const [projectFormFields, setProjectFormFields] = useState<ProjectFormField[]>(
+    () => normalizeProjectFormFields(DEFAULT_PROJECT_FORM_FIELDS)
+  );
 
   const loadProjectFormConfig = useCallback(async () => {
     try {
       const res = await fetch("/api/projects/form-config", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load company form config");
       const data = (await res.json()) as { fields?: ProjectFormField[] };
-      setProjectFormFields(
-        Array.isArray(data.fields) && data.fields.length > 0
-          ? data.fields
-          : DEFAULT_PROJECT_FORM_FIELDS
-      );
+      setProjectFormFields(normalizeProjectFormFields(data.fields));
     } catch {
-      setProjectFormFields(DEFAULT_PROJECT_FORM_FIELDS);
+      setProjectFormFields(normalizeProjectFormFields(DEFAULT_PROJECT_FORM_FIELDS));
     }
   }, []);
 
@@ -3457,15 +3647,150 @@ export default function ProjectsPage() {
     [categories, projects]
   );
 
+  const enabledCompanyFields = useMemo(
+    () => projectFormFields.filter((field) => field.enabled),
+    [projectFormFields]
+  );
+
+  const companyFilterableFields = useMemo(
+    () =>
+      enabledCompanyFields.filter(
+        (field) =>
+          supportsProjectFiltering(field.type) &&
+          resolveProjectFieldBoolean(field.filterable, true)
+      ),
+    [enabledCompanyFields]
+  );
+
+  const companySortableFields = useMemo(
+    () =>
+      enabledCompanyFields.filter(
+        (field) =>
+          supportsProjectSorting(field.type) &&
+          resolveProjectFieldBoolean(field.sortable, true)
+      ),
+    [enabledCompanyFields]
+  );
+
+  const selectedCompanyFilterField = useMemo(
+    () => companyFilterableFields.find((field) => field.key === customFilterFieldKey) ?? null,
+    [companyFilterableFields, customFilterFieldKey]
+  );
+
+  const selectedCompanySortField = useMemo(
+    () => companySortableFields.find((field) => field.key === customSortFieldKey) ?? null,
+    [companySortableFields, customSortFieldKey]
+  );
+
+  useEffect(() => {
+    if (customFilterFieldKey === "none") return;
+    if (!selectedCompanyFilterField) {
+      setCustomFilterFieldKey("none");
+      setCustomFilterValue("");
+    }
+  }, [customFilterFieldKey, selectedCompanyFilterField]);
+
+  useEffect(() => {
+    if (customSortFieldKey === "none") return;
+    if (!selectedCompanySortField) {
+      setCustomSortFieldKey("none");
+    }
+  }, [customSortFieldKey, selectedCompanySortField]);
+
+  const companyFilterOptions = useMemo(
+    () =>
+      selectedCompanyFilterField
+        ? getProjectFieldFilterOptions(selectedCompanyFilterField, projects)
+        : [],
+    [projects, selectedCompanyFilterField]
+  );
+
+  const listCoreVisibility = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const field of enabledCompanyFields) {
+      if (field.source !== "core" || !field.coreKey) continue;
+      map.set(field.coreKey, resolveProjectFieldBoolean(field.showInList, defaultProjectShowInList(field)));
+    }
+    return map;
+  }, [enabledCompanyFields]);
+
+  const gridCoreVisibility = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const field of enabledCompanyFields) {
+      if (field.source !== "core" || !field.coreKey) continue;
+      map.set(field.coreKey, resolveProjectFieldBoolean(field.showInGrid, defaultProjectShowInGrid(field)));
+    }
+    return map;
+  }, [enabledCompanyFields]);
+
+  const listCustomCompanyFields = useMemo(
+    () =>
+      enabledCompanyFields.filter(
+        (field) =>
+          field.source === "custom" &&
+          resolveProjectFieldBoolean(field.showInList, defaultProjectShowInList(field))
+      ),
+    [enabledCompanyFields]
+  );
+
+  const gridCustomCompanyFields = useMemo(
+    () =>
+      enabledCompanyFields.filter(
+        (field) =>
+          field.source === "custom" &&
+          resolveProjectFieldBoolean(field.showInGrid, defaultProjectShowInGrid(field))
+      ),
+    [enabledCompanyFields]
+  );
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return projects.filter((p) => {
+    let list = projects.filter((p) => {
       const matchesStatus = activeStatus === "all" || p.status === activeStatus;
       const matchesCategory = activeCategory === "all" || p.category?.id === activeCategory;
       const matchesSearch = !q || p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q);
       return matchesStatus && matchesCategory && matchesSearch;
     });
-  }, [projects, activeStatus, activeCategory, searchQuery]);
+
+    const filterQuery = customFilterValue.trim().toLowerCase();
+    if (selectedCompanyFilterField && filterQuery) {
+      list = list.filter((project) => {
+        const raw = getProjectFieldRawValue(project, selectedCompanyFilterField);
+        if (selectedCompanyFilterField.type === "checkbox") {
+          const boolText = Boolean(raw) ? "yes" : "no";
+          return boolText === filterQuery || (filterQuery === "true" && boolText === "yes") || (filterQuery === "false" && boolText === "no");
+        }
+        if (Array.isArray(raw)) {
+          return raw.some((entry) => normalizeProjectFieldToText(entry).toLowerCase().includes(filterQuery));
+        }
+        return normalizeProjectFieldToText(raw).toLowerCase().includes(filterQuery);
+      });
+    }
+
+    if (selectedCompanySortField) {
+      list = [...list].sort((a, b) => {
+        const left = toProjectSortValue(getProjectFieldRawValue(a, selectedCompanySortField), selectedCompanySortField);
+        const right = toProjectSortValue(getProjectFieldRawValue(b, selectedCompanySortField), selectedCompanySortField);
+        const direction = customSortDirection === "asc" ? 1 : -1;
+        if (left === right) return a.name.localeCompare(b.name);
+        if (typeof left === "number" && typeof right === "number") {
+          return (left - right) * direction;
+        }
+        return String(left).localeCompare(String(right)) * direction;
+      });
+    }
+
+    return list;
+  }, [
+    projects,
+    activeStatus,
+    activeCategory,
+    searchQuery,
+    customFilterValue,
+    selectedCompanyFilterField,
+    selectedCompanySortField,
+    customSortDirection,
+  ]);
 
   function handleCreated(project: Project) {
     setProjects((prev) => [normalizeProject(project), ...prev]);
@@ -3578,52 +3903,136 @@ export default function ProjectsPage() {
 
       {/* ── Main Content ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b bg-white px-6 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            {canWrite && (
-              <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" />
-                New Company
-              </Button>
-            )}
-            <span className="text-sm text-gray-400">{filtered.length} compan{filtered.length === 1 ? "y" : "ies"}</span>
-            <div className="ml-2 inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className={cn(
-                  "h-7 px-2 text-xs",
-                  companyLayout === "grid" ? "bg-[#AA8038] text-white hover:bg-[#8f682d] hover:text-white" : "text-gray-500 hover:bg-gray-100"
-                )}
-                onClick={() => setCompanyLayout("grid")}
-              >
-                <Columns3 className="h-3.5 w-3.5 mr-1" />
-                Grid
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className={cn(
-                  "h-7 px-2 text-xs",
-                  companyLayout === "list" ? "bg-[#AA8038] text-white hover:bg-[#8f682d] hover:text-white" : "text-gray-500 hover:bg-gray-100"
-                )}
-                onClick={() => setCompanyLayout("list")}
-              >
-                <List className="h-3.5 w-3.5 mr-1" />
-                List
-              </Button>
+        <div className="border-b bg-white px-6 py-3 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {canWrite && (
+                <Button size="sm" style={{ backgroundColor: "#AA8038", color: "#fff" }} onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  New Company
+                </Button>
+              )}
+              <span className="text-sm text-gray-400">{filtered.length} compan{filtered.length === 1 ? "y" : "ies"}</span>
+              <div className="ml-2 inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn(
+                    "h-7 px-2 text-xs",
+                    companyLayout === "grid" ? "bg-[#AA8038] text-white hover:bg-[#8f682d] hover:text-white" : "text-gray-500 hover:bg-gray-100"
+                  )}
+                  onClick={() => setCompanyLayout("grid")}
+                >
+                  <Columns3 className="h-3.5 w-3.5 mr-1" />
+                  Grid
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn(
+                    "h-7 px-2 text-xs",
+                    companyLayout === "list" ? "bg-[#AA8038] text-white hover:bg-[#8f682d] hover:text-white" : "text-gray-500 hover:bg-gray-100"
+                  )}
+                  onClick={() => setCompanyLayout("list")}
+                >
+                  <List className="h-3.5 w-3.5 mr-1" />
+                  List
+                </Button>
+              </div>
+            </div>
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search companies..."
+                className="pl-8 h-8 text-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
-          <div className="relative w-64">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search companies..."
-              className="pl-8 h-8 text-sm"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-48">
+              <Select value={customFilterFieldKey} onValueChange={(value) => { setCustomFilterFieldKey(value ?? "none"); setCustomFilterValue(""); }}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Custom filter field" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No custom filter</SelectItem>
+                  {companyFilterableFields.map((field) => (
+                    <SelectItem key={`company-filter-${field.id}`} value={field.key}>
+                      {field.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedCompanyFilterField ? (
+              companyFilterOptions.length > 0 ? (
+                <div className="min-w-44">
+                  <Select value={customFilterValue || "all"} onValueChange={(value) => setCustomFilterValue(value === "all" ? "" : (value ?? ""))}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Filter value" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All values</SelectItem>
+                      {companyFilterOptions.map((option) => (
+                        <SelectItem key={`company-filter-value-${option}`} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="min-w-56">
+                  <Input
+                    className="h-8 text-sm"
+                    value={customFilterValue}
+                    onChange={(event) => setCustomFilterValue(event.target.value)}
+                    placeholder={`Filter by ${selectedCompanyFilterField.label.toLowerCase()}`}
+                  />
+                </div>
+              )
+            ) : null}
+
+            <div className="min-w-48">
+              <Select value={customSortFieldKey} onValueChange={(value) => setCustomSortFieldKey(value ?? "none")}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Sort by" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No custom sort</SelectItem>
+                  {companySortableFields.map((field) => (
+                    <SelectItem key={`company-sort-${field.id}`} value={field.key}>
+                      {field.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-32">
+              <Select value={customSortDirection} onValueChange={(value) => setCustomSortDirection(value === "desc" ? "desc" : "asc")}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="asc">Asc</SelectItem>
+                  <SelectItem value="desc">Desc</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-slate-600"
+              onClick={() => {
+                setCustomFilterFieldKey("none");
+                setCustomFilterValue("");
+                setCustomSortFieldKey("none");
+                setCustomSortDirection("asc");
+              }}
+            >
+              Clear
+            </Button>
           </div>
         </div>
 
@@ -3653,6 +4062,8 @@ export default function ProjectsPage() {
                   project={project}
                   onOpen={() => setOpenProjectId(project.id)}
                   onEdit={() => { setEditProject(project); setEditOpen(true); }}
+                  gridCoreVisibility={gridCoreVisibility}
+                  gridCustomFields={gridCustomCompanyFields}
                   canEditProject={
                     canWrite &&
                     (
@@ -3673,7 +4084,7 @@ export default function ProjectsPage() {
                   <TableRow>
                     <TableHead>Company</TableHead>
                     <TableHead>Details</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{listCoreVisibility.get("status") === false ? "Status (Hidden)" : "Status"}</TableHead>
                     <TableHead>Tasks</TableHead>
                     <TableHead>Members</TableHead>
                     <TableHead className="w-[90px] text-right">Edit</TableHead>
@@ -3683,6 +4094,10 @@ export default function ProjectsPage() {
                   {filtered.map((project) => {
                     const tasksCount = project.tasks?.length ?? project._count.tasks;
                     const details = toText(project.description ?? "");
+                    const showDescription = listCoreVisibility.get("description") !== false;
+                    const showCategory = listCoreVisibility.get("categoryId") !== false;
+                    const showStart = listCoreVisibility.get("startDate") !== false;
+                    const showEnd = listCoreVisibility.get("endDate") !== false;
                     const canEditCompany =
                       canWrite &&
                       (
@@ -3707,27 +4122,48 @@ export default function ProjectsPage() {
                         </TableCell>
                         <TableCell className="text-sm text-slate-600">
                           <div className="min-w-0 max-w-[24rem]">
-                            {details ? (
-                              <p className="line-clamp-2 text-xs text-slate-500">{details}</p>
-                            ) : (
-                              <p className="text-xs text-slate-400">No details</p>
-                            )}
-                            {project.category ? (
+                            {showDescription ? (
+                              details ? (
+                                <p className="line-clamp-2 text-xs text-slate-500">{details}</p>
+                              ) : (
+                                <p className="text-xs text-slate-400">No details</p>
+                              )
+                            ) : null}
+                            {showCategory && project.category ? (
                               <p className="mt-1 text-xs text-slate-500">{project.category.name}</p>
                             ) : null}
+                            {showStart ? (
+                              <p className="mt-1 text-xs text-slate-500">Start: {project.startDate ? formatDateTime(project.startDate) : "-"}</p>
+                            ) : null}
+                            {showEnd ? (
+                              <p className="mt-1 text-xs text-slate-500">End: {project.endDate ? formatDateTime(project.endDate) : "-"}</p>
+                            ) : null}
+                            {listCustomCompanyFields.map((field) => {
+                              const value = getProjectFieldDisplayValue(project, field);
+                              if (!value) return null;
+                              return (
+                                <p key={`company-list-custom-${project.id}-${field.id}`} className="mt-1 truncate text-xs text-slate-500">
+                                  <span className="font-medium text-slate-600">{field.label}:</span> {value}
+                                </p>
+                              );
+                            })}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "text-xs",
-                              STATUS_CONFIG[project.status]?.className ??
-                                "bg-gray-100 text-gray-600"
-                            )}
-                          >
-                            {STATUS_CONFIG[project.status]?.label ?? project.status}
-                          </Badge>
+                          {listCoreVisibility.get("status") === false ? (
+                            <span className="text-xs text-slate-400">-</span>
+                          ) : (
+                            <Badge
+                              variant="secondary"
+                              className={cn(
+                                "text-xs",
+                                STATUS_CONFIG[project.status]?.className ??
+                                  "bg-gray-100 text-gray-600"
+                              )}
+                            >
+                              {STATUS_CONFIG[project.status]?.label ?? project.status}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-slate-700">
                           {tasksCount} task{tasksCount !== 1 ? "s" : ""}

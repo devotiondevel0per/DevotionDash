@@ -214,6 +214,10 @@ type TaskFormConfigField = {
   layoutColumns: 1 | 2 | 3 | 4;
   layoutColSpan: number;
   spanMode?: "auto" | "manual";
+  showInList?: boolean;
+  showInGrid?: boolean;
+  filterable?: boolean;
+  sortable?: boolean;
   options: string[];
   multiple: boolean;
   accept: string;
@@ -432,6 +436,48 @@ function getTaskFieldSpan(field: TaskFormConfigField, columns: 1 | 2 | 3 | 4) {
   return getAutoTaskFieldSpan(field, columns);
 }
 
+function supportsTaskFiltering(type: TaskFormFieldType): boolean {
+  return type !== "actions" && type !== "file";
+}
+
+function supportsTaskSorting(type: TaskFormFieldType): boolean {
+  return type !== "actions" && type !== "file" && type !== "rich_text" && type !== "textarea";
+}
+
+function defaultTaskShowInList(field: Pick<TaskFormConfigField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "title" ||
+      field.coreKey === "status" ||
+      field.coreKey === "priority" ||
+      field.coreKey === "type" ||
+      field.coreKey === "dueDate" ||
+      field.coreKey === "description" ||
+      field.coreKey === "assignees"
+    );
+  }
+  return field.type !== "file";
+}
+
+function defaultTaskShowInGrid(field: Pick<TaskFormConfigField, "source" | "coreKey" | "type">): boolean {
+  if (field.source === "core") {
+    return (
+      field.coreKey === "title" ||
+      field.coreKey === "status" ||
+      field.coreKey === "priority" ||
+      field.coreKey === "type" ||
+      field.coreKey === "dueDate" ||
+      field.coreKey === "description" ||
+      field.coreKey === "assignees"
+    );
+  }
+  return field.type !== "file";
+}
+
+function resolveTaskFieldBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
   const allowedTypes: TaskFormFieldType[] = [
     "text",
@@ -495,6 +541,30 @@ function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
       const resolvedCoreKey = source === "core" ? (coreKey ?? fallbackCore?.coreKey ?? null) : null;
       const required = resolvedCoreKey === "title" ? true : Boolean(src.required);
       const enabled = resolvedCoreKey === "title" ? true : src.enabled !== false;
+      const defaultDisplay = { source, coreKey: resolvedCoreKey, type } satisfies Pick<
+        TaskFormConfigField,
+        "source" | "coreKey" | "type"
+      >;
+      const showInList = resolveTaskFieldBoolean(
+        src.showInList,
+        resolveTaskFieldBoolean(fallbackCore?.showInList, defaultTaskShowInList(defaultDisplay))
+      );
+      const showInGrid = resolveTaskFieldBoolean(
+        src.showInGrid,
+        resolveTaskFieldBoolean(fallbackCore?.showInGrid, defaultTaskShowInGrid(defaultDisplay))
+      );
+      const filterable = supportsTaskFiltering(type)
+        ? resolveTaskFieldBoolean(
+            src.filterable,
+            resolveTaskFieldBoolean(fallbackCore?.filterable, true)
+          )
+        : false;
+      const sortable = supportsTaskSorting(type)
+        ? resolveTaskFieldBoolean(
+            src.sortable,
+            resolveTaskFieldBoolean(fallbackCore?.sortable, true)
+          )
+        : false;
 
       const nextField: TaskFormConfigField = {
         id,
@@ -513,6 +583,10 @@ function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
         layoutColumns,
         layoutColSpan: manualColSpan,
         spanMode,
+        showInList,
+        showInGrid,
+        filterable,
+        sortable,
         options:
           type === "select" || type === "multiselect"
             ? normalizeFieldOptions(src.options)
@@ -594,6 +668,101 @@ function toText(value: string | null) {
     .replace(/&nbsp;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function getTaskCoreFieldValue(task: TaskItem, field: TaskFormConfigField, stages: WorkflowStage[]): unknown {
+  switch (field.coreKey) {
+    case "title":
+      return task.title;
+    case "type":
+      return task.type;
+    case "status":
+      return getStageMeta(stages, task.status).label;
+    case "priority":
+      return task.priority;
+    case "dueDate":
+      return task.dueDate;
+    case "description":
+      return toText(task.description);
+    case "assignees":
+      return task.assignees.map((entry) => nameOf(entry.user));
+    case "privateTask":
+      return task.isPrivate;
+    default:
+      return undefined;
+  }
+}
+
+function getTaskFieldRawValue(task: TaskItem, field: TaskFormConfigField, stages: WorkflowStage[]): unknown {
+  if (field.source === "core") {
+    return getTaskCoreFieldValue(task, field, stages);
+  }
+  if (!task.customData || typeof task.customData !== "object") return undefined;
+  return task.customData[field.key];
+}
+
+function normalizeTaskFieldToText(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return value.map((entry) => normalizeTaskFieldToText(entry)).filter(Boolean).join(", ");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+  if (typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    if (typeof row.fileName === "string" && row.fileName.trim()) return row.fileName.trim();
+    if (typeof row.label === "string" && row.label.trim()) return row.label.trim();
+    return "";
+  }
+  return String(value).trim();
+}
+
+function getTaskFieldDisplayValue(task: TaskItem, field: TaskFormConfigField, stages: WorkflowStage[]): string {
+  const raw = getTaskFieldRawValue(task, field, stages);
+  if (field.coreKey === "dueDate") return formatDate(raw ? String(raw) : null);
+  if (field.type === "date" || field.type === "datetime") return formatDateTime(raw ? String(raw) : null);
+  return normalizeTaskFieldToText(raw);
+}
+
+function getTaskFieldFilterOptions(
+  field: TaskFormConfigField,
+  items: TaskItem[],
+  stages: WorkflowStage[]
+): string[] {
+  if (field.coreKey === "status") return stages.map((stage) => stage.label);
+  if (field.coreKey === "type") return ["task", "event", "note"];
+  if (field.coreKey === "priority") return ["high", "normal", "low"];
+  if (field.type === "select" || field.type === "multiselect") {
+    if (field.options.length > 0) return field.options;
+  }
+  if (field.type === "checkbox") return ["yes", "no"];
+
+  const set = new Set<string>();
+  for (const item of items) {
+    const raw = getTaskFieldRawValue(item, field, stages);
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        const text = normalizeTaskFieldToText(entry);
+        if (text) set.add(text);
+      }
+    } else {
+      const text = normalizeTaskFieldToText(raw);
+      if (text) set.add(text);
+    }
+    if (set.size >= 100) break;
+  }
+  return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
+}
+
+function toTaskSortValue(raw: unknown, field: TaskFormConfigField): number | string {
+  if (field.coreKey === "dueDate" || field.type === "date" || field.type === "datetime") {
+    const time = new Date(String(raw ?? "")).getTime();
+    return Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY;
+  }
+  if (field.type === "number") {
+    const parsed = Number.parseFloat(String(raw ?? ""));
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  }
+  if (typeof raw === "boolean") return raw ? 1 : 0;
+  return normalizeTaskFieldToText(raw).toLowerCase();
 }
 
 function isWithinCommentWindow(createdAt: string, windowMinutes: number) {
@@ -2287,6 +2456,10 @@ export default function TasksPage() {
   const [statusScope, setStatusScope] = useState("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [customFilterFieldKey, setCustomFilterFieldKey] = useState("none");
+  const [customFilterValue, setCustomFilterValue] = useState("");
+  const [customSortFieldKey, setCustomSortFieldKey] = useState("none");
+  const [customSortDirection, setCustomSortDirection] = useState<"asc" | "desc">("asc");
 
   const [filterDraft, setFilterDraft] = useState<FilterState>(EMPTY_FILTERS);
   const [filterApplied, setFilterApplied] = useState<FilterState>(EMPTY_FILTERS);
@@ -2401,10 +2574,146 @@ export default function TasksPage() {
     return map;
   }, [countTasks, stages]);
 
+  const enabledTaskFields = useMemo(
+    () => taskFormFields.filter((field) => field.enabled),
+    [taskFormFields]
+  );
+
+  const filterableTaskFields = useMemo(
+    () =>
+      enabledTaskFields.filter((field) => {
+        if (!supportsTaskFiltering(field.type)) return false;
+        if (field.coreKey === "duePresets" || field.coreKey === "attachments") return false;
+        return resolveTaskFieldBoolean(field.filterable, true);
+      }),
+    [enabledTaskFields]
+  );
+
+  const sortableTaskFields = useMemo(
+    () =>
+      enabledTaskFields.filter((field) => {
+        if (!supportsTaskSorting(field.type)) return false;
+        if (field.coreKey === "duePresets" || field.coreKey === "attachments") return false;
+        return resolveTaskFieldBoolean(field.sortable, true);
+      }),
+    [enabledTaskFields]
+  );
+
+  const selectedFilterField = useMemo(
+    () => filterableTaskFields.find((field) => field.key === customFilterFieldKey) ?? null,
+    [customFilterFieldKey, filterableTaskFields]
+  );
+
+  const selectedSortField = useMemo(
+    () => sortableTaskFields.find((field) => field.key === customSortFieldKey) ?? null,
+    [customSortFieldKey, sortableTaskFields]
+  );
+
+  useEffect(() => {
+    if (customFilterFieldKey === "none") return;
+    if (!selectedFilterField) {
+      setCustomFilterFieldKey("none");
+      setCustomFilterValue("");
+    }
+  }, [customFilterFieldKey, selectedFilterField]);
+
+  useEffect(() => {
+    if (customSortFieldKey === "none") return;
+    if (!selectedSortField) {
+      setCustomSortFieldKey("none");
+    }
+  }, [customSortFieldKey, selectedSortField]);
+
+  const customFilterOptions = useMemo(
+    () =>
+      selectedFilterField
+        ? getTaskFieldFilterOptions(selectedFilterField, tasks, stages)
+        : [],
+    [selectedFilterField, stages, tasks]
+  );
+
+  const visibleTasks = useMemo(() => {
+    let list = [...tasks];
+    const query = customFilterValue.trim().toLowerCase();
+    if (selectedFilterField && query) {
+      list = list.filter((task) => {
+        const raw = getTaskFieldRawValue(task, selectedFilterField, stages);
+        if (selectedFilterField.type === "checkbox") {
+          const boolText = Boolean(raw) ? "yes" : "no";
+          return boolText === query || (query === "true" && boolText === "yes") || (query === "false" && boolText === "no");
+        }
+        if (Array.isArray(raw)) {
+          return raw.some((entry) => normalizeTaskFieldToText(entry).toLowerCase().includes(query));
+        }
+        return normalizeTaskFieldToText(raw).toLowerCase().includes(query);
+      });
+    }
+
+    if (selectedSortField) {
+      list = [...list].sort((a, b) => {
+        const left = toTaskSortValue(getTaskFieldRawValue(a, selectedSortField, stages), selectedSortField);
+        const right = toTaskSortValue(getTaskFieldRawValue(b, selectedSortField, stages), selectedSortField);
+        const direction = customSortDirection === "asc" ? 1 : -1;
+        if (left === right) return a.createdAt.localeCompare(b.createdAt);
+        if (typeof left === "number" && typeof right === "number") {
+          return (left - right) * direction;
+        }
+        return String(left).localeCompare(String(right)) * direction;
+      });
+    }
+    return list;
+  }, [customFilterValue, customSortDirection, selectedFilterField, selectedSortField, stages, tasks]);
+
+  const listVisibleTaskFields = useMemo(
+    () =>
+      enabledTaskFields.filter((field) => {
+        if (field.coreKey === "title") return false;
+        return resolveTaskFieldBoolean(field.showInList, defaultTaskShowInList(field));
+      }),
+    [enabledTaskFields]
+  );
+
+  const gridVisibleTaskFields = useMemo(
+    () =>
+      enabledTaskFields.filter((field) => {
+        if (field.coreKey === "title") return false;
+        return resolveTaskFieldBoolean(field.showInGrid, defaultTaskShowInGrid(field));
+      }),
+    [enabledTaskFields]
+  );
+
+  const listCoreVisibility = useMemo(() => {
+    const map = new Map<TaskFormCoreFieldKey, boolean>();
+    for (const field of enabledTaskFields) {
+      if (field.source !== "core" || !field.coreKey) continue;
+      map.set(field.coreKey, resolveTaskFieldBoolean(field.showInList, defaultTaskShowInList(field)));
+    }
+    return map;
+  }, [enabledTaskFields]);
+
+  const gridCoreVisibility = useMemo(() => {
+    const map = new Map<TaskFormCoreFieldKey, boolean>();
+    for (const field of enabledTaskFields) {
+      if (field.source !== "core" || !field.coreKey) continue;
+      map.set(field.coreKey, resolveTaskFieldBoolean(field.showInGrid, defaultTaskShowInGrid(field)));
+    }
+    return map;
+  }, [enabledTaskFields]);
+
+  const listCustomTaskFields = useMemo(
+    () => listVisibleTaskFields.filter((field) => field.source === "custom"),
+    [listVisibleTaskFields]
+  );
+
+  const gridCustomTaskFields = useMemo(
+    () => gridVisibleTaskFields.filter((field) => field.source === "custom"),
+    [gridVisibleTaskFields]
+  );
+
   const tasksByStatus = useMemo(() => {
     const buckets: Record<string, TaskItem[]> = {};
     for (const stage of stages) buckets[stage.key] = [];
-    for (const task of tasks) {
+    for (const task of visibleTasks) {
       if (buckets[task.status]) {
         buckets[task.status].push(task);
       } else {
@@ -2414,7 +2723,7 @@ export default function TasksPage() {
       }
     }
     return buckets;
-  }, [tasks, stages]);
+  }, [stages, visibleTasks]);
 
   function openCreate() {
     if (!canWrite) return;
@@ -2727,7 +3036,7 @@ export default function TasksPage() {
                 </Button>
               ) : null}
               <span className="text-sm text-gray-500">
-                {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+                {visibleTasks.length} task{visibleTasks.length !== 1 ? "s" : ""}
               </span>
             </div>
 
@@ -2774,7 +3083,8 @@ export default function TasksPage() {
                 );
               })}
             </div>
-            <div className="ml-auto min-w-44">
+
+            <div className="min-w-44">
               <Select value={statusScope} onValueChange={(value) => setStatusScope(value ?? "all")}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -2785,6 +3095,94 @@ export default function TasksPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="min-w-48">
+              <Select
+                value={customFilterFieldKey}
+                onValueChange={(value) => {
+                  setCustomFilterFieldKey(value ?? "none");
+                  setCustomFilterValue("");
+                }}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Custom filter field" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No custom filter</SelectItem>
+                  {filterableTaskFields.map((field) => (
+                    <SelectItem key={`task-filter-${field.id}`} value={field.key}>
+                      {field.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedFilterField ? (
+              customFilterOptions.length > 0 ? (
+                <div className="min-w-44">
+                  <Select value={customFilterValue || "all"} onValueChange={(value) => setCustomFilterValue(value === "all" ? "" : (value ?? ""))}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Filter value" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All values</SelectItem>
+                      {customFilterOptions.map((option) => (
+                        <SelectItem key={`task-filter-value-${option}`} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="min-w-56">
+                  <Input
+                    value={customFilterValue}
+                    onChange={(event) => setCustomFilterValue(event.target.value)}
+                    placeholder={`Filter by ${selectedFilterField.label.toLowerCase()}`}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              )
+            ) : null}
+
+            <div className="min-w-48">
+              <Select value={customSortFieldKey} onValueChange={(value) => setCustomSortFieldKey(value ?? "none")}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Sort by" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No custom sort</SelectItem>
+                  {sortableTaskFields.map((field) => (
+                    <SelectItem key={`task-sort-${field.id}`} value={field.key}>
+                      {field.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="min-w-32">
+              <Select value={customSortDirection} onValueChange={(value) => setCustomSortDirection(value === "desc" ? "desc" : "asc")}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="asc">Asc</SelectItem>
+                  <SelectItem value="desc">Desc</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-slate-600"
+              onClick={() => {
+                setCustomFilterFieldKey("none");
+                setCustomFilterValue("");
+                setCustomSortFieldKey("none");
+                setCustomSortDirection("asc");
+              }}
+            >
+              Clear
+            </Button>
           </div>
         </div>
 
@@ -2814,7 +3212,7 @@ export default function TasksPage() {
                 {Array.from({ length: 6 }).map((_, idx) => <Skeleton key={idx} className="h-44 w-full rounded-xl" />)}
               </div>
             )
-          ) : tasks.length === 0 ? (
+          ) : visibleTasks.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
               <CheckCircle2 className="h-14 w-14 opacity-30" />
               <p className="mt-3 text-sm">No tasks found.</p>
@@ -2824,13 +3222,13 @@ export default function TasksPage() {
               <div className="grid grid-cols-[44px_1.8fr_130px_160px_160px_170px_170px] border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <span className="text-center">#</span>
                 <span>Subject</span>
-                <span>Status</span>
-                <span>Due</span>
+                <span>{listCoreVisibility.get("status") === false ? "Status (Hidden)" : "Status"}</span>
+                <span>{listCoreVisibility.get("dueDate") === false ? "Due (Hidden)" : "Due"}</span>
                 <span>Created</span>
-                <span>Responsible</span>
+                <span>{listCoreVisibility.get("assignees") === false ? "Responsible (Hidden)" : "Responsible"}</span>
                 <span className="text-right">Actions</span>
               </div>
-              {tasks.map((task) => {
+              {visibleTasks.map((task) => {
                 const done = stages.find((s) => s.key === task.status)?.isClosed ?? false;
                 const canEditTaskItem = task.canEditTask ?? canWrite;
                 const canChangeStatus = task.canChangeStatus ?? canEditTaskItem;
@@ -2860,38 +3258,63 @@ export default function TasksPage() {
                           onClick={() => openDetail(task)}
                           title="View details & comments"
                         >{task.title}</button>
-                        <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority])}>{task.priority}</Badge>
-                        <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type])}>{task.type}</Badge>
+                        {listCoreVisibility.get("priority") === false ? null : (
+                          <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority])}>{task.priority}</Badge>
+                        )}
+                        {listCoreVisibility.get("type") === false ? null : (
+                          <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type])}>{task.type}</Badge>
+                        )}
                         {groupBucket ? (
                           <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
                             Group Bucket
                           </Badge>
                         ) : null}
                       </div>
-                      {task.searchMatchText || task.description ? (
+                      {listCoreVisibility.get("description") === false ? null : task.searchMatchText || task.description ? (
                         <p className="truncate text-xs text-slate-500">
                           {task.searchMatchText
                             ? `Match: ${toText(task.searchMatchText)}`
                             : toText(task.description)}
                         </p>
                       ) : null}
+                      {listCustomTaskFields.length > 0 ? (
+                        <div className="mt-1 space-y-0.5">
+                          {listCustomTaskFields.map((field) => {
+                            const value = getTaskFieldDisplayValue(task, field, stages);
+                            if (!value) return null;
+                            return (
+                              <p key={`list-custom-${task.id}-${field.id}`} className="truncate text-[11px] text-slate-500">
+                                <span className="font-medium text-slate-600">{field.label}:</span> {value}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div>
-                      <Badge variant="outline" style={getStageMeta(stages, task.status).badgeStyle} className="h-5 px-1.5 text-[10px]">
-                        {getStageMeta(stages, task.status).label}
-                      </Badge>
+                      {listCoreVisibility.get("status") === false ? (
+                        <span className="text-[11px] text-slate-400">-</span>
+                      ) : (
+                        <Badge variant="outline" style={getStageMeta(stages, task.status).badgeStyle} className="h-5 px-1.5 text-[10px]">
+                          {getStageMeta(stages, task.status).label}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 text-xs text-slate-600">
                       <CalendarClock className="h-3.5 w-3.5 text-slate-400" />
-                      {formatDate(task.dueDate)}
+                      {listCoreVisibility.get("dueDate") === false ? "-" : formatDate(task.dueDate)}
                     </div>
                     <div className="flex items-center gap-1 text-xs text-slate-600">
                       <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
                       {formatDateTime(task.createdAt)}
                     </div>
                     <div className="truncate text-xs text-slate-700">
-                      {task.assignees.length > 0 ? task.assignees.map((entry) => nameOf(entry.user)).join(", ") : "-"}
+                      {listCoreVisibility.get("assignees") === false
+                        ? "-"
+                        : task.assignees.length > 0
+                          ? task.assignees.map((entry) => nameOf(entry.user)).join(", ")
+                          : "-"}
                     </div>
                     <div className="flex items-center justify-end gap-1">
                       <button
@@ -2941,7 +3364,7 @@ export default function TasksPage() {
             </div>
           ) : layout === "grid" ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {tasks.map((task) => {
+              {visibleTasks.map((task) => {
                 const canEditTaskItem = task.canEditTask ?? canWrite;
                 const canChangeStatus = task.canChangeStatus ?? canEditTaskItem;
                 const canDeleteTaskItem = task.canDelete ?? canManage;
@@ -2967,9 +3390,15 @@ export default function TasksPage() {
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <Badge variant="outline" style={getStageMeta(stages, task.status).badgeStyle} className="h-5 px-1.5 text-[10px]">{getStageMeta(stages, task.status).label}</Badge>
-                    <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority])}>{task.priority}</Badge>
-                    <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type])}>{task.type}</Badge>
+                    {gridCoreVisibility.get("status") === false ? null : (
+                      <Badge variant="outline" style={getStageMeta(stages, task.status).badgeStyle} className="h-5 px-1.5 text-[10px]">{getStageMeta(stages, task.status).label}</Badge>
+                    )}
+                    {gridCoreVisibility.get("priority") === false ? null : (
+                      <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", PRIORITY_META[task.priority])}>{task.priority}</Badge>
+                    )}
+                    {gridCoreVisibility.get("type") === false ? null : (
+                      <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px]", TYPE_META[task.type])}>{task.type}</Badge>
+                    )}
                     {groupBucket ? (
                       <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
                         Group Bucket
@@ -2977,22 +3406,37 @@ export default function TasksPage() {
                     ) : null}
                   </div>
 
-                  <p className="mt-2 line-clamp-3 min-h-[3.5rem] text-xs text-slate-600">
-                    {task.searchMatchText
-                      ? `Match: ${toText(task.searchMatchText)}`
-                      : toText(task.description) || "No description"}
-                  </p>
+                  {gridCoreVisibility.get("description") === false ? null : (
+                    <p className="mt-2 line-clamp-3 min-h-[3.5rem] text-xs text-slate-600">
+                      {task.searchMatchText
+                        ? `Match: ${toText(task.searchMatchText)}`
+                        : toText(task.description) || "No description"}
+                    </p>
+                  )}
 
                   <div className="mt-3 space-y-1 text-xs text-slate-600">
-                    <div className="flex items-center gap-1">
-                      <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
-                      Due: {formatDate(task.dueDate)}
-                    </div>
-                    <div className="truncate">Assigned: {task.assignees.length > 0 ? task.assignees.map((entry) => nameOf(entry.user)).join(", ") : "-"}</div>
+                    {gridCoreVisibility.get("dueDate") === false ? null : (
+                      <div className="flex items-center gap-1">
+                        <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+                        Due: {formatDate(task.dueDate)}
+                      </div>
+                    )}
+                    {gridCoreVisibility.get("assignees") === false ? null : (
+                      <div className="truncate">Assigned: {task.assignees.length > 0 ? task.assignees.map((entry) => nameOf(entry.user)).join(", ") : "-"}</div>
+                    )}
                     {Array.isArray(task.assignedGroups) && task.assignedGroups.length > 0 ? (
                       <div className="truncate">Groups: {task.assignedGroups.map((group) => group.name).join(", ")}</div>
                     ) : null}
                     <div className="truncate text-[#0066c2]">Author: {nameOf(task.creator)}</div>
+                    {gridCustomTaskFields.map((field) => {
+                      const value = getTaskFieldDisplayValue(task, field, stages);
+                      if (!value) return null;
+                      return (
+                        <div key={`grid-custom-${task.id}-${field.id}`} className="truncate">
+                          <span className="font-medium text-slate-700">{field.label}:</span> {value}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="mt-4 flex items-center justify-end gap-1">
