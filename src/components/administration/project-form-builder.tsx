@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,11 @@ import type {
 type Props = {
   canManage: boolean;
 };
+
+const DEFAULT_LEFT_PANEL_WIDTH = 420;
+const MIN_LEFT_PANEL_WIDTH = 320;
+const MIN_RIGHT_PANEL_WIDTH = 520;
+const RESIZE_HANDLE_WIDTH = 12;
 
 const FIELD_TYPE_OPTIONS: Array<{ value: ProjectFormFieldType; label: string }> = [
   { value: "text", label: "Text" },
@@ -108,6 +113,21 @@ export function ProjectFormBuilder({ canManage }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(DEFAULT_LEFT_PANEL_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
+  const layoutRef = useRef<HTMLDivElement | null>(null);
+
+  const clampLeftPanelWidth = useCallback((proposed: number) => {
+    const containerWidth = layoutRef.current?.clientWidth ?? 0;
+    if (containerWidth <= 0) {
+      return Math.max(MIN_LEFT_PANEL_WIDTH, proposed);
+    }
+    const maxLeft = Math.max(
+      MIN_LEFT_PANEL_WIDTH,
+      containerWidth - MIN_RIGHT_PANEL_WIDTH - RESIZE_HANDLE_WIDTH
+    );
+    return Math.max(MIN_LEFT_PANEL_WIDTH, Math.min(maxLeft, proposed));
+  }, []);
 
   function normalizeLayoutFields(nextFields: ProjectFormField[]) {
     return nextFields
@@ -152,6 +172,37 @@ export function ProjectFormBuilder({ canManage }: Props) {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      setLeftPanelWidth((prev) => clampLeftPanelWidth(prev));
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clampLeftPanelWidth]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+    const onPointerMove = (event: MouseEvent) => {
+      const rect = layoutRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const next = event.clientX - rect.left;
+      setLeftPanelWidth(clampLeftPanelWidth(next));
+    };
+    const stopResizing = () => setIsResizing(false);
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onPointerMove);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onPointerMove);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [clampLeftPanelWidth, isResizing]);
 
   const selectedField = useMemo(
     () => fields.find((field) => field.id === selectedId) ?? null,
@@ -425,7 +476,16 @@ export function ProjectFormBuilder({ canManage }: Props) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-[420px_1fr]">
+      <CardContent>
+        <div
+          ref={layoutRef}
+          className="grid gap-4 lg:gap-0 lg:[grid-template-columns:minmax(320px,var(--builder-left))_12px_minmax(520px,1fr)]"
+          style={
+            {
+              "--builder-left": `${leftPanelWidth}px`,
+            } as CSSProperties
+          }
+        >
         <div className="space-y-3 rounded-lg border bg-slate-50 p-3">
           <div className="flex items-center justify-between">
             <div>
@@ -561,7 +621,29 @@ export function ProjectFormBuilder({ canManage }: Props) {
           </div>
         </div>
         {selectedField ? (
-          <div className="space-y-4 rounded-lg border p-4">
+          <>
+            <div
+              className="hidden lg:flex lg:items-stretch lg:justify-center"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize form builder panels"
+            >
+              <button
+                type="button"
+                className={`group h-full w-2 cursor-col-resize rounded bg-slate-200/70 transition hover:bg-[#AA8038]/40 ${
+                  isResizing ? "bg-[#AA8038]/50" : ""
+                }`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setIsResizing(true);
+                }}
+                onDoubleClick={() => setLeftPanelWidth(DEFAULT_LEFT_PANEL_WIDTH)}
+                aria-label="Drag to resize. Double click to reset."
+              >
+                <span className="sr-only">Resize panels</span>
+              </button>
+            </div>
+            <div className="space-y-4 rounded-lg border p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Label</Label>
@@ -905,12 +987,37 @@ export function ProjectFormBuilder({ canManage }: Props) {
                 </div>
               </div>
             )}
-          </div>
+            </div>
+          </>
         ) : (
-          <div className="rounded-lg border p-4 text-sm text-slate-500">
-            Select a field from the left panel to edit configuration.
-          </div>
+          <>
+            <div
+              className="hidden lg:flex lg:items-stretch lg:justify-center"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize form builder panels"
+            >
+              <button
+                type="button"
+                className={`group h-full w-2 cursor-col-resize rounded bg-slate-200/70 transition hover:bg-[#AA8038]/40 ${
+                  isResizing ? "bg-[#AA8038]/50" : ""
+                }`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setIsResizing(true);
+                }}
+                onDoubleClick={() => setLeftPanelWidth(DEFAULT_LEFT_PANEL_WIDTH)}
+                aria-label="Drag to resize. Double click to reset."
+              >
+                <span className="sr-only">Resize panels</span>
+              </button>
+            </div>
+            <div className="rounded-lg border p-4 text-sm text-slate-500">
+              Select a field from the left panel to edit configuration.
+            </div>
+          </>
         )}
+        </div>
       </CardContent>
     </Card>
   );
