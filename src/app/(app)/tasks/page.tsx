@@ -31,6 +31,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/use-permissions";
 import { buildThreadTree, type ThreadNode } from "@/lib/task-comment-thread";
+import {
+  evaluateFieldConditions,
+  type FormFieldCondition,
+} from "@/lib/form-conditions";
 import { cn } from "@/lib/utils";
 import {
   CalendarClock,
@@ -196,6 +200,7 @@ type TaskFileMetadataField = {
   placeholder: string;
   options: string[];
 };
+type TaskFormFieldCondition = FormFieldCondition;
 
 type TaskFormConfigField = {
   id: string;
@@ -222,6 +227,7 @@ type TaskFormConfigField = {
   multiple: boolean;
   accept: string;
   metadataFields: TaskFileMetadataField[];
+  conditions?: TaskFormFieldCondition[];
 };
 
 const VIEW_TABS: Array<{ id: TaskView; label: string }> = [
@@ -379,6 +385,49 @@ function normalizeTaskMetadataFields(input: unknown): TaskFileMetadataField[] {
       required: Boolean(src.required),
       placeholder: (typeof src.placeholder === "string" ? src.placeholder.trim() : "").slice(0, 200),
       options: type === "select" ? normalizeFieldOptions(src.options) : [],
+    });
+  }
+  return list;
+}
+
+function normalizeTaskFieldConditions(
+  input: unknown,
+  fieldKey: string,
+  fieldType: TaskFormFieldType
+): TaskFormFieldCondition[] {
+  if (!Array.isArray(input)) return [];
+  const supportsOptionRules = fieldType === "select" || fieldType === "multiselect";
+  const list: TaskFormFieldCondition[] = [];
+  const seen = new Set<string>();
+  for (const entry of input) {
+    if (!entry || typeof entry !== "object") continue;
+    const src = entry as Record<string, unknown>;
+    const id = normalizeFieldKey(src.id, `condition_${list.length + 1}`);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const sourceKey = normalizeFieldKey(src.sourceKey, "");
+    if (!sourceKey || sourceKey === fieldKey) continue;
+    const actionRaw = String(src.action ?? "show");
+    const action: TaskFormFieldCondition["action"] =
+      actionRaw === "require" || actionRaw === "options" ? actionRaw : "show";
+    if (action === "options" && !supportsOptionRules) continue;
+    const operatorRaw = String(src.operator ?? "equals");
+    const operator: TaskFormFieldCondition["operator"] =
+      operatorRaw === "not_equals" ||
+      operatorRaw === "contains" ||
+      operatorRaw === "not_contains" ||
+      operatorRaw === "is_empty" ||
+      operatorRaw === "is_not_empty"
+        ? operatorRaw
+        : "equals";
+    list.push({
+      id,
+      sourceKey,
+      operator,
+      value: (typeof src.value === "string" ? src.value : "").trim().slice(0, 300),
+      action,
+      options: action === "options" ? normalizeFieldOptions(src.options) : [],
+      enabled: src.enabled !== false,
     });
   }
   return list;
@@ -594,6 +643,7 @@ function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",
         metadataFields: type === "file" ? normalizeTaskMetadataFields(src.metadataFields) : [],
+        conditions: normalizeTaskFieldConditions(src.conditions, key, type),
       };
       if (spanMode === "auto") {
         nextField.layoutColSpan = getAutoTaskFieldSpan(nextField, layoutColumns);
@@ -608,16 +658,57 @@ function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
       ...coreField,
       options: [...coreField.options],
       metadataFields: [],
+      conditions: [],
     });
   }
 
-  return list
+  const normalized = list
     .sort((a, b) => {
       if (a.pane !== b.pane) return a.pane === "main" ? -1 : 1;
       if (a.layoutRow !== b.layoutRow) return a.layoutRow - b.layoutRow;
       return a.order - b.order;
-    })
-    .map((field, index) => ({ ...field, order: index + 1 }));
+    });
+  const availableKeys = new Set(normalized.map((field) => field.key));
+  return normalized.map((field, index) => ({
+    ...field,
+    order: index + 1,
+    conditions: (field.conditions ?? [])
+      .filter((condition) => {
+        if (!condition.sourceKey || condition.sourceKey === field.key) return false;
+        return availableKeys.has(condition.sourceKey);
+      })
+      .map((condition) => ({
+        ...condition,
+        options: condition.action === "options" ? normalizeFieldOptions(condition.options) : [],
+      })),
+  }));
+}
+
+function getTaskFormConditionValues(form: TaskFormState): Record<string, unknown> {
+  return {
+    title: form.title,
+    type: form.type,
+    status: form.status,
+    priority: form.priority,
+    dueDate: form.dueDate,
+    privateTask: form.isPrivate,
+    description: form.descriptionHtml,
+    assignees: form.assignees.map((entry) => entry.userId),
+    ...form.customData,
+  };
+}
+
+function getTaskFormFieldState(field: TaskFormConfigField, form: TaskFormState) {
+  if (field.source === "core" && field.coreKey === "title") {
+    return { visible: true, required: true, options: field.options };
+  }
+  return evaluateFieldConditions({
+    fieldType: field.type,
+    baseRequired: field.required,
+    baseOptions: field.options,
+    conditions: field.conditions,
+    values: getTaskFormConditionValues(form),
+  });
 }
 
 function nameOf(user: { name: string; fullname: string }) {
@@ -886,9 +977,25 @@ function TaskModal({
     setUploadingFieldKey(null);
   }, [open, initial, meId]);
 
-  const activeFormFields = useMemo(
+  const configuredFormFields = useMemo(
     () => normalizeTaskFormFields(formFields).filter((field) => field.enabled),
     [formFields]
+  );
+  const activeFormFields = useMemo(
+    () =>
+      configuredFormFields
+        .map((field) => {
+          const state = getTaskFormFieldState(field, form);
+          return {
+            ...field,
+            required: state.required,
+            options: state.options,
+            visible: state.visible,
+          };
+        })
+        .filter((field) => field.visible)
+        .map(({ visible, ...field }) => field),
+    [configuredFormFields, form]
   );
   const formFieldByCore = useMemo(
     () => new Map(activeFormFields.map((field) => [field.coreKey, field])),
@@ -1011,8 +1118,19 @@ function TaskModal({
     }
 
     for (const field of activeFormFields) {
-      if (!field.required || field.source !== "custom") continue;
       const value = preparedForm.customData[field.key];
+      if (field.source !== "custom") continue;
+      if (field.type === "select" && typeof value === "string" && value) {
+        if (field.options.length > 0 && !field.options.includes(value)) {
+          return `${field.label} has an invalid selection`;
+        }
+      }
+      if (field.type === "multiselect" && Array.isArray(value)) {
+        if (field.options.length > 0 && value.some((item) => !field.options.includes(String(item)))) {
+          return `${field.label} has invalid selections`;
+        }
+      }
+      if (!field.required) continue;
       if (value === undefined || value === null || value === "") {
         return `${field.label} is required`;
       }
@@ -1046,6 +1164,36 @@ function TaskModal({
     return null;
   }
 
+  function buildConditionalCustomData(preparedForm: TaskFormState) {
+    const next: Record<string, unknown> = {};
+    for (const field of configuredFormFields) {
+      if (field.source !== "custom") continue;
+      const state = getTaskFormFieldState(field, preparedForm);
+      if (!state.visible) continue;
+      const value = preparedForm.customData[field.key];
+      if (value === undefined || value === null || value === "") continue;
+      if (field.type === "select") {
+        const text = String(value).trim();
+        if (!text) continue;
+        if (state.options.length > 0 && !state.options.includes(text)) continue;
+        next[field.key] = text;
+        continue;
+      }
+      if (field.type === "multiselect") {
+        const values = Array.isArray(value) ? value.map((entry) => String(entry).trim()).filter(Boolean) : [];
+        if (values.length === 0) continue;
+        const filtered =
+          state.options.length > 0
+            ? values.filter((entry) => state.options.includes(entry))
+            : values;
+        if (filtered.length > 0) next[field.key] = filtered;
+        continue;
+      }
+      next[field.key] = value;
+    }
+    return next;
+  }
+
   async function submit() {
     const preparedForm = ensureCreatorAssignee(form);
     const requiredError = validateRequiredFields(preparedForm);
@@ -1056,6 +1204,7 @@ function TaskModal({
 
     setSaving(true);
     try {
+      const conditionedCustomData = buildConditionalCustomData(preparedForm);
       const payload = {
         title: preparedForm.title.trim(),
         description: preparedForm.descriptionHtml,
@@ -1066,7 +1215,7 @@ function TaskModal({
         isPrivate: preparedForm.isPrivate,
         assignees: preparedForm.assignees,
         groupIds: preparedForm.groupIds,
-        customData: preparedForm.customData,
+        customData: conditionedCustomData,
       };
 
       const response = await fetch(form.id ? `/api/tasks/${form.id}` : "/api/tasks", {

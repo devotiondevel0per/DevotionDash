@@ -77,6 +77,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { buildThreadTree, type ThreadNode } from "@/lib/task-comment-thread";
 import type { ProjectFormField } from "@/lib/project-form-config";
+import { evaluateFieldConditions } from "@/lib/form-conditions";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -479,9 +480,81 @@ function resolveProjectFieldBoolean(value: unknown, fallback: boolean): boolean 
   return typeof value === "boolean" ? value : fallback;
 }
 
+function normalizeProjectFieldKey(input: unknown, fallback: string) {
+  const raw = typeof input === "string" ? input : fallback;
+  const normalized = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
+  return normalized || fallback;
+}
+
+function normalizeProjectFieldOptions(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const options: string[] = [];
+  for (const item of input) {
+    if (typeof item !== "string") continue;
+    const value = item.trim().slice(0, 120);
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push(value);
+  }
+  return options;
+}
+
+function normalizeProjectFieldConditions(
+  input: unknown,
+  fieldKey: string,
+  fieldType: ProjectFormField["type"]
+) {
+  if (!Array.isArray(input)) return [];
+  const supportsOptionRules = fieldType === "select" || fieldType === "multiselect";
+  const list: NonNullable<ProjectFormField["conditions"]> = [];
+  const seen = new Set<string>();
+  for (const entry of input) {
+    if (!entry || typeof entry !== "object") continue;
+    const src = entry as Record<string, unknown>;
+    const id = normalizeProjectFieldKey(src.id, `condition_${list.length + 1}`);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const sourceKey = normalizeProjectFieldKey(src.sourceKey, "");
+    if (!sourceKey || sourceKey === fieldKey) continue;
+    const actionRaw = String(src.action ?? "show");
+    const action =
+      actionRaw === "require" || actionRaw === "options"
+        ? actionRaw
+        : "show";
+    if (action === "options" && !supportsOptionRules) continue;
+    const operatorRaw = String(src.operator ?? "equals");
+    const operator =
+      operatorRaw === "not_equals" ||
+      operatorRaw === "contains" ||
+      operatorRaw === "not_contains" ||
+      operatorRaw === "is_empty" ||
+      operatorRaw === "is_not_empty"
+        ? operatorRaw
+        : "equals";
+    list.push({
+      id,
+      sourceKey,
+      operator,
+      value: (typeof src.value === "string" ? src.value : "").trim().slice(0, 300),
+      action,
+      options: action === "options" ? normalizeProjectFieldOptions(src.options) : [],
+      enabled: src.enabled !== false,
+    });
+  }
+  return list;
+}
+
 function normalizeProjectFormFields(input: unknown): ProjectFormField[] {
   const source = Array.isArray(input) && input.length > 0 ? input : DEFAULT_PROJECT_FORM_FIELDS;
-  return source
+  const normalized = source
     .map((field) => {
       const showInList = resolveProjectFieldBoolean(field.showInList, defaultProjectShowInList(field));
       const showInGrid = resolveProjectFieldBoolean(field.showInGrid, defaultProjectShowInGrid(field));
@@ -497,6 +570,7 @@ function normalizeProjectFormFields(input: unknown): ProjectFormField[] {
         showInGrid,
         filterable,
         sortable,
+        conditions: normalizeProjectFieldConditions(field.conditions, field.key, field.type),
       };
     })
     .sort((a, b) => {
@@ -505,6 +579,58 @@ function normalizeProjectFormFields(input: unknown): ProjectFormField[] {
       if (rowA !== rowB) return rowA - rowB;
       return a.order - b.order;
     });
+  const availableKeys = new Set(normalized.map((field) => field.key));
+  return normalized.map((field) => ({
+    ...field,
+    conditions: ((field.conditions ?? []) as NonNullable<ProjectFormField["conditions"]>)
+      .filter((condition: NonNullable<ProjectFormField["conditions"]>[number]) => {
+        if (!condition.sourceKey || condition.sourceKey === field.key) return false;
+        return availableKeys.has(condition.sourceKey);
+      })
+      .map((condition: NonNullable<ProjectFormField["conditions"]>[number]) => ({
+        ...condition,
+        options:
+          condition.action === "options"
+            ? normalizeProjectFieldOptions(condition.options)
+            : [],
+      })),
+  }));
+}
+
+function getProjectFormConditionValues(input: {
+  name: string;
+  description: string;
+  categoryId: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  customData: Record<string, unknown>;
+}) {
+  return {
+    name: input.name,
+    description: input.description,
+    categoryId: input.categoryId,
+    status: input.status,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    ...input.customData,
+  };
+}
+
+function getProjectFieldState(
+  field: ProjectFormField,
+  values: ReturnType<typeof getProjectFormConditionValues>
+) {
+  if (field.source === "core" && field.coreKey === "name") {
+    return { visible: true, required: true, options: field.options };
+  }
+  return evaluateFieldConditions({
+    fieldType: field.type,
+    baseRequired: field.required,
+    baseOptions: field.options,
+    conditions: field.conditions,
+    values,
+  });
 }
 
 function formatDate(iso?: string | null): string {
@@ -802,7 +928,20 @@ function ProjectFormDialog({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [uploadingFieldKey, setUploadingFieldKey] = useState<string | null>(null);
 
-  const enabledFields = useMemo(
+  const conditionValues = useMemo(
+    () =>
+      getProjectFormConditionValues({
+        name,
+        description,
+        categoryId,
+        status,
+        startDate,
+        endDate,
+        customData,
+      }),
+    [name, description, categoryId, status, startDate, endDate, customData]
+  );
+  const configuredFields = useMemo(
     () =>
       [...formFields]
         .filter((field) => field.enabled)
@@ -813,6 +952,22 @@ function ProjectFormDialog({
           return a.order - b.order;
         }),
     [formFields]
+  );
+  const enabledFields = useMemo(
+    () =>
+      configuredFields
+        .map((field) => {
+          const state = getProjectFieldState(field, conditionValues);
+          return {
+            ...field,
+            required: state.required,
+            options: state.options,
+            visible: state.visible,
+          };
+        })
+        .filter((field) => field.visible)
+        .map(({ visible, ...field }) => field),
+    [configuredFields, conditionValues]
   );
 
   const formRows = useMemo(() => {
@@ -917,6 +1072,16 @@ function ProjectFormDialog({
       }
 
       const value = customData[field.key];
+      if (field.type === "select" && typeof value === "string" && value) {
+        if (field.options.length > 0 && !field.options.includes(value)) {
+          return `${field.label} has an invalid selection`;
+        }
+      }
+      if (field.type === "multiselect" && Array.isArray(value)) {
+        if (field.options.length > 0 && value.some((item) => !field.options.includes(String(item)))) {
+          return `${field.label} has invalid selections`;
+        }
+      }
       if (value === undefined || value === null || value === "") return `${field.label} is required`;
       if (field.type === "multiselect" && (!Array.isArray(value) || value.length === 0)) {
         return `${field.label} is required`;
@@ -947,6 +1112,36 @@ function ProjectFormDialog({
     return null;
   }
 
+  function buildConditionalCustomData() {
+    const next: Record<string, unknown> = {};
+    for (const field of configuredFields) {
+      if (field.source !== "custom") continue;
+      const state = getProjectFieldState(field, conditionValues);
+      if (!state.visible) continue;
+      const value = customData[field.key];
+      if (value === undefined || value === null || value === "") continue;
+      if (field.type === "select") {
+        const text = String(value).trim();
+        if (!text) continue;
+        if (state.options.length > 0 && !state.options.includes(text)) continue;
+        next[field.key] = text;
+        continue;
+      }
+      if (field.type === "multiselect") {
+        const values = Array.isArray(value) ? value.map((entry) => String(entry).trim()).filter(Boolean) : [];
+        if (values.length === 0) continue;
+        const filtered =
+          state.options.length > 0
+            ? values.filter((entry) => state.options.includes(entry))
+            : values;
+        if (filtered.length > 0) next[field.key] = filtered;
+        continue;
+      }
+      next[field.key] = value;
+    }
+    return next;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const requiredError = validateRequiredFields();
@@ -956,6 +1151,7 @@ function ProjectFormDialog({
     }
     setSubmitting(true);
     try {
+      const conditionedCustomData = buildConditionalCustomData();
       const payload = {
         name: name.trim() || undefined,
         description: hasRichTextContent(description) ? normalizeRichText(description) : undefined,
@@ -963,7 +1159,7 @@ function ProjectFormDialog({
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         status,
-        customData,
+        customData: conditionedCustomData,
       };
       const url = isEdit ? `/api/projects/${existing!.id}` : "/api/projects";
       const res = await fetch(url, {

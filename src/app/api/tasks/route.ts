@@ -505,7 +505,15 @@ export async function POST(req: NextRequest) {
       assigneeIds,
     });
     const taskFormFields = await loadTaskFormFields();
-    const normalizedCustomData = sanitizeTaskCustomData(customData, taskFormFields);
+    const normalizedCustomData = sanitizeTaskCustomData(customData, taskFormFields, {
+      title,
+      type: type ?? "task",
+      status: statusToUse,
+      priority: priority ?? "normal",
+      dueDate: dueDate ?? null,
+      privateTask: isPrivate ?? false,
+      description: description ?? "",
+    });
     const customDataValue: Prisma.InputJsonValue | undefined =
       Object.keys(normalizedCustomData).length > 0
         ? (normalizedCustomData as Prisma.InputJsonValue)

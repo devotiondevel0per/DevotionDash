@@ -1,5 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@prisma/client";
+import {
+  dedupeConditionOptions,
+  evaluateFieldConditions,
+  isValidFormConditionAction,
+  isValidFormConditionOperator,
+  type ConditionSourceValues,
+  type FormConditionAction,
+  type FormConditionOperator,
+  type FormFieldCondition,
+} from "@/lib/form-conditions";
 
 export const TASK_FORM_SCHEMA_SETTING_KEY = "tasks.form.schema.v1";
 
@@ -47,6 +57,10 @@ export type TaskFileMetadataField = {
   options: string[];
 };
 
+export type TaskFormFieldConditionOperator = FormConditionOperator;
+export type TaskFormFieldConditionAction = FormConditionAction;
+export type TaskFormFieldCondition = FormFieldCondition;
+
 export type TaskFormField = {
   id: string;
   key: string;
@@ -72,6 +86,7 @@ export type TaskFormField = {
   multiple: boolean;
   accept: string;
   metadataFields: TaskFileMetadataField[];
+  conditions?: TaskFormFieldCondition[];
 };
 
 type FileEntry = {
@@ -466,6 +481,41 @@ function sanitizeMetadataFields(input: unknown): TaskFileMetadataField[] {
   return result;
 }
 
+function sanitizeTaskFieldConditions(
+  input: unknown,
+  fieldKey: string,
+  fieldType: TaskFormFieldType
+): TaskFormFieldCondition[] {
+  if (!Array.isArray(input)) return [];
+  const supportsOptionAction = fieldType === "select" || fieldType === "multiselect";
+  const result: TaskFormFieldCondition[] = [];
+  const seenIds = new Set<string>();
+  for (const entry of input) {
+    if (!entry || typeof entry !== "object") continue;
+    const src = entry as Record<string, unknown>;
+    const id = normalizeKey(src.id, `condition_${result.length + 1}`);
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    const sourceKey = normalizeKey(src.sourceKey, "");
+    if (!sourceKey || sourceKey === fieldKey) continue;
+    const action = isValidFormConditionAction(src.action) ? src.action : "show";
+    if (!supportsOptionAction && action === "options") continue;
+    const operator = isValidFormConditionOperator(src.operator) ? src.operator : "equals";
+    const value = (typeof src.value === "string" ? src.value : "").trim().slice(0, 300);
+    result.push({
+      id,
+      sourceKey,
+      operator,
+      value,
+      action,
+      options: action === "options" ? dedupeConditionOptions(src.options) : [],
+      enabled: src.enabled !== false,
+    });
+    if (result.length >= 50) break;
+  }
+  return result;
+}
+
 export function getDefaultTaskFormFields(): TaskFormField[] {
   return CORE_FIELD_DEFAULTS.map((field) => ({
     ...field,
@@ -475,6 +525,7 @@ export function getDefaultTaskFormFields(): TaskFormField[] {
     sortable: supportsTaskSorting(field.type),
     options: [...field.options],
     metadataFields: [],
+    conditions: [],
   }));
 }
 
@@ -531,6 +582,7 @@ export function sanitizeTaskFormFields(input: unknown): TaskFormField[] {
       const resolvedCoreKey = source === "core" ? (coreKey ?? defaultCore?.coreKey ?? null) : null;
       const fieldOptions =
         type === "select" || type === "multiselect" ? dedupeOptions(src.options) : [];
+      const conditions = sanitizeTaskFieldConditions(src.conditions, key, type);
       const fieldDefaults = {
         source,
         coreKey: resolvedCoreKey,
@@ -583,6 +635,7 @@ export function sanitizeTaskFormFields(input: unknown): TaskFormField[] {
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",
         metadataFields: type === "file" ? sanitizeMetadataFields(src.metadataFields) : [],
+        conditions,
       });
       if (result.length >= 140) break;
     }
@@ -590,16 +643,35 @@ export function sanitizeTaskFormFields(input: unknown): TaskFormField[] {
 
   for (const coreField of defaults) {
     if (result.some((entry) => entry.source === "core" && entry.coreKey === coreField.coreKey)) continue;
-    result.push({ ...coreField, options: [...coreField.options], metadataFields: [] });
+    result.push({
+      ...coreField,
+      options: [...coreField.options],
+      metadataFields: [],
+      conditions: [],
+    });
   }
 
-  return result
+  const normalized = result
     .sort((a, b) => {
       if (a.pane !== b.pane) return a.pane === "main" ? -1 : 1;
       if (a.layoutRow !== b.layoutRow) return a.layoutRow - b.layoutRow;
       return a.order - b.order;
-    })
-    .map((field, index) => ({ ...field, order: index + 1 }));
+    });
+  const availableKeys = new Set(normalized.map((field) => field.key));
+  return normalized.map((field, index) => ({
+    ...field,
+    order: index + 1,
+    conditions: (field.conditions ?? [])
+      .filter((condition) => {
+        if (!condition.sourceKey || condition.sourceKey === field.key) return false;
+        return availableKeys.has(condition.sourceKey);
+      })
+      .map((condition) => ({
+        ...condition,
+        options:
+          condition.action === "options" ? dedupeConditionOptions(condition.options) : [],
+      })),
+  }));
 }
 
 export function parseTaskFormFieldsSetting(raw: string | null | undefined): TaskFormField[] {
@@ -660,38 +732,70 @@ function sanitizeFileEntry(input: unknown, field: TaskFormField): FileEntry | nu
   return { url, fileName, size, mimeType, metadata: normalizedMetadata };
 }
 
+export function resolveTaskFieldConditionalState(
+  field: Pick<TaskFormField, "type" | "required" | "options" | "conditions">,
+  values: ConditionSourceValues
+) {
+  return evaluateFieldConditions({
+    fieldType: field.type,
+    baseRequired: field.required,
+    baseOptions: field.options,
+    conditions: field.conditions,
+    values,
+  });
+}
+
 export function sanitizeTaskCustomData(
   input: unknown,
-  fields: TaskFormField[]
+  fields: TaskFormField[],
+  conditionValues: ConditionSourceValues = {}
 ): Record<string, unknown> {
   const source = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   const result: Record<string, unknown> = {};
-  const customFields = fields.filter((field) => field.enabled && field.source === "custom");
+  const customFields = fields
+    .filter((field) => field.enabled && field.source === "custom")
+    .sort((a, b) => a.order - b.order);
+  const conditionSource: ConditionSourceValues = { ...conditionValues, ...source };
 
   for (const field of customFields) {
+    const resolved = resolveTaskFieldConditionalState(field, conditionSource);
+    if (!resolved.visible) {
+      delete conditionSource[field.key];
+      continue;
+    }
     const raw = source[field.key];
     if (raw === undefined || raw === null || raw === "") continue;
 
     if (field.type === "checkbox") {
       result[field.key] = Boolean(raw);
+      conditionSource[field.key] = result[field.key];
       continue;
     }
     if (field.type === "number") {
       const parsed = Number.parseFloat(String(raw));
-      if (Number.isFinite(parsed)) result[field.key] = parsed;
+      if (Number.isFinite(parsed)) {
+        result[field.key] = parsed;
+        conditionSource[field.key] = parsed;
+      }
       continue;
     }
     if (field.type === "multiselect") {
       const values = Array.isArray(raw) ? raw.map((item) => String(item).trim()) : [];
-      const filtered = values.filter((item) => item && (field.options.length === 0 || field.options.includes(item)));
-      if (filtered.length > 0) result[field.key] = filtered.slice(0, 100);
+      const filtered = values.filter(
+        (item) => item && (resolved.options.length === 0 || resolved.options.includes(item))
+      );
+      if (filtered.length > 0) {
+        result[field.key] = filtered.slice(0, 100);
+        conditionSource[field.key] = result[field.key];
+      }
       continue;
     }
     if (field.type === "select") {
       const text = String(raw).trim();
       if (!text) continue;
-      if (field.options.length === 0 || field.options.includes(text)) {
+      if (resolved.options.length === 0 || resolved.options.includes(text)) {
         result[field.key] = text;
+        conditionSource[field.key] = text;
       }
       continue;
     }
@@ -702,6 +806,7 @@ export function sanitizeTaskCustomData(
         .filter((entry): entry is FileEntry => Boolean(entry));
       if (files.length > 0) {
         result[field.key] = field.multiple ? files : [files[0]];
+        conditionSource[field.key] = result[field.key];
       }
       continue;
     }
@@ -709,6 +814,7 @@ export function sanitizeTaskCustomData(
     const text = String(raw).trim();
     if (!text) continue;
     result[field.key] = text.slice(0, field.type === "rich_text" ? 100000 : 4000);
+    conditionSource[field.key] = result[field.key];
   }
 
   return result;

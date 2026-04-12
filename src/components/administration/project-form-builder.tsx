@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { GripVertical, Plus, Save, Trash2 } from "lucide-react";
 import type {
   ProjectFileMetadataField,
+  ProjectFormFieldCondition,
   ProjectFormField,
   ProjectFormFieldType,
 } from "@/lib/project-form-config";
@@ -57,6 +58,19 @@ const META_TYPE_OPTIONS: Array<{ value: ProjectFileMetadataField["type"]; label:
   { value: "email", label: "Email" },
   { value: "phone", label: "Phone" },
 ];
+const CONDITION_OPERATOR_OPTIONS: Array<{ value: ProjectFormFieldCondition["operator"]; label: string }> = [
+  { value: "equals", label: "Equals" },
+  { value: "not_equals", label: "Not Equals" },
+  { value: "contains", label: "Contains" },
+  { value: "not_contains", label: "Not Contains" },
+  { value: "is_empty", label: "Is Empty" },
+  { value: "is_not_empty", label: "Is Not Empty" },
+];
+const CONDITION_ACTION_OPTIONS: Array<{ value: ProjectFormFieldCondition["action"]; label: string }> = [
+  { value: "show", label: "Show Field" },
+  { value: "require", label: "Require Field" },
+  { value: "options", label: "Conditional Options" },
+];
 
 function normalizeKey(value: string, fallback: string) {
   return (
@@ -75,7 +89,52 @@ function nextFieldOrder(fields: ProjectFormField[]) {
 function asOptionLines(lines: string) {
   return lines
     .split(/\r?\n/)
-    .map((line) => line.trim());
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function supportsConditionalOptions(type: ProjectFormFieldType) {
+  return type === "select" || type === "multiselect";
+}
+
+function sanitizeProjectBuilderConditions(
+  conditions: ProjectFormField["conditions"],
+  fieldKey: string,
+  fieldType: ProjectFormFieldType
+): ProjectFormFieldCondition[] {
+  if (!Array.isArray(conditions)) return [];
+  const canUseOptionRules = supportsConditionalOptions(fieldType);
+  const seen = new Set<string>();
+  const result: ProjectFormFieldCondition[] = [];
+  for (const condition of conditions) {
+    if (!condition || typeof condition !== "object") continue;
+    const id = normalizeKey(condition.id, `condition_${result.length + 1}`);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const sourceKey = normalizeKey(condition.sourceKey, "");
+    if (!sourceKey || sourceKey === fieldKey) continue;
+    const action: ProjectFormFieldCondition["action"] =
+      condition.action === "require" || condition.action === "options" ? condition.action : "show";
+    if (!canUseOptionRules && action === "options") continue;
+    const operator: ProjectFormFieldCondition["operator"] =
+      condition.operator === "not_equals" ||
+      condition.operator === "contains" ||
+      condition.operator === "not_contains" ||
+      condition.operator === "is_empty" ||
+      condition.operator === "is_not_empty"
+        ? condition.operator
+        : "equals";
+    result.push({
+      id,
+      sourceKey,
+      operator,
+      action,
+      value: (condition.value ?? "").toString().trim().slice(0, 300),
+      options: action === "options" ? asOptionLines((condition.options ?? []).join("\n")) : [],
+      enabled: condition.enabled !== false,
+    });
+  }
+  return result;
 }
 
 function clampRowColumns(value: unknown): 1 | 2 | 3 | 4 {
@@ -207,7 +266,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
   }, []);
 
   function normalizeLayoutFields(nextFields: ProjectFormField[]) {
-    return nextFields
+    const normalized = nextFields
       .map((field, index) => {
         const row = normalizeRow(field.layoutRow, field.order || index + 1);
         const columns = clampRowColumns(field.layoutColumns);
@@ -237,13 +296,22 @@ export function ProjectFormBuilder({ canManage }: Props) {
           showInGrid,
           filterable,
           sortable,
+          conditions: sanitizeProjectBuilderConditions(field.conditions, field.key, field.type),
         };
       })
       .sort((a, b) => {
         if (a.layoutRow !== b.layoutRow) return a.layoutRow - b.layoutRow;
         return a.order - b.order;
-      })
-      .map((field, index) => ({ ...field, order: index + 1 }));
+      });
+    const availableKeys = new Set(normalized.map((field) => field.key));
+    return normalized.map((field, index) => ({
+      ...field,
+      order: index + 1,
+      conditions: (field.conditions ?? []).filter(
+        (condition) =>
+          condition.sourceKey !== field.key && availableKeys.has(condition.sourceKey)
+      ),
+    }));
   }
 
   useEffect(() => {
@@ -325,6 +393,18 @@ export function ProjectFormBuilder({ canManage }: Props) {
         fields: row.fields.sort((a, b) => a.order - b.order),
       }));
   }, [fields]);
+  const conditionSourceFields = useMemo(
+    () =>
+      selectedField
+        ? fields
+            .filter((field) => field.id !== selectedField.id && field.enabled)
+            .map((field) => ({
+              key: field.key,
+              label: `${field.label} (${field.key})`,
+            }))
+        : [],
+    [fields, selectedField]
+  );
 
   function mutateField(id: string, updater: (field: ProjectFormField) => ProjectFormField) {
     setFields((prev) => normalizeLayoutFields(prev.map((field) => (field.id === id ? updater(field) : field))));
@@ -427,6 +507,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
       multiple: false,
       accept: "",
       metadataFields: [],
+      conditions: [],
     };
     setFields((prev) => normalizeLayoutFields([...prev, newField]));
     setSelectedId(id);
@@ -496,6 +577,53 @@ export function ProjectFormBuilder({ canManage }: Props) {
     } finally {
       setDeletingFieldId(null);
     }
+  }
+
+  function addCondition(targetId: string) {
+    setFields((prev) => {
+      const sourceKey = prev.find((field) => field.id !== targetId)?.key ?? "";
+      const next = prev.map((field) => {
+        if (field.id !== targetId) return field;
+        const conditionId = `condition_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        return {
+          ...field,
+          conditions: [
+            ...(field.conditions ?? []),
+            {
+              id: conditionId,
+              sourceKey,
+              operator: "equals",
+              value: "",
+              action: "show",
+              options: [],
+              enabled: true,
+            } as ProjectFormFieldCondition,
+          ],
+        };
+      });
+      return normalizeLayoutFields(next);
+    });
+    setDirty(true);
+  }
+
+  function mutateCondition(
+    targetId: string,
+    conditionId: string,
+    updater: (condition: ProjectFormFieldCondition) => ProjectFormFieldCondition
+  ) {
+    mutateField(targetId, (field) => ({
+      ...field,
+      conditions: (field.conditions ?? []).map((condition) =>
+        condition.id === conditionId ? updater(condition) : condition
+      ),
+    }));
+  }
+
+  function removeCondition(targetId: string, conditionId: string) {
+    mutateField(targetId, (field) => ({
+      ...field,
+      conditions: (field.conditions ?? []).filter((condition) => condition.id !== conditionId),
+    }));
   }
 
   function addMetaField(targetId: string) {
@@ -908,6 +1036,12 @@ export function ProjectFormBuilder({ canManage }: Props) {
                       options:
                         value === "select" || value === "multiselect" ? field.options : [],
                       metadataFields: value === "file" ? field.metadataFields : [],
+                      conditions:
+                        value === "select" || value === "multiselect"
+                          ? field.conditions ?? []
+                          : (field.conditions ?? []).filter(
+                              (condition) => condition.action !== "options"
+                            ),
                     }))
                   }
                   disabled={!canManage}
@@ -1092,6 +1226,165 @@ export function ProjectFormBuilder({ canManage }: Props) {
                 />
               </div>
             )}
+
+            <div className="space-y-2 rounded-lg border bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-slate-700">Conditional Logic</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addCondition(selectedField.id)}
+                  disabled={!canManage || conditionSourceFields.length === 0}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Rule
+                </Button>
+              </div>
+              {conditionSourceFields.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  Add at least one more enabled field to use as a condition source.
+                </p>
+              ) : null}
+              {(selectedField.conditions ?? []).length === 0 ? (
+                <p className="text-xs text-slate-500">No conditional rules configured.</p>
+              ) : (
+                <div className="space-y-2">
+                  {(selectedField.conditions ?? []).map((condition) => (
+                    <div key={condition.id} className="space-y-2 rounded border bg-white p-2">
+                      <div className="grid gap-2 md:grid-cols-4">
+                        <Select
+                          value={condition.action}
+                          onValueChange={(value) =>
+                            mutateCondition(selectedField.id, condition.id, (entry) => ({
+                              ...entry,
+                              action: value as ProjectFormFieldCondition["action"],
+                              options:
+                                value === "options"
+                                  ? entry.options
+                                  : [],
+                            }))
+                          }
+                          disabled={!canManage}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CONDITION_ACTION_OPTIONS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                                disabled={
+                                  option.value === "options" &&
+                                  !supportsConditionalOptions(selectedField.type)
+                                }
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={condition.sourceKey || "__none"}
+                          onValueChange={(value) =>
+                            mutateCondition(selectedField.id, condition.id, (entry) => ({
+                              ...entry,
+                              sourceKey: value && value !== "__none" ? value : "",
+                            }))
+                          }
+                          disabled={!canManage}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Source field" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">Select source field</SelectItem>
+                            {conditionSourceFields.map((option) => (
+                              <SelectItem key={option.key} value={option.key}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={condition.operator}
+                          onValueChange={(value) =>
+                            mutateCondition(selectedField.id, condition.id, (entry) => ({
+                              ...entry,
+                              operator: value as ProjectFormFieldCondition["operator"],
+                            }))
+                          }
+                          disabled={!canManage}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CONDITION_OPERATOR_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center justify-between gap-2 rounded border px-2 py-1.5">
+                          <label className="flex items-center gap-2 text-xs text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={condition.enabled !== false}
+                              onChange={(event) =>
+                                mutateCondition(selectedField.id, condition.id, (entry) => ({
+                                  ...entry,
+                                  enabled: event.target.checked,
+                                }))
+                              }
+                              disabled={!canManage}
+                            />
+                            Enabled
+                          </label>
+                          <button
+                            type="button"
+                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            onClick={() => removeCondition(selectedField.id, condition.id)}
+                            disabled={!canManage}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      {condition.operator === "is_empty" || condition.operator === "is_not_empty" ? null : (
+                        <Input
+                          value={condition.value}
+                          onChange={(event) =>
+                            mutateCondition(selectedField.id, condition.id, (entry) => ({
+                              ...entry,
+                              value: event.target.value,
+                            }))
+                          }
+                          placeholder="Compare value"
+                          disabled={!canManage}
+                        />
+                      )}
+                      {condition.action === "options" ? (
+                        <textarea
+                          className="min-h-20 w-full rounded border px-2 py-2 text-xs"
+                          value={condition.options.join("\n")}
+                          onChange={(event) =>
+                            mutateCondition(selectedField.id, condition.id, (entry) => ({
+                              ...entry,
+                              options: asOptionLines(event.target.value),
+                            }))
+                          }
+                          placeholder="Dropdown options for this condition (one per line)"
+                          disabled={!canManage}
+                        />
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {selectedField.type === "file" && (
               <div className="space-y-3 rounded-lg border bg-slate-50 p-3">

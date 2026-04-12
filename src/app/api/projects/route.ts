@@ -95,12 +95,20 @@ export async function POST(req: NextRequest) {
       customData?: unknown;
     };
 
-    const fields = await loadProjectFormFields();
-    const normalizedCustomData = sanitizeProjectCustomData(customData, fields);
     const normalizedName =
       typeof name === "string" && name.trim()
         ? name.trim()
         : `Company ${new Date().toLocaleDateString()}`;
+    const normalizedStatus = normalizeCompanyStatus(status);
+    const fields = await loadProjectFormFields();
+    const normalizedCustomData = sanitizeProjectCustomData(customData, fields, {
+      name: normalizedName,
+      description: description ?? "",
+      categoryId: categoryId ?? "",
+      status: normalizedStatus,
+      startDate: startDate ?? null,
+      endDate: endDate ?? null,
+    });
 
     if (!normalizedName) {
       return NextResponse.json({ error: "Company name is required" }, { status: 400 });
@@ -113,7 +121,7 @@ export async function POST(req: NextRequest) {
         name: normalizedName,
         description,
         categoryId: categoryId ?? null,
-        status: normalizeCompanyStatus(status),
+        status: normalizedStatus,
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,
         customData: normalizedCustomData as Prisma.InputJsonValue,

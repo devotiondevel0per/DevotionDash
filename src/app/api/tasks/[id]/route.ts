@@ -557,8 +557,13 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
       where: { id },
       select: {
         id: true,
+        title: true,
+        description: true,
+        type: true,
         status: true,
         priority: true,
+        dueDate: true,
+        isPrivate: true,
         completedAt: true,
         customData: true,
       },
@@ -652,7 +657,15 @@ async function updateTask(req: NextRequest, { params }: RouteContext) {
     let mergedCustomData: Prisma.InputJsonValue | undefined;
     if (customData !== undefined) {
       const fields = await loadTaskFormFields();
-      const normalizedCustomData = sanitizeTaskCustomData(customData, fields);
+      const normalizedCustomData = sanitizeTaskCustomData(customData, fields, {
+        title: title ?? existing.title,
+        description: description ?? existing.description ?? "",
+        type: type ?? existing.type,
+        status: statusToUse ?? existing.status,
+        priority: priority ?? existing.priority,
+        dueDate: dueDate ?? (existing.dueDate ? existing.dueDate.toISOString() : null),
+        privateTask: isPrivate ?? existing.isPrivate,
+      });
       const merged = mergeTaskCustomDataPreservingUnknown(
         existing.customData,
         normalizedCustomData,

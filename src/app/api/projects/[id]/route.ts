@@ -290,18 +290,43 @@ export async function PUT(
     };
 
     const fields = await loadProjectFormFields();
-    const normalizedCustomData =
-      customData !== undefined ? sanitizeProjectCustomData(customData, fields) : undefined;
+    const normalizedStatus = status !== undefined ? normalizeCompanyStatus(status) : undefined;
     let mergedCustomData: Prisma.InputJsonValue | undefined;
 
-    if (normalizedCustomData !== undefined) {
+    if (customData !== undefined) {
       const existingProject = await prisma.project.findUnique({
         where: { id },
-        select: { customData: true },
+        select: {
+          name: true,
+          description: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+          categoryId: true,
+          customData: true,
+        },
       });
       if (!existingProject) {
         return NextResponse.json({ error: "Company not found" }, { status: 404 });
       }
+
+      const normalizedCustomData = sanitizeProjectCustomData(customData, fields, {
+        name: name ?? existingProject.name,
+        description: description ?? existingProject.description ?? "",
+        categoryId:
+          categoryId !== undefined
+            ? (categoryId ?? "")
+            : (existingProject.categoryId ?? ""),
+        status: normalizedStatus ?? normalizeCompanyStatus(existingProject.status),
+        startDate:
+          startDate !== undefined
+            ? (startDate ?? null)
+            : (existingProject.startDate ? existingProject.startDate.toISOString() : null),
+        endDate:
+          endDate !== undefined
+            ? (endDate ?? null)
+            : (existingProject.endDate ? existingProject.endDate.toISOString() : null),
+      });
 
       const merged = mergeProjectCustomDataPreservingUnknown(
         existingProject.customData,
@@ -316,7 +341,7 @@ export async function PUT(
       data: {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
-        ...(status !== undefined && { status: normalizeCompanyStatus(status) }),
+        ...(status !== undefined && { status: normalizedStatus }),
         ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
         ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
         ...(categoryId !== undefined && {
