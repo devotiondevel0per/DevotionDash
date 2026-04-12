@@ -389,8 +389,41 @@ function getGridColumnsClass(columns: 1 | 2 | 3 | 4) {
   return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
 }
 
-function getFieldSpanClass(columns: 1 | 2 | 3 | 4, spanRaw: unknown) {
-  const span = clampLayoutSpan(spanRaw, columns);
+function getAutoProjectFieldSpan(field: ProjectFormField, columns: 1 | 2 | 3 | 4) {
+  if (columns <= 1) return 1;
+
+  if (field.source === "core" && field.coreKey === "name") {
+    return Math.min(columns, 2);
+  }
+
+  if (field.type === "rich_text" || field.type === "textarea" || field.type === "file") {
+    return columns;
+  }
+
+  if (
+    field.type === "multiselect" ||
+    field.type === "email" ||
+    field.type === "url" ||
+    field.type === "phone"
+  ) {
+    return Math.min(columns, 2);
+  }
+
+  if (field.type === "text") {
+    const textHint = `${field.key} ${field.label}`.toLowerCase();
+    if (/(name|title|summary|description|address|comment|message|notes)/.test(textHint)) {
+      return Math.min(columns, 2);
+    }
+  }
+
+  return 1;
+}
+
+function getFieldSpanClass(field: ProjectFormField, columns: 1 | 2 | 3 | 4) {
+  const span =
+    field.spanMode === "manual"
+      ? clampLayoutSpan(field.layoutColSpan, columns)
+      : clampLayoutSpan(getAutoProjectFieldSpan(field, columns), columns);
   if (columns === 1) return "col-span-1";
   if (columns === 2) {
     return span >= 2 ? "col-span-1 md:col-span-2" : "col-span-1 md:col-span-1";
@@ -837,7 +870,7 @@ function ProjectFormDialog({
           {formRows.map((row) => (
             <div key={`row-${row.row}`} className={cn("grid gap-4", getGridColumnsClass(row.columns))}>
               {row.fields.map((field) => {
-                const spanClass = getFieldSpanClass(row.columns, field.layoutColSpan);
+                const spanClass = getFieldSpanClass(field, row.columns);
                 const isRequired = field.required;
                 const label = (
                   <Label className="text-sm">

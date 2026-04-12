@@ -19,6 +19,7 @@ export type ProjectFormFieldType =
   | "phone";
 
 export type ProjectFormRowColumns = 1 | 2 | 3 | 4;
+export type ProjectFormSpanMode = "auto" | "manual";
 
 export type ProjectCoreFieldKey =
   | "name"
@@ -53,6 +54,7 @@ export type ProjectFormField = {
   layoutRow: number;
   layoutColumns: ProjectFormRowColumns;
   layoutColSpan: number;
+  spanMode?: ProjectFormSpanMode;
   options: string[];
   multiple: boolean;
   accept: string;
@@ -365,6 +367,7 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
       const layoutRow = sanitizeLayoutRow(src.layoutRow, order);
       const layoutColumns = sanitizeLayoutColumns(src.layoutColumns, defaultCore?.layoutColumns ?? 1);
       const layoutColSpan = sanitizeLayoutColSpan(src.layoutColSpan, layoutColumns);
+      const spanMode = src.spanMode === "manual" ? "manual" : "auto";
       const fieldOptions =
         type === "select" || type === "multiselect" ? dedupeOptions(src.options) : [];
 
@@ -383,6 +386,7 @@ export function sanitizeProjectFormFields(input: unknown): ProjectFormField[] {
         layoutRow,
         layoutColumns,
         layoutColSpan,
+        spanMode,
         options: isCoreStatusField ? ["active", "inactive"] : fieldOptions,
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",

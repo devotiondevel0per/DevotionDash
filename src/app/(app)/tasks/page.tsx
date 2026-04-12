@@ -213,6 +213,7 @@ type TaskFormConfigField = {
   layoutRow: number;
   layoutColumns: 1 | 2 | 3 | 4;
   layoutColSpan: number;
+  spanMode?: "auto" | "manual";
   options: string[];
   multiple: boolean;
   accept: string;
@@ -379,6 +380,58 @@ function normalizeTaskMetadataFields(input: unknown): TaskFileMetadataField[] {
   return list;
 }
 
+function getAutoTaskFieldSpan(field: TaskFormConfigField, columns: 1 | 2 | 3 | 4) {
+  if (columns <= 1) return 1;
+
+  if (field.source === "core" && field.coreKey === "title") {
+    return Math.min(columns, 2);
+  }
+
+  if (
+    field.type === "rich_text" ||
+    field.type === "textarea" ||
+    field.type === "file" ||
+    field.type === "actions" ||
+    field.type === "assignees"
+  ) {
+    return columns;
+  }
+
+  if (
+    field.type === "multiselect" ||
+    field.type === "email" ||
+    field.type === "url" ||
+    field.type === "phone"
+  ) {
+    return Math.min(columns, 2);
+  }
+
+  if (field.type === "text") {
+    const textHint = `${field.key} ${field.label}`.toLowerCase();
+    if (/(name|title|subject|summary|description|address|comment|message|notes)/.test(textHint)) {
+      return Math.min(columns, 2);
+    }
+  }
+
+  return 1;
+}
+
+function getTaskFieldSpanMode(field: TaskFormConfigField): "auto" | "manual" {
+  return field.spanMode === "manual" ? "manual" : "auto";
+}
+
+function getTaskFieldSpan(field: TaskFormConfigField, columns: 1 | 2 | 3 | 4) {
+  if (getTaskFieldSpanMode(field) === "manual") {
+    const parsed =
+      typeof field.layoutColSpan === "number"
+        ? field.layoutColSpan
+        : Number.parseInt(String(field.layoutColSpan ?? ""), 10);
+    const safe = Number.isFinite(parsed) ? parsed : 1;
+    return Math.max(1, Math.min(columns, Math.round(safe)));
+  }
+  return getAutoTaskFieldSpan(field, columns);
+}
+
 function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
   const allowedTypes: TaskFormFieldType[] = [
     "text",
@@ -431,8 +484,9 @@ function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
 
       const layoutColumnsRaw = Number.parseInt(String(src.layoutColumns ?? fallbackCore?.layoutColumns ?? 1), 10);
       const layoutColumns = Math.max(1, Math.min(4, Number.isFinite(layoutColumnsRaw) ? layoutColumnsRaw : 1)) as 1 | 2 | 3 | 4;
+      const spanMode = src.spanMode === "manual" ? "manual" : "auto";
       const layoutColSpanRaw = Number.parseInt(String(src.layoutColSpan ?? fallbackCore?.layoutColSpan ?? 1), 10);
-      const layoutColSpan = Math.max(1, Math.min(layoutColumns, Number.isFinite(layoutColSpanRaw) ? layoutColSpanRaw : 1));
+      const manualColSpan = Math.max(1, Math.min(layoutColumns, Number.isFinite(layoutColSpanRaw) ? layoutColSpanRaw : 1));
       const layoutRowRaw = Number.parseInt(String(src.layoutRow ?? fallbackCore?.layoutRow ?? list.length + 1), 10);
       const layoutRow = Math.max(1, Math.min(500, Number.isFinite(layoutRowRaw) ? layoutRowRaw : list.length + 1));
       const orderRaw = Number.parseInt(String(src.order ?? fallbackCore?.order ?? list.length + 1), 10);
@@ -442,7 +496,7 @@ function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
       const required = resolvedCoreKey === "title" ? true : Boolean(src.required);
       const enabled = resolvedCoreKey === "title" ? true : src.enabled !== false;
 
-      list.push({
+      const nextField: TaskFormConfigField = {
         id,
         key,
         label: (typeof src.label === "string" ? src.label.trim() : "").slice(0, 120) || fallbackCore?.label || "Field",
@@ -457,7 +511,8 @@ function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
         pane,
         layoutRow,
         layoutColumns,
-        layoutColSpan,
+        layoutColSpan: manualColSpan,
+        spanMode,
         options:
           type === "select" || type === "multiselect"
             ? normalizeFieldOptions(src.options)
@@ -465,7 +520,11 @@ function normalizeTaskFormFields(input: unknown): TaskFormConfigField[] {
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",
         metadataFields: type === "file" ? normalizeTaskMetadataFields(src.metadataFields) : [],
-      });
+      };
+      if (spanMode === "auto") {
+        nextField.layoutColSpan = getAutoTaskFieldSpan(nextField, layoutColumns);
+      }
+      list.push(nextField);
     }
   }
 
@@ -1508,7 +1567,7 @@ function TaskModal({
         style={{ gridTemplateColumns: `repeat(${row.columns}, minmax(0, 1fr))` }}
       >
         {row.fields.map((field) => {
-          const span = Math.max(1, Math.min(row.columns, field.layoutColSpan));
+          const span = getTaskFieldSpan(field, row.columns);
           return (
             <div key={field.id} style={{ gridColumn: `span ${span} / span ${span}` }}>
               {renderField(field)}

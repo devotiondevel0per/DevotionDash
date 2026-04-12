@@ -105,6 +105,47 @@ function normalizeRow(value: unknown, fallback: number) {
   return Math.max(1, Math.min(500, Math.round(parsed)));
 }
 
+function getAutoProjectFieldSpan(field: ProjectFormField, columns: 1 | 2 | 3 | 4) {
+  if (columns <= 1) return 1;
+
+  if (field.source === "core" && field.coreKey === "name") {
+    return Math.min(columns, 2);
+  }
+
+  if (field.type === "rich_text" || field.type === "textarea" || field.type === "file") {
+    return columns;
+  }
+
+  if (
+    field.type === "multiselect" ||
+    field.type === "email" ||
+    field.type === "url" ||
+    field.type === "phone"
+  ) {
+    return Math.min(columns, 2);
+  }
+
+  if (field.type === "text") {
+    const textHint = `${field.key} ${field.label}`.toLowerCase();
+    if (/(name|title|summary|description|address|comment|message|notes)/.test(textHint)) {
+      return Math.min(columns, 2);
+    }
+  }
+
+  return 1;
+}
+
+function getProjectFieldSpanMode(field: ProjectFormField): "auto" | "manual" {
+  return field.spanMode === "manual" ? "manual" : "auto";
+}
+
+function getEffectiveProjectFieldSpan(field: ProjectFormField, columns: 1 | 2 | 3 | 4) {
+  if (getProjectFieldSpanMode(field) === "manual") {
+    return clampSpan(field.layoutColSpan, columns);
+  }
+  return getAutoProjectFieldSpan(field, columns);
+}
+
 export function ProjectFormBuilder({ canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -134,12 +175,14 @@ export function ProjectFormBuilder({ canManage }: Props) {
       .map((field, index) => {
         const row = normalizeRow(field.layoutRow, field.order || index + 1);
         const columns = clampRowColumns(field.layoutColumns);
-        const span = clampSpan(field.layoutColSpan, columns);
+        const spanMode = getProjectFieldSpanMode(field);
+        const manualSpan = clampSpan(field.layoutColSpan, columns);
         return {
           ...field,
           layoutRow: row,
           layoutColumns: columns,
-          layoutColSpan: span,
+          layoutColSpan: manualSpan,
+          spanMode,
         };
       })
       .sort((a, b) => {
@@ -249,7 +292,10 @@ export function ProjectFormBuilder({ canManage }: Props) {
         ...item,
         layoutRow: targetRow,
         layoutColumns: targetColumns,
-        layoutColSpan: clampSpan(item.layoutColSpan, targetColumns),
+        layoutColSpan:
+          getProjectFieldSpanMode(item) === "manual"
+            ? clampSpan(item.layoutColSpan, targetColumns)
+            : item.layoutColSpan,
       });
       return normalizeLayoutFields(next);
     });
@@ -264,7 +310,10 @@ export function ProjectFormBuilder({ canManage }: Props) {
           return {
             ...field,
             layoutColumns: columns,
-            layoutColSpan: clampSpan(field.layoutColSpan, columns),
+            layoutColSpan:
+              getProjectFieldSpanMode(field) === "manual"
+                ? clampSpan(field.layoutColSpan, columns)
+                : field.layoutColSpan,
           };
         })
       )
@@ -285,7 +334,10 @@ export function ProjectFormBuilder({ canManage }: Props) {
             ...field,
             layoutRow: normalizedRow,
             layoutColumns: rowColumns,
-            layoutColSpan: clampSpan(field.layoutColSpan, rowColumns),
+            layoutColSpan:
+              getProjectFieldSpanMode(field) === "manual"
+                ? clampSpan(field.layoutColSpan, rowColumns)
+                : field.layoutColSpan,
           };
         })
       )
@@ -312,6 +364,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
       layoutRow: row,
       layoutColumns: rowColumns,
       layoutColSpan: 1,
+      spanMode: "auto",
       options: [],
       multiple: false,
       accept: "",
@@ -337,7 +390,10 @@ export function ProjectFormBuilder({ canManage }: Props) {
         ...item,
         layoutRow: row,
         layoutColumns: rowColumns,
-        layoutColSpan: clampSpan(item.layoutColSpan, rowColumns),
+        layoutColSpan:
+          getProjectFieldSpanMode(item) === "manual"
+            ? clampSpan(item.layoutColSpan, rowColumns)
+            : item.layoutColSpan,
       });
       return normalizeLayoutFields(next);
     });
@@ -562,7 +618,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
                   style={{ gridTemplateColumns: `repeat(${row.columns}, minmax(0, 1fr))` }}
                 >
                   {row.fields.map((field) => {
-                    const span = clampSpan(field.layoutColSpan, row.columns);
+                    const span = getEffectiveProjectFieldSpan(field, row.columns);
                     return (
                       <div
                         key={field.id}
@@ -590,7 +646,7 @@ export function ProjectFormBuilder({ canManage }: Props) {
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium text-slate-700">{field.label}</p>
                           <p className="text-[11px] text-slate-500">
-                            {field.source === "core" ? "Core" : "Custom"} | {field.type} | span {span}
+                            {field.source === "core" ? "Core" : "Custom"} | {field.type} | {getProjectFieldSpanMode(field)} | span {span}
                           </p>
                         </div>
                         {!field.enabled ? (
@@ -708,19 +764,18 @@ export function ProjectFormBuilder({ canManage }: Props) {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Field Span</Label>
+                <Label>Span Mode</Label>
                 <Select
-                  value={String(
-                    clampSpan(selectedField.layoutColSpan, clampRowColumns(selectedField.layoutColumns))
-                  )}
+                  value={getProjectFieldSpanMode(selectedField)}
                   onValueChange={(value) =>
-                    mutateField(selectedField.id, (field) => {
-                      const rowColumns = clampRowColumns(field.layoutColumns);
-                      return {
-                        ...field,
-                        layoutColSpan: clampSpan(value, rowColumns),
-                      };
-                    })
+                    mutateField(selectedField.id, (field) => ({
+                      ...field,
+                      spanMode: value === "manual" ? "manual" : "auto",
+                      layoutColSpan:
+                        value === "manual"
+                          ? clampSpan(field.layoutColSpan, clampRowColumns(field.layoutColumns))
+                          : field.layoutColSpan,
+                    }))
                   }
                   disabled={!canManage}
                 >
@@ -728,16 +783,58 @@ export function ProjectFormBuilder({ canManage }: Props) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.from(
-                      { length: clampRowColumns(selectedField.layoutColumns) },
-                      (_, index) => index + 1
-                    ).map((span) => (
-                      <SelectItem key={`span-${span}`} value={String(span)}>
-                        Span {span}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="auto">Auto</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>{getProjectFieldSpanMode(selectedField) === "manual" ? "Field Span" : "Auto Span"}</Label>
+                {getProjectFieldSpanMode(selectedField) === "manual" ? (
+                  <Select
+                    value={String(
+                      clampSpan(selectedField.layoutColSpan, clampRowColumns(selectedField.layoutColumns))
+                    )}
+                    onValueChange={(value) =>
+                      mutateField(selectedField.id, (field) => {
+                        const rowColumns = clampRowColumns(field.layoutColumns);
+                        return {
+                          ...field,
+                          spanMode: "manual",
+                          layoutColSpan: clampSpan(value, rowColumns),
+                        };
+                      })
+                    }
+                    disabled={!canManage}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(
+                        { length: clampRowColumns(selectedField.layoutColumns) },
+                        (_, index) => index + 1
+                      ).map((span) => (
+                        <SelectItem key={`span-${span}`} value={String(span)}>
+                          Span {span}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={String(
+                      getAutoProjectFieldSpan(
+                        selectedField,
+                        clampRowColumns(selectedField.layoutColumns)
+                      )
+                    )}
+                    disabled
+                  />
+                )}
               </div>
             </div>
 

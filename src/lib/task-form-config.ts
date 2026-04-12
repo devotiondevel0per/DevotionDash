@@ -23,6 +23,7 @@ export type TaskFormFieldType =
   | "assignees";
 
 export type TaskFormRowColumns = 1 | 2 | 3 | 4;
+export type TaskFormSpanMode = "auto" | "manual";
 
 export type TaskCoreFieldKey =
   | "title"
@@ -62,6 +63,7 @@ export type TaskFormField = {
   layoutRow: number;
   layoutColumns: TaskFormRowColumns;
   layoutColSpan: number;
+  spanMode?: TaskFormSpanMode;
   options: string[];
   multiple: boolean;
   accept: string;
@@ -475,6 +477,7 @@ export function sanitizeTaskFormFields(input: unknown): TaskFormField[] {
       const layoutRow = sanitizeLayoutRow(src.layoutRow, order);
       const layoutColumns = sanitizeLayoutColumns(src.layoutColumns, defaultCore?.layoutColumns ?? 1);
       const layoutColSpan = sanitizeLayoutColSpan(src.layoutColSpan, layoutColumns);
+      const spanMode = src.spanMode === "manual" ? "manual" : "auto";
       const resolvedCoreKey = source === "core" ? (coreKey ?? defaultCore?.coreKey ?? null) : null;
       const fieldOptions =
         type === "select" || type === "multiselect" ? dedupeOptions(src.options) : [];
@@ -500,6 +503,7 @@ export function sanitizeTaskFormFields(input: unknown): TaskFormField[] {
         layoutRow,
         layoutColumns,
         layoutColSpan,
+        spanMode,
         options: defaultCore?.coreKey === "status" ? [] : fieldOptions,
         multiple: type === "file" ? Boolean(src.multiple) : false,
         accept: type === "file" ? (typeof src.accept === "string" ? src.accept.trim().slice(0, 200) : "") : "",
@@ -634,4 +638,3 @@ export function sanitizeTaskCustomData(
 
   return result;
 }
-
